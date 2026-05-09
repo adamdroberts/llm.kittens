@@ -64,13 +64,18 @@ for both projects.
 ## Hardware
 
 - **H100 (sm_90a)** — primary target. WGMMA + TMA + 228 KB shared mem.
-- **A100, RTX 4090, RTX 5090, B200** — not supported in v1. ThunderKittens has
-  experimental sm_100/103/120 support; revisit after v1 lands.
+- **RTX 5090 (sm_120)** — supported only for the generic device-test path
+  (`rtx5090-device`: CUDA runtime probe plus the plain CUDA SwiGLU smoke).
+  The TK model kernels remain H100-only.
+- **A100, RTX 4090, B200** — not supported in v1. ThunderKittens has
+  experimental sm_100/103/120 support; revisit full Blackwell kernels after v1 lands.
 
 The goal harness enforces this at runtime: `scripts/validate_goal_h100.sh
-preflight` and `cuda-runtime` reject non-H100/sm90-class devices unless
-`ALLOW_NON_H100=1` is set for dry compile/debug work. That override is not
-valid completion evidence for the unchecked H100 gates in [`goal.md`](goal.md).
+preflight` and `cuda-runtime` target H100/sm90-class devices by default. Set
+`DEVICE_TEST_TARGET=rtx5090` for the RTX 5090 device-test probe path, or run
+`scripts/validate_goal_h100.sh rtx5090-device`, which forces `DEVICE_ARCH=SM120`.
+That path is not valid completion evidence for the unchecked H100 gates in
+[`goal.md`](goal.md).
 
 ## Precision
 
@@ -165,9 +170,11 @@ including `<binary> smoke OK`, `CUDA runtime check passed.`, `gpt2_validate OK`,
 and `test_gpt2cu OK`, rather than relying only on process exit status.
 Use `scripts/validate_goal_h100.sh host-core` on local machines that can compile
 and run host-only checks but do not have a working CUDA runtime.
-`ALLOW_NON_H100=1` may be used with the `preflight` and `cuda-runtime` probes
-only for dry debugging on unsupported GPUs; real runtime gates still require
-H100/sm90-class hardware.
+Use `scripts/validate_goal_h100.sh rtx5090-device` on an RTX 5090 host to build
+the generic CUDA probes with `DEVICE_ARCH=SM120` and run the CUDA runtime plus
+plain CUDA SwiGLU smoke. `ALLOW_NON_H100=1` may still be used with the
+`preflight` and `cuda-runtime` probes only for dry debugging on unsupported GPUs;
+real runtime gates still require H100/sm90-class hardware.
 `goal-complete` refuses to run with that override set.
 On a target machine where every remaining `goal.md` gate should run in one
 intentional pass, use

@@ -12,10 +12,11 @@ shapes use fused materialization/unpermute. Runtime H100 parity is still pending
 
 | Requirement | Why |
 |---|---|
-| CUDA Toolkit ≥ 12.4 | nvcc with `-std=c++20` and `sm_90a` |
+| CUDA Toolkit ≥ 12.4 | nvcc with `-std=c++20` and `sm_90a`; RTX 5090 device probes use `sm_120a` |
 | GCC ≥ 11 (or Clang ≥ 14) | host compiler for c++20 |
 | ThunderKittens checkout | header-only; expected at `../ThunderKittens` by default |
-| H100 (sm_90a) | runtime; `validate_goal_h100.sh preflight` / `cuda-runtime` reject other GPUs unless `ALLOW_NON_H100=1` is set for dry debug |
+| H100 (sm_90a) | primary runtime target for goal evidence |
+| RTX 5090 (sm_120) | generic device-test target only: CUDA runtime probe plus plain CUDA SwiGLU smoke |
 | NCCL ≥ 2.x + libnccl-dev | optional, multi-GPU |
 | OpenMPI | optional, multi-node MPI init |
 | Python ≥ 3.10 | only for `dev/data/*.py` preprocessing scripts |
@@ -80,6 +81,7 @@ The Makefile picks these defaults; override on the command line if needed.
 |---|---|---|
 | `TK_ROOT=` | `$(abspath ../ThunderKittens)` | ThunderKittens checkout |
 | `FORCE_NVCC_O=` | `3` | nvcc optimisation level |
+| `DEVICE_ARCH=SM90` | `SM90` | CUDA/TK architecture; `SM120` is available for generic RTX 5090 device probes |
 | `NO_OMP=1` | unset | Disable OpenMP host parallelism |
 | `NO_MULTI_GPU=1` | unset | Disable NCCL even if installed |
 | `NCCL_DIR=` | unset | Enable NCCL from a custom prefix containing `include/nccl.h` and `lib*/libnccl.so` |
@@ -92,7 +94,8 @@ The Makefile hard-codes:
 
 - `--use_fast_math -std=c++20`
 - `--expt-extended-lambda --expt-relaxed-constexpr`
-- `-DKITTENS_SM90 -gencode arch=compute_90a,code=sm_90a`
+- default `DEVICE_ARCH=SM90`: `-DKITTENS_SM90 -gencode arch=compute_90a,code=sm_90a`
+- opt-in `DEVICE_ARCH=SM120`: `-DKITTENS_SM120 -gencode arch=compute_120a,code=sm_120a`
 - `-DENABLE_BF16`
 - `-I$(TK_ROOT)/include -I$(TK_ROOT)/prototype`
 
@@ -102,10 +105,10 @@ errors out fast — see [precision.md](precision.md).
 ## GPU sniff
 
 When `nvidia-smi` is available, the Makefile prints a warning if the lowest-CC
-GPU is not Hopper (sm_90):
+GPU does not match `DEVICE_ARCH`:
 
 ```
-⚠ Detected GPU compute capability 86; llm.kittens v1 targets sm_90a (H100).
+⚠ Detected GPU compute capability 86; DEVICE_ARCH=SM90 targets sm_90a.
   Build will still proceed.
 ```
 
@@ -114,8 +117,16 @@ a Hopper deployment. Set `CI=true` to suppress the sniff.
 
 This build-time warning is intentionally weaker than the goal harness. The
 target-host `scripts/validate_goal_h100.sh preflight` and `cuda-runtime` probes
-reject non-H100 / non-sm90-class GPUs unless `ALLOW_NON_H100=1` is set for dry
-compile/debug runs.
+target H100 / sm90-class GPUs by default. For RTX 5090 device-only checks, run:
+
+```bash
+scripts/validate_goal_h100.sh rtx5090-device
+```
+
+That phase forces `DEVICE_TEST_TARGET=rtx5090`, `DEVICE_ARCH=SM120`, and skips
+NCCL/MPI by default. It covers only the generic CUDA runtime/device-allocation
+probe and the plain CUDA SwiGLU smoke; TK model-kernel and `goal.md` completion
+evidence remains H100-only.
 
 ## Smoke test
 
@@ -153,9 +164,10 @@ Device: NVIDIA H100 80GB HBM3 (sm_90)
 ```
 
 Run on a non-H100 GPU prints a warning and continues (TK kernels will fail at
-runtime — the test is only meaningful on an H100). On non-Hopper hardware,
-treat a clean compile as the only useful signal; the goal harness preflight
-still requires an H100/sm90-class target for runtime evidence.
+runtime — the TK smoke tests are only meaningful on an H100). On RTX 5090,
+use `scripts/validate_goal_h100.sh rtx5090-device` for the supported generic
+device checks; treat TK target compiles as the only useful signal until the
+Blackwell TK kernels are ported.
 
 `test_attention` checks GPT-style packed Q/K/V attention against an independent
 CPU reference. It covers direct TK forward with fallback backward (`T=192`) and
@@ -261,9 +273,11 @@ Use `scripts/validate_goal_h100.sh gqa-runtime` for the dedicated H100 GQA/RoPE
 CUDA comparison against the CPU reference smoke shapes.
 Set `NCCL_DIR`, `NCCL_INCLUDE_PATH`, or `NCCL_LIB_PATH` before running the
 harness when the target cluster provides NCCL through a module or custom
-prefix. The preflight phase first requires an H100/sm90-class GPU, then checks
-the same NCCL paths the Makefile uses. The `cuda-runtime` phase independently
-checks the same GPU class contract inside the compiled runtime probe.
+prefix. The preflight phase first requires an H100/sm90-class GPU by default,
+then checks the same NCCL paths the Makefile uses. With
+`DEVICE_TEST_TARGET=rtx5090`, preflight instead accepts RTX 5090/sm_120-class
+devices and skips NCCL/MPI by default. The `cuda-runtime` phase independently
+checks the same target contract inside the compiled runtime probe.
 `ALLOW_NON_H100=1` bypasses only the GPU class gate for dry compile/debug runs;
 it is not valid goal-completion evidence, and `goal-complete` refuses to run
 while it is set.

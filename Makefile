@@ -1,6 +1,7 @@
 # llm.kittens — H100 GPT-2/GPT-3/Llama-3 trainer on top of ThunderKittens.
 # Adapted from llm.c's Makefile. Differences:
-#   * sm_90a only (TK H100 kernels need WGMMA + TMA — sm_90 alone is not enough)
+#   * sm_90a by default (TK H100 kernels need WGMMA + TMA — sm_90 alone is not enough)
+#     plus an opt-in SM120 build mode for generic RTX 5090 device probes
 #   * c++20 instead of c++17 (TK requires it)
 #   * BF16 only — FP16/FP32 paths removed; TK H100 GEMM/MHA are bf16
 #   * cuBLAS, cuBLASLt, cuDNN all removed (every matmul/attn goes through TK)
@@ -21,6 +22,21 @@ OUTPUT_FILE = -o $@
 CUDA_OUTPUT_FILE = -o $@
 
 FORCE_NVCC_O ?= 3
+DEVICE_ARCH ?= SM90
+
+ifeq ($(DEVICE_ARCH),SM90)
+  KITTENS_ARCH_DEFINE := -DKITTENS_SM90
+  CUDA_GENCODE := -gencode arch=compute_90a,code=sm_90a
+  DEVICE_ARCH_LABEL := sm_90a
+  DEVICE_ARCH_CC := 90
+else ifeq ($(DEVICE_ARCH),SM120)
+  KITTENS_ARCH_DEFINE := -DKITTENS_SM120
+  CUDA_GENCODE := -gencode arch=compute_120a,code=sm_120a
+  DEVICE_ARCH_LABEL := sm_120a
+  DEVICE_ARCH_CC := 120
+else
+  $(error Unsupported DEVICE_ARCH=$(DEVICE_ARCH). Use SM90 or SM120.)
+endif
 
 # ThunderKittens
 TK_ROOT ?= $(abspath ../ThunderKittens)
@@ -35,7 +51,7 @@ NVCC_FLAGS += -forward-unknown-to-host-compiler
 NVCC_FLAGS += -Xcompiler=-Wno-psabi -Xcompiler=-fno-strict-aliasing
 NVCC_FLAGS += -ftemplate-backtrace-limit=0
 NVCC_FLAGS += -I$(TK_ROOT)/include -I$(TK_ROOT)/prototype
-NVCC_FLAGS += -DKITTENS_SM90 -gencode arch=compute_90a,code=sm_90a
+NVCC_FLAGS += $(KITTENS_ARCH_DEFINE) $(CUDA_GENCODE)
 NVCC_FLAGS += -DENABLE_BF16
 
 NVCC_LDFLAGS = -lrt -lpthread -ldl -lcuda -lcudadevrt -lcudart_static
@@ -51,8 +67,8 @@ ifneq ($(CI),true)
     ifneq ($(shell which nvidia-smi 2>/dev/null),)
       GPU_COMPUTE_CAPABILITY := $(shell nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | sed 's/\.//g' | sort -n | head -n 1)
       ifneq ($(GPU_COMPUTE_CAPABILITY),)
-        ifneq ($(GPU_COMPUTE_CAPABILITY),90)
-          $(info ⚠ Detected GPU compute capability $(GPU_COMPUTE_CAPABILITY); llm.kittens v1 targets sm_90a (H100). Build will still proceed.)
+        ifneq ($(GPU_COMPUTE_CAPABILITY),$(DEVICE_ARCH_CC))
+          $(info ⚠ Detected GPU compute capability $(GPU_COMPUTE_CAPABILITY); DEVICE_ARCH=$(DEVICE_ARCH) targets $(DEVICE_ARCH_LABEL). Build will still proceed.)
         endif
       endif
     endif
@@ -63,7 +79,7 @@ $(info ---------------------------------------------)
 $(info llm.kittens build configuration)
 $(info ---------------------------------------------)
 $(info TK_ROOT          : $(TK_ROOT))
-$(info NVCC arch        : sm_90a)
+$(info NVCC arch        : $(DEVICE_ARCH_LABEL))
 $(info Precision        : BF16 (locked))
 $(info ---------------------------------------------)
 

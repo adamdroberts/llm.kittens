@@ -8,6 +8,12 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05 — M8 profiling gate hardening
 
+- Added an RTX 5090 generic device-test target without weakening the H100 goal
+  gates. `scripts/validate_goal_h100.sh rtx5090-device` now forces
+  `DEVICE_TEST_TARGET=rtx5090` and `DEVICE_ARCH=SM120`, skips NCCL/MPI by
+  default, builds `cuda_runtime_check` plus the plain CUDA `test_swiglu`, and
+  runs both device probes. Full TK/model-kernel runtime evidence remains
+  H100-only.
 - Replaced the ZeRO-3 runtime fail-fast with a compile-wired parameter-shard
   runtime path for GPT and Llama. ZeRO-3 now allocates an authoritative local
   BF16 parameter shard, initializes it from the full parameter layout, runs
@@ -93,12 +99,13 @@ changelog is the diary; `goal.md` is the plan.
 - Added a `host-core` harness aggregate for local machines without a usable CUDA
   runtime. It runs the non-CUDA-runtime host-side gates against existing built
   binaries and artifacts; `all-local` now aliases this phase.
-- Tightened `scripts/validate_goal_h100.sh preflight` so runtime gates require
-  H100/sm90-class GPUs. Unsupported devices such as RTX 5090 fail before
-  NCCL/MPI checks unless `ALLOW_NON_H100=1` is set for dry compile/debug runs.
-- Matched the standalone `cuda-runtime` probe to the same H100/sm90-class
-  contract, so running that phase directly cannot accept sm_120 or other
-  unsupported GPUs as runtime evidence.
+- Tightened `scripts/validate_goal_h100.sh preflight` so H100 runtime gates
+  require H100/sm90-class GPUs. Unsupported devices fail before NCCL/MPI checks
+  unless `ALLOW_NON_H100=1` is set for dry compile/debug runs. RTX 5090 now has
+  a separate generic device-test path, but it is not H100 runtime evidence.
+- Matched the standalone `cuda-runtime` probe to the same target contract, so
+  running that phase directly cannot accept the wrong GPU class as runtime
+  evidence.
 - Made `goal-complete` reject `ALLOW_NON_H100=1`, keeping the dry-debug escape
   hatch out of the one-shot completion gate.
 - Added [`dev/validate_data_artifacts.py`](dev/validate_data_artifacts.py) and a

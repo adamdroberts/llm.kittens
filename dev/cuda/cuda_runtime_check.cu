@@ -24,6 +24,23 @@ static bool device_name_contains(const char* name, const char* needle) {
     return std::strstr(name, needle) != nullptr;
 }
 
+static bool target_is_rtx5090(const char* target) {
+    return target != nullptr &&
+           (std::strcmp(target, "rtx5090") == 0 ||
+            std::strcmp(target, "rtx-5090") == 0 ||
+            std::strcmp(target, "5090") == 0 ||
+            std::strcmp(target, "sm120") == 0 ||
+            std::strcmp(target, "sm_120") == 0 ||
+            std::strcmp(target, "blackwell") == 0);
+}
+
+static bool target_is_h100(const char* target) {
+    return target == nullptr ||
+           std::strcmp(target, "") == 0 ||
+           std::strcmp(target, "h100") == 0 ||
+           std::strcmp(target, "hopper") == 0;
+}
+
 int main() {
     int driver_version = 0;
     int runtime_version = 0;
@@ -44,21 +61,42 @@ int main() {
     cudaDeviceProp prop;
     CUDA_CHECK(cudaGetDeviceProperties(&prop, 0));
     printf("CUDA device 0: %s (sm_%d%d)\n", prop.name, prop.major, prop.minor);
+    const char* device_target = getenv("DEVICE_TEST_TARGET");
+    const bool rtx5090_target = target_is_rtx5090(device_target);
+    const bool h100_target = target_is_h100(device_target);
+    if (!rtx5090_target && !h100_target) {
+        fprintf(stderr, "Unsupported DEVICE_TEST_TARGET=%s; use h100 or rtx5090.\n", device_target);
+        return EXIT_FAILURE;
+    }
+    printf("CUDA device target: %s\n", rtx5090_target ? "rtx5090" : "h100");
+
     const char* allow_non_h100 = getenv("ALLOW_NON_H100");
     const bool allow_non_h100_debug =
         allow_non_h100 != nullptr && std::strcmp(allow_non_h100, "1") == 0;
     const bool sm90_class = prop.major == 9;
+    const bool sm120_class = prop.major == 12 && prop.minor == 0;
     const bool named_hopper =
         device_name_contains(prop.name, "H100") ||
         device_name_contains(prop.name, "H200") ||
         device_name_contains(prop.name, "GH200");
-    if (!allow_non_h100_debug && !sm90_class && !named_hopper) {
-        fprintf(stderr,
-                "goal.md runtime gates require H100/sm_90-class GPUs; "
-                "detected %s (sm_%d%d). "
-                "Set ALLOW_NON_H100=1 only for dry debugging.\n",
-                prop.name, prop.major, prop.minor);
-        return EXIT_FAILURE;
+    const bool named_rtx5090 = device_name_contains(prop.name, "RTX 5090");
+    if (!allow_non_h100_debug) {
+        if (rtx5090_target && !sm120_class && !named_rtx5090) {
+            fprintf(stderr,
+                    "device tests target RTX 5090/sm_120-class GPUs; "
+                    "detected %s (sm_%d%d). "
+                    "Set ALLOW_NON_H100=1 only for dry debugging.\n",
+                    prop.name, prop.major, prop.minor);
+            return EXIT_FAILURE;
+        }
+        if (h100_target && !sm90_class && !named_hopper) {
+            fprintf(stderr,
+                    "goal.md runtime gates require H100/sm_90-class GPUs; "
+                    "detected %s (sm_%d%d). "
+                    "Set ALLOW_NON_H100=1 only for dry debugging.\n",
+                    prop.name, prop.major, prop.minor);
+            return EXIT_FAILURE;
+        }
     }
 
     CUDA_CHECK(cudaSetDevice(0));

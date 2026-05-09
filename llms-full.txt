@@ -93,13 +93,18 @@ for both projects.
 ## Hardware
 
 - **H100 (sm_90a)** — primary target. WGMMA + TMA + 228 KB shared mem.
-- **A100, RTX 4090, RTX 5090, B200** — not supported in v1. ThunderKittens has
-  experimental sm_100/103/120 support; revisit after v1 lands.
+- **RTX 5090 (sm_120)** — supported only for the generic device-test path
+  (`rtx5090-device`: CUDA runtime probe plus the plain CUDA SwiGLU smoke).
+  The TK model kernels remain H100-only.
+- **A100, RTX 4090, B200** — not supported in v1. ThunderKittens has
+  experimental sm_100/103/120 support; revisit full Blackwell kernels after v1 lands.
 
 The goal harness enforces this at runtime: `scripts/validate_goal_h100.sh
-preflight` and `cuda-runtime` reject non-H100/sm90-class devices unless
-`ALLOW_NON_H100=1` is set for dry compile/debug work. That override is not
-valid completion evidence for the unchecked H100 gates in [`goal.md`](goal.md).
+preflight` and `cuda-runtime` target H100/sm90-class devices by default. Set
+`DEVICE_TEST_TARGET=rtx5090` for the RTX 5090 device-test probe path, or run
+`scripts/validate_goal_h100.sh rtx5090-device`, which forces `DEVICE_ARCH=SM120`.
+That path is not valid completion evidence for the unchecked H100 gates in
+[`goal.md`](goal.md).
 
 ## Precision
 
@@ -195,9 +200,11 @@ including `<binary> smoke OK`, `CUDA runtime check passed.`, `gpt2_validate OK`,
 and `test_gpt2cu OK`, rather than relying only on process exit status.
 Use `scripts/validate_goal_h100.sh host-core` on local machines that can compile
 and run host-only checks but do not have a working CUDA runtime.
-`ALLOW_NON_H100=1` may be used with the `preflight` and `cuda-runtime` probes
-only for dry debugging on unsupported GPUs; real runtime gates still require
-H100/sm90-class hardware.
+Use `scripts/validate_goal_h100.sh rtx5090-device` on an RTX 5090 host to build
+the generic CUDA probes with `DEVICE_ARCH=SM120` and run the CUDA runtime plus
+plain CUDA SwiGLU smoke. `ALLOW_NON_H100=1` may still be used with the
+`preflight` and `cuda-runtime` probes only for dry debugging on unsupported GPUs;
+real runtime gates still require H100/sm90-class hardware.
 `goal-complete` refuses to run with that override set.
 On a target machine where every remaining `goal.md` gate should run in one
 intentional pass, use
@@ -539,7 +546,7 @@ This is the highest-risk milestone — the GQA + RoPE-fused attention kernel has
 ## Out of scope for v1
 
 - FP16 and FP32 activations (TK H100 GEMM/MHA are bf16-only; re-introducing them is v2 work).
-- A100 / RTX 4090 / RTX 5090 / B200 backends (TK has experimental sm_100/103/120 support; revisit after v1).
+- A100 / RTX 4090 / B200 backends, plus full RTX 5090 TK/model-kernel support. RTX 5090 is supported only for the generic CUDA device-test path.
 - FP8 / int8 / mxfp8 (TK ships H100 kernels for these; this is the more interesting v2 story than FP16/FP32).
 ================================================================================
 ## 3. docs/architecture.md
@@ -786,10 +793,11 @@ shapes use fused materialization/unpermute. Runtime H100 parity is still pending
 
 | Requirement | Why |
 |---|---|
-| CUDA Toolkit ≥ 12.4 | nvcc with `-std=c++20` and `sm_90a` |
+| CUDA Toolkit ≥ 12.4 | nvcc with `-std=c++20` and `sm_90a`; RTX 5090 device probes use `sm_120a` |
 | GCC ≥ 11 (or Clang ≥ 14) | host compiler for c++20 |
 | ThunderKittens checkout | header-only; expected at `../ThunderKittens` by default |
-| H100 (sm_90a) | runtime; `validate_goal_h100.sh preflight` / `cuda-runtime` reject other GPUs unless `ALLOW_NON_H100=1` is set for dry debug |
+| H100 (sm_90a) | primary runtime target for goal evidence |
+| RTX 5090 (sm_120) | generic device-test target only: CUDA runtime probe plus plain CUDA SwiGLU smoke |
 | NCCL ≥ 2.x + libnccl-dev | optional, multi-GPU |
 | OpenMPI | optional, multi-node MPI init |
 | Python ≥ 3.10 | only for `dev/data/*.py` preprocessing scripts |
@@ -854,6 +862,7 @@ The Makefile picks these defaults; override on the command line if needed.
 |---|---|---|
 | `TK_ROOT=` | `$(abspath ../ThunderKittens)` | ThunderKittens checkout |
 | `FORCE_NVCC_O=` | `3` | nvcc optimisation level |
+| `DEVICE_ARCH=SM90` | `SM90` | CUDA/TK architecture; `SM120` is available for generic RTX 5090 device probes |
 | `NO_OMP=1` | unset | Disable OpenMP host parallelism |
 | `NO_MULTI_GPU=1` | unset | Disable NCCL even if installed |
 | `NCCL_DIR=` | unset | Enable NCCL from a custom prefix containing `include/nccl.h` and `lib*/libnccl.so` |
@@ -866,7 +875,8 @@ The Makefile hard-codes:
 
 - `--use_fast_math -std=c++20`
 - `--expt-extended-lambda --expt-relaxed-constexpr`
-- `-DKITTENS_SM90 -gencode arch=compute_90a,code=sm_90a`
+- default `DEVICE_ARCH=SM90`: `-DKITTENS_SM90 -gencode arch=compute_90a,code=sm_90a`
+- opt-in `DEVICE_ARCH=SM120`: `-DKITTENS_SM120 -gencode arch=compute_120a,code=sm_120a`
 - `-DENABLE_BF16`
 - `-I$(TK_ROOT)/include -I$(TK_ROOT)/prototype`
 
@@ -888,8 +898,10 @@ a Hopper deployment. Set `CI=true` to suppress the sniff.
 
 This build-time warning is intentionally weaker than the goal harness. The
 target-host `scripts/validate_goal_h100.sh preflight` and `cuda-runtime` probes
-reject non-H100 / non-sm90-class GPUs unless `ALLOW_NON_H100=1` is set for dry
-compile/debug runs.
+target H100 / sm90-class GPUs by default. For RTX 5090 device-only checks, run
+`scripts/validate_goal_h100.sh rtx5090-device`; that phase forces
+`DEVICE_TEST_TARGET=rtx5090`, `DEVICE_ARCH=SM120`, and skips NCCL/MPI by
+default.
 
 ## Smoke test
 
@@ -1921,11 +1933,13 @@ host-only parser and ZeRO-2 layout path used for converted HF checkpoints.
 For local machines without a usable CUDA runtime, `scripts/validate_goal_h100.sh
 host-core` runs the non-CUDA-runtime subset using existing built binaries and
 artifacts.
-The target preflight and CUDA runtime probe are stricter than local build
-probes: they require H100/sm90-class GPUs and reject A100, RTX, and Blackwell
-cards unless `ALLOW_NON_H100=1` is set for dry compile/debug runs. That
-override is only for local debugging and does not count as runtime evidence for
-unchecked `goal.md` items; `goal-complete` refuses to run while it is set.
+The target preflight and CUDA runtime probe default to H100/sm90-class GPUs.
+RTX 5090 hosts have a separate device-only path:
+`scripts/validate_goal_h100.sh rtx5090-device`. It forces
+`DEVICE_TEST_TARGET=rtx5090` and `DEVICE_ARCH=SM120`, skips NCCL/MPI by
+default, and runs only the generic CUDA runtime probe plus the plain CUDA
+SwiGLU smoke. It does not count as runtime evidence for unchecked H100
+`goal.md` items; `goal-complete` still requires H100 evidence.
 Longer phases are explicit:
 
 ```bash
@@ -2113,8 +2127,10 @@ coverage, CUDA launch failures, or numerical failures cannot be hidden by
 partial output.
 `scripts/validate_goal_h100.sh cuda-runtime` asserts the `CUDA runtime check
 passed.` marker after the driver/runtime/device-allocation probe completes.
-The probe independently enforces the same H100/sm90-class runtime contract as
-`preflight`; `ALLOW_NON_H100=1` is accepted only as a dry-debug override.
+The probe independently enforces the same target contract as `preflight`:
+H100 by default, or RTX 5090 when `DEVICE_TEST_TARGET=rtx5090` is set.
+In RTX 5090 validate-only mode the harness also requires the
+`CUDA device target: rtx5090` log marker.
 `scripts/validate_goal_h100.sh smoke` asserts `<binary> smoke OK` from each
 kernel smoke binary: `test_matmul`, `test_attention`, `test_layernorm`,
 `test_rope`, `test_rmsnorm`, `test_swiglu`, and `test_attention_gqa`.

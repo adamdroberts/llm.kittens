@@ -28,6 +28,9 @@ Phases:
   llama-converter-smoke
                       Validate train_llama3.py write_model with a tiny checkpoint.
   cuda-runtime        Run a tiny CUDA driver/runtime/device allocation probe.
+  device-compile      Build generic CUDA device probes for DEVICE_ARCH.
+  device-tests        Run target preflight, generic CUDA device compile, cuda-runtime, and plain CUDA SwiGLU smoke.
+  rtx5090-device      Run device-tests with DEVICE_TEST_TARGET=rtx5090 and forced DEVICE_ARCH=SM120.
   starter-pack        Check GPT-2 starter-pack files, checkpoint metadata, and debug-state payload.
   smoke               Run kernel smoke tests.
   gpt2                Run GPT-2 forward/parity gates: gpt2_validate + test_gpt2cu.
@@ -63,6 +66,8 @@ Environment:
   NCCL_DIR=/path/to/nccl      custom NCCL prefix for Makefile/preflight.
   NCCL_INCLUDE_PATH=...       custom NCCL include directory.
   NCCL_LIB_PATH=...           custom NCCL library directory.
+  DEVICE_TEST_TARGET=h100     target for preflight/cuda-runtime/device-tests: h100 or rtx5090.
+  DEVICE_ARCH=SM90            Makefile target arch: SM90 or SM120; rtx5090-device forces SM120.
   ALLOW_NON_H100=0            allow non-H100 GPUs only for dry compile/debug phases.
   PREFLIGHT_VALIDATE_ONLY=0   Validate captured preflight stdout from PREFLIGHT_LOG instead of probing host.
   PREFLIGHT_LOG=...           Captured stdout/stderr from validate_goal_h100.sh preflight.
@@ -494,6 +499,32 @@ require_nccl() {
     [ -f /usr/include/nccl.h ] || [ -f /usr/local/cuda/include/nccl.h ] || die "nccl.h not found in /usr/include or /usr/local/cuda/include"
 }
 
+device_test_target() {
+    local target="${DEVICE_TEST_TARGET:-h100}"
+    target="${target,,}"
+    case "$target" in
+        h100|hopper) printf 'h100\n' ;;
+        rtx5090|rtx-5090|5090|sm120|sm_120|blackwell) printf 'rtx5090\n' ;;
+        *) die "unsupported DEVICE_TEST_TARGET=$target; use h100 or rtx5090" ;;
+    esac
+}
+
+device_preflight_marker() {
+    case "$1" in
+        h100) printf 'H100 preflight OK\n' ;;
+        rtx5090) printf 'RTX 5090 device preflight OK\n' ;;
+        *) die "unsupported device target marker: $1" ;;
+    esac
+}
+
+device_default_arch() {
+    case "$1" in
+        h100) printf 'SM90\n' ;;
+        rtx5090) printf 'SM120\n' ;;
+        *) die "unsupported device arch target: $1" ;;
+    esac
+}
+
 make_args() {
     local args=("FORCE_NVCC_O=${FORCE_NVCC_O:-3}")
     if [ -n "${MAKE_EXTRA:-}" ]; then
@@ -506,8 +537,11 @@ make_args() {
 
 phase_preflight() {
     log "preflight"
+    local target marker
+    target="$(device_test_target)"
+    marker="$(device_preflight_marker "$target")"
     if [ "${PREFLIGHT_VALIDATE_ONLY:-0}" = "1" ]; then
-        require_file_contains "H100 preflight OK" "${PREFLIGHT_LOG:-preflight.log}"
+        require_file_contains "$marker" "${PREFLIGHT_LOG:-preflight.log}"
         return
     fi
     require_cmd make
@@ -522,28 +556,52 @@ phase_preflight() {
     fi
     printf '%s\n' "$gpu_csv"
     if [ "${ALLOW_NON_H100:-0}" != "1" ]; then
-        printf '%s\n' "$gpu_csv" | awk -F, '
-            {
-                name=$1; cap=$2;
-                gsub(/^[ \t]+|[ \t]+$/, "", name);
-                gsub(/^[ \t]+|[ \t]+$/, "", cap);
-                if (name !~ /(H100|H200|GH200)/ && (cap + 0 < 9.0 || cap + 0 >= 10.0)) bad=1;
-            }
-            END { exit bad ? 1 : 0 }
-        ' || die "goal.md runtime gates require H100/sm_90-class GPUs; set ALLOW_NON_H100=1 only for dry compile/debug runs"
+        case "$target" in
+            h100)
+                printf '%s\n' "$gpu_csv" | awk -F, '
+                    {
+                        name=$1; cap=$2;
+                        gsub(/^[ \t]+|[ \t]+$/, "", name);
+                        gsub(/^[ \t]+|[ \t]+$/, "", cap);
+                        if (name !~ /(H100|H200|GH200)/ && (cap + 0 < 9.0 || cap + 0 >= 10.0)) bad=1;
+                    }
+                    END { exit bad ? 1 : 0 }
+                ' || die "goal.md runtime gates require H100/sm_90-class GPUs; set ALLOW_NON_H100=1 only for dry compile/debug runs"
+                ;;
+            rtx5090)
+                printf '%s\n' "$gpu_csv" | awk -F, '
+                    {
+                        name=$1; cap=$2;
+                        gsub(/^[ \t]+|[ \t]+$/, "", name);
+                        gsub(/^[ \t]+|[ \t]+$/, "", cap);
+                        if (name !~ /(RTX 5090|GeForce RTX 5090)/ && (cap + 0 < 12.0 || cap + 0 >= 12.1)) bad=1;
+                    }
+                    END { exit bad ? 1 : 0 }
+                ' || die "device tests target RTX 5090/sm_120-class GPUs; set ALLOW_NON_H100=1 only for dry debugging"
+                ;;
+        esac
     fi
 
-    if [ "${REQUIRE_NCCL:-1}" = "1" ]; then
+    local require_nccl require_mpi
+    if [ "$target" = "rtx5090" ]; then
+        require_nccl="${REQUIRE_NCCL:-0}"
+        require_mpi="${REQUIRE_MPI:-0}"
+    else
+        require_nccl="${REQUIRE_NCCL:-1}"
+        require_mpi="${REQUIRE_MPI:-1}"
+    fi
+
+    if [ "$require_nccl" = "1" ]; then
         require_nccl
     fi
-    if [ "${REQUIRE_MPI:-1}" = "1" ]; then
+    if [ "$require_mpi" = "1" ]; then
         require_cmd mpirun
         require_cmd mpicc
     fi
     if [ "${REQUIRE_NCU:-0}" = "1" ]; then
         require_cuda_tool ncu
     fi
-    printf 'H100 preflight OK\n'
+    printf '%s\n' "$marker"
 }
 
 phase_compile() {
@@ -722,11 +780,44 @@ phase_llama_converter_smoke() {
 phase_cuda_runtime() {
     log "CUDA runtime"
     if [ "${CUDA_RUNTIME_VALIDATE_ONLY:-0}" = "1" ]; then
-        require_file_contains "CUDA runtime check passed." "${CUDA_RUNTIME_LOG:-cuda_runtime_check.log}"
+        local log_path="${CUDA_RUNTIME_LOG:-cuda_runtime_check.log}"
+        if [ "$(device_test_target)" = "rtx5090" ]; then
+            require_file_contains "CUDA device target: rtx5090" "$log_path"
+        fi
+        require_file_contains "CUDA runtime check passed." "$log_path"
     else
         require_file ./cuda_runtime_check
         run_contains "CUDA runtime check passed." ./cuda_runtime_check
     fi
+}
+
+phase_device_compile() {
+    log "generic CUDA device compile"
+    local target arch args
+    target="$(device_test_target)"
+    arch="${DEVICE_ARCH:-$(device_default_arch "$target")}"
+    mapfile -t args < <(make_args)
+    args+=("DEVICE_ARCH=$arch" "NO_MULTI_GPU=1" "NO_USE_MPI=1")
+    run make -B cuda_runtime_check test_swiglu "${args[@]}"
+}
+
+phase_device_tests() {
+    log "generic CUDA device tests"
+    phase_preflight
+    phase_device_compile
+    phase_cuda_runtime
+    require_file ./test_swiglu
+    run_contains "test_swiglu smoke OK" ./test_swiglu
+}
+
+phase_rtx5090_device() {
+    (
+        export DEVICE_TEST_TARGET=rtx5090
+        export DEVICE_ARCH=SM120
+        export REQUIRE_NCCL="${REQUIRE_NCCL:-0}"
+        export REQUIRE_MPI="${REQUIRE_MPI:-0}"
+        phase_device_tests
+    )
 }
 
 phase_starter_pack() {
@@ -1588,6 +1679,9 @@ for phase in "$@"; do
         goal-replay-smoke) phase_goal_replay_smoke ;;
         llama-converter-smoke) phase_llama_converter_smoke ;;
         cuda-runtime) phase_cuda_runtime ;;
+        device-compile) phase_device_compile ;;
+        device-tests) phase_device_tests ;;
+        rtx5090-device) phase_rtx5090_device ;;
         starter-pack) phase_starter_pack ;;
         smoke) phase_smoke ;;
         gpt2) phase_gpt2 ;;

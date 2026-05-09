@@ -23,11 +23,13 @@ host-only parser and ZeRO-2 layout path used for converted HF checkpoints.
 For local machines without a usable CUDA runtime, `scripts/validate_goal_h100.sh
 host-core` runs the non-CUDA-runtime subset using existing built binaries and
 artifacts.
-The target preflight and CUDA runtime probe are stricter than local build
-probes: they require H100/sm90-class GPUs and reject A100, RTX, and Blackwell
-cards unless `ALLOW_NON_H100=1` is set for dry compile/debug runs. That
-override is only for local debugging and does not count as runtime evidence for
-unchecked `goal.md` items; `goal-complete` refuses to run while it is set.
+The target preflight and CUDA runtime probe default to H100/sm90-class GPUs.
+RTX 5090 hosts have a separate device-only path:
+`scripts/validate_goal_h100.sh rtx5090-device`. It forces
+`DEVICE_TEST_TARGET=rtx5090` and `DEVICE_ARCH=SM120`, skips NCCL/MPI by
+default, and runs only the generic CUDA runtime probe plus the plain CUDA
+SwiGLU smoke. It does not count as runtime evidence for unchecked H100
+`goal.md` items; `goal-complete` still requires H100 evidence.
 Longer phases are explicit:
 
 ```bash
@@ -43,6 +45,7 @@ scripts/validate_goal_h100.sh gqa-runtime
 scripts/validate_goal_h100.sh profile-parser
 scripts/validate_goal_h100.sh llama-converter-smoke
 scripts/validate_goal_h100.sh cuda-runtime
+scripts/validate_goal_h100.sh rtx5090-device
 scripts/validate_goal_h100.sh starter-pack
 scripts/validate_goal_h100.sh gpt-dry
 scripts/validate_goal_h100.sh llama-dry
@@ -203,8 +206,10 @@ coverage, CUDA launch failures, or numerical failures cannot be hidden by
 partial output.
 `scripts/validate_goal_h100.sh cuda-runtime` asserts the `CUDA runtime check
 passed.` marker after the driver/runtime/device-allocation probe completes.
-The probe independently enforces the same H100/sm90-class runtime contract as
-`preflight`; `ALLOW_NON_H100=1` is accepted only as a dry-debug override.
+The probe independently enforces the same target contract as `preflight`:
+H100 by default, or RTX 5090 when `DEVICE_TEST_TARGET=rtx5090` is set.
+In RTX 5090 validate-only mode the harness also requires the
+`CUDA device target: rtx5090` log marker.
 `scripts/validate_goal_h100.sh smoke` asserts `<binary> smoke OK` from each
 kernel smoke binary: `test_matmul`, `test_attention`, `test_layernorm`,
 `test_rope`, `test_rmsnorm`, `test_swiglu`, and `test_attention_gqa`.

@@ -162,6 +162,9 @@ CASE_LABELS = [
     "goal-complete-prereqs",
     "goal-complete",
     "goal-replay-smoke",
+    "device-compile",
+    "device-tests",
+    "rtx5090-device",
     "gpt2-smoke",
     "llama-resume",
     "gqa-runtime",
@@ -238,6 +241,9 @@ GOAL_REPLAY_REQUIRED = [
     "eval accuracy latest step 1 is before required step 4",
     "gpt2_full_bad_run.log",
     "NPROC=8",
+    "RTX 5090 device preflight OK",
+    "CUDA device target: rtx5090",
+    "DEVICE_TEST_TARGET",
 ]
 
 RUNTIME_EVIDENCE_CONTRACTS = [

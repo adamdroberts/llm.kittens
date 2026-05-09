@@ -22,8 +22,12 @@ MAKEFILE_REQUIRED = [
     "-std=c++20",
     "-I$(TK_ROOT)/include",
     "-I$(TK_ROOT)/prototype",
-    "-DKITTENS_SM90",
-    "-gencode arch=compute_90a,code=sm_90a",
+    "DEVICE_ARCH ?= SM90",
+    "KITTENS_ARCH_DEFINE := -DKITTENS_SM90",
+    "CUDA_GENCODE := -gencode arch=compute_90a,code=sm_90a",
+    "KITTENS_ARCH_DEFINE := -DKITTENS_SM120",
+    "CUDA_GENCODE := -gencode arch=compute_120a,code=sm_120a",
+    "NVCC_FLAGS += $(KITTENS_ARCH_DEFINE) $(CUDA_GENCODE)",
     "-DENABLE_BF16",
 ]
 
@@ -73,9 +77,14 @@ CUBLAS_COMMON_FORBIDDEN = [
 ]
 
 HARNESS_REQUIRED = [
+    "DEVICE_TEST_TARGET",
+    "device_preflight_marker",
+    "RTX 5090 device preflight OK",
     "if [ \"${ALLOW_NON_H100:-0}\" != \"1\" ]; then",
     "cap + 0 < 9.0 || cap + 0 >= 10.0",
+    "cap + 0 < 12.0 || cap + 0 >= 12.1",
     "goal.md runtime gates require H100/sm_90-class GPUs; set ALLOW_NON_H100=1 only for dry compile/debug runs",
+    "device tests target RTX 5090/sm_120-class GPUs; set ALLOW_NON_H100=1 only for dry debugging",
 ]
 
 TK_COORD_FORBIDDEN = [

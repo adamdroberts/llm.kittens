@@ -4,7 +4,8 @@
 > [karpathy/llm.c](https://github.com/karpathy/llm.c) feature-for-feature
 > but replacing tile-MMA kernels (GEMM, MHA, LayerNorm/RMSNorm where useful)
 > with [ThunderKittens](https://github.com/HazyResearch/ThunderKittens).
-> H100 (sm_90a) only, BF16 only, in v1.
+> H100 (sm_90a) for TK/model runtime evidence, BF16 only, in v1. RTX 5090
+> (sm_120) is supported only for the generic `rtx5090-device` probe path.
 >
 > **In-flight port.** [`goal.md`](goal.md) is the authoritative TODO. Read it
 > first before answering any "what is done / what is left" question.
@@ -141,10 +142,12 @@
   guards, profiling, and full-run phases.
   Runtime phases assert explicit final markers such as `<binary> smoke OK`,
   `CUDA runtime check passed.`, `gpt2_validate OK`, and `test_gpt2cu OK`.
-  `preflight` and `cuda-runtime` reject non-H100/sm90-class devices unless
-  `ALLOW_NON_H100=1` is set for dry compile/debug work; that override is not
-  valid completion evidence for unchecked H100 gates, and `goal-complete`
-  refuses to run while it is set.
+  `preflight` and `cuda-runtime` target H100/sm90-class devices by default.
+  `scripts/validate_goal_h100.sh rtx5090-device` forces
+  `DEVICE_TEST_TARGET=rtx5090` and `DEVICE_ARCH=SM120` for the RTX 5090 CUDA
+  runtime probe plus plain CUDA SwiGLU smoke; that path is not valid completion
+  evidence for unchecked H100 gates. `ALLOW_NON_H100=1` remains a dry-debug
+  override, and `goal-complete` refuses to run while it is set.
   `scripts/validate_goal_h100.sh host-core` runs the non-CUDA-runtime host-side
   subset against existing built binaries/artifacts.
   `ALLOW_FULL_GOAL_RUN=1 scripts/validate_goal_h100.sh goal-complete` runs

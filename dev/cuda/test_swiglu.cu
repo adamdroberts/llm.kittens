@@ -13,6 +13,7 @@ Build via the Makefile target:
 #include <cstdio>
 #include <cstdlib>
 #include <random>
+#include <cstring>
 #include <vector>
 
 #include <cuda_bf16.h>
@@ -90,8 +91,10 @@ int main() {
     cudaCheck(cudaSetDevice(0));
     cudaCheck(cudaGetDeviceProperties(&deviceProp, 0));
     printf("Device: %s (sm_%d%d)\n", deviceProp.name, deviceProp.major, deviceProp.minor);
-    if (deviceProp.major != 9) {
-        printf("warning: this smoke test targets H100 (sm_90a); continuing anyway\n");
+    const bool rtx5090 = deviceProp.major == 12 && deviceProp.minor == 0
+        && std::strstr(deviceProp.name, "RTX 5090") != nullptr;
+    if (deviceProp.major != 9 && !rtx5090) {
+        printf("warning: this plain CUDA smoke test is validated for H100 and RTX 5090; continuing anyway\n");
     }
     printf("Shape: N=%d\n", N);
 

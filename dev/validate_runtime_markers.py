@@ -85,11 +85,18 @@ def validate_cuda_runtime_contract(failures: list[str]) -> None:
     context = rel(source)
     for needle in [
         'std::strcmp(allow_non_h100, "1") == 0',
+        "DEVICE_TEST_TARGET",
+        "target_is_rtx5090",
         "const bool sm90_class = prop.major == 9;",
+        "const bool sm120_class = prop.major == 12 && prop.minor == 0;",
         'device_name_contains(prop.name, "H100")',
         'device_name_contains(prop.name, "H200")',
         'device_name_contains(prop.name, "GH200")',
-        "if (!allow_non_h100_debug && !sm90_class && !named_hopper)",
+        'device_name_contains(prop.name, "RTX 5090")',
+        'printf("CUDA device target: %s\\n", rtx5090_target ? "rtx5090" : "h100");',
+        "if (rtx5090_target && !sm120_class && !named_rtx5090)",
+        "device tests target RTX 5090/sm_120-class GPUs;",
+        "if (h100_target && !sm90_class && !named_hopper)",
         "goal.md runtime gates require H100/sm_90-class GPUs;",
         "Set ALLOW_NON_H100=1 only for dry debugging.",
     ]:

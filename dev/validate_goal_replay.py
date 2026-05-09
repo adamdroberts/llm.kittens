@@ -231,11 +231,55 @@ def main() -> None:
             },
         )
         run_harness(
+            "preflight",
+            {
+                "DEVICE_TEST_TARGET": "rtx5090",
+                "PREFLIGHT_VALIDATE_ONLY": "1",
+                "PREFLIGHT_LOG": str(
+                    write(
+                        root / "rtx5090_preflight.log",
+                        "NVIDIA GeForce RTX 5090, 12.0\nRTX 5090 device preflight OK\n",
+                    )
+                ),
+            },
+        )
+        expect_harness_fail(
+            "preflight",
+            {
+                "DEVICE_TEST_TARGET": "rtx5090",
+                "PREFLIGHT_VALIDATE_ONLY": "1",
+                "PREFLIGHT_LOG": str(root / "preflight.log"),
+            },
+            "RTX 5090 device preflight OK",
+        )
+        run_harness(
             "cuda-runtime",
             {
                 "CUDA_RUNTIME_VALIDATE_ONLY": "1",
                 "CUDA_RUNTIME_LOG": str(write(root / "cuda_runtime_check.log", "CUDA runtime check passed.\n")),
             },
+        )
+        run_harness(
+            "cuda-runtime",
+            {
+                "DEVICE_TEST_TARGET": "rtx5090",
+                "CUDA_RUNTIME_VALIDATE_ONLY": "1",
+                "CUDA_RUNTIME_LOG": str(
+                    write(
+                        root / "rtx5090_cuda_runtime_check.log",
+                        "CUDA device target: rtx5090\nCUDA runtime check passed.\n",
+                    )
+                ),
+            },
+        )
+        expect_harness_fail(
+            "cuda-runtime",
+            {
+                "DEVICE_TEST_TARGET": "rtx5090",
+                "CUDA_RUNTIME_VALIDATE_ONLY": "1",
+                "CUDA_RUNTIME_LOG": str(root / "cuda_runtime_check.log"),
+            },
+            "CUDA device target: rtx5090",
         )
 
         smoke_dir = root / "smoke"
