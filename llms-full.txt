@@ -1,0 +1,3190 @@
+# llm.kittens - full documentation bundle for LLM ingestion
+
+This file aggregates the canonical operational documentation and narrative porting notes for llm.kittens.
+It is generated from the current repo docs; if it drifts, regenerate it from the listed files.
+The browseable index is [docs/README.md](docs/README.md). The single-source-of-truth TODO is [goal.md](goal.md).
+
+The order is:
+1. README.md
+2. goal.md
+3. docs/architecture.md
+4. docs/build-and-run.md
+5. docs/kernel-reference.md
+6. docs/precision.md
+7. docs/multi-gpu.md
+8. docs/llama3.md
+9. docs/testing.md
+10. docs/porting-notes.md
+11. docs/agents.md
+12. doc/README.md
+13. doc/gemm/gemm.md
+14. doc/attention/attention.md
+15. doc/norms/norms.md
+16. doc/llama3/llama3.md
+17. .claude/skills/llm-kittens-port/SKILL.md
+
+================================================================================
+## 1. README.md
+================================================================================
+
+# llm.kittens
+
+GPT-2 / GPT-3 / Llama-3 training in single-binary C++/CUDA, with every GPU
+kernel built on top of [ThunderKittens](https://github.com/HazyResearch/ThunderKittens).
+Mirrors [karpathy/llm.c](https://github.com/karpathy/llm.c) feature-for-feature
+but replaces its bespoke CUDA kernels (and cuBLAS / cuBLASLt / cuDNN) with
+TK-backed ones.
+
+> **In-flight port.** The ⬜ checkboxes in [`goal.md`](goal.md) are the canonical
+> "what is done / what is left". Today `make all` builds the GEMM smoke test,
+> `train_gpt2cu`, and `test_gpt2cu`; `make gpt2_validate` builds the
+> forward-only GPT-2 loss gate; `make train_llama3cu` builds the Llama
+> trainer loop with TK GQA forward plus supported-shape backward paths;
+> `make test_attention`, `make test_layernorm`, and `make test_attention_gqa`
+> build the GPT MHA, GPT LayerNorm, and GQA reference smoke harnesses.
+> H100 runtime parity and full Llama-3 support are tracked through M2–M8. **Read [`goal.md`](goal.md)
+> first.**
+
+## Documentation
+
+| Need | Page |
+|---|---|
+| Master TODO and milestone status | [`goal.md`](goal.md) |
+| Project shape, layering rules, file map | [`docs/architecture.md`](docs/architecture.md) |
+| How to build / run today | [`docs/build-and-run.md`](docs/build-and-run.md) |
+| Per-kernel mapping (TK vs verbatim from llm.c) | [`docs/kernel-reference.md`](docs/kernel-reference.md) |
+| BF16-only invariant and rationale | [`docs/precision.md`](docs/precision.md) |
+| ZeRO + multi-node | [`docs/multi-gpu.md`](docs/multi-gpu.md) |
+| Llama-3 (M6/M7) plan and new kernels | [`docs/llama3.md`](docs/llama3.md) |
+| Test pyramid + tolerances | [`docs/testing.md`](docs/testing.md) |
+| H100 goal validation harness | [`scripts/validate_goal_h100.sh`](scripts/validate_goal_h100.sh) |
+| Wrapper-PR checklist and common gotchas | [`docs/porting-notes.md`](docs/porting-notes.md) |
+| Narrative kernel porting tutorials | [`doc/README.md`](doc/README.md) |
+| Repo-local agent skills | [`docs/agents.md`](docs/agents.md), [`.claude/skills/`](.claude/skills/) |
+| LLM ingestion artifacts | [`llms.txt`](llms.txt), [`llms-full.txt`](llms-full.txt) |
+| Append-only history | [`CHANGELOG.md`](CHANGELOG.md) |
+
+The full docs index is at [`docs/README.md`](docs/README.md).
+
+## Status snapshot
+
+| Milestone | Scope | State |
+|---|---|---|
+| M1 | Skeleton, Makefile, verbatim ports, BF16 lock, dataset prep, starter pack | ✅ done |
+| M2 | Single-GPU GPT-2 forward (TK GEMM + TK MHA-fwd + TK LayerNorm-fwd + `train_gpt2.cu`) | 🟡 GPT-2 forward wrappers, forward-only validation binary, and MHA/LayerNorm smoke harnesses compile-wired; H100 validation pending |
+| M3 | Single-GPU GPT-2 backward + `test_gpt2.cu` numerical parity | 🟡 GPT-2 backward kernels and MHA/LayerNorm smoke harnesses compile-wired; H100 parity pending |
+| M4 | Multi-GPU NCCL + ZeRO 0/1, full GPT-2 124M reproduction on 8×H100 | 🟡 scripts + log verifier landed; H100 run pending |
+| M5 | GPT-3 variants + multi-node + ZeRO 2/3 | 🟡 descriptor + scripts + GPT dry-runs landed; ZeRO-2 compile-wired; ZeRO-3 parameter-shard runtime path compile-wired; H100/NCCL validation pending |
+| M6 | Llama-3 1B (RMSNorm, RoPE, GQA, SwiGLU) | 🟡 converter + kernels + trainer loop + dataloaders/checkpoint-resume/logging compile; TK GQA forward + supported-shape bwd compile; TK tile-load RoPE compile-wired for supported shapes; H100 validation pending |
+| M7 | Llama-3 8B multi-node | 🟡 Slurm script + converter validation hooks landed; gated HF conversion/runtime validation pending |
+| M8 | Polish, profiling, optional bias-fusion | 🟡 docs + profile/log verifier wired; profile helper enforces the 70% tensor-util gate; parser threshold logic has a synthetic CSV check; GEMM epilogue compile/profile-wired; `ncu`/H100 validation pending |
+
+Per-task checkboxes live in [`goal.md`](goal.md).
+
+## Why
+
+`llm.c` is the reference for "small, fast, single-binary GPT training in pure
+C/CUDA" — but its kernels are bespoke CUDA + cuBLAS. ThunderKittens is a
+tile-oriented kernel framework from the FlashAttention-3 author, H100/Blackwell
+first. Putting them together produces an end-to-end open trainer that uses the
+most modern Hopper kernel patterns (WGMMA, TMA) and serves as a worked example
+for both projects.
+
+## Hardware
+
+- **H100 (sm_90a)** — primary target. WGMMA + TMA + 228 KB shared mem.
+- **A100, RTX 4090, RTX 5090, B200** — not supported in v1. ThunderKittens has
+  experimental sm_100/103/120 support; revisit after v1 lands.
+
+The goal harness enforces this at runtime: `scripts/validate_goal_h100.sh
+preflight` and `cuda-runtime` reject non-H100/sm90-class devices unless
+`ALLOW_NON_H100=1` is set for dry compile/debug work. That override is not
+valid completion evidence for the unchecked H100 gates in [`goal.md`](goal.md).
+
+## Precision
+
+BF16 only. ThunderKittens H100 GEMM and MHA kernels are bf16-only and we
+inherit the constraint. Master weights, gradient accumulation, and AdamW state
+remain FP32 — same invariants as `llm.c`. Compile-time errors out on `ENABLE_FP16`
+or `ENABLE_FP32`. Full rationale and the v2 plan: [`docs/precision.md`](docs/precision.md).
+
+## Build (today)
+
+```bash
+# Default: assumes ../ThunderKittens is the TK checkout.
+make
+
+# Or set TK_ROOT explicitly:
+make TK_ROOT=/path/to/ThunderKittens
+```
+
+`make` (default) builds `test_matmul`, `train_gpt2cu`, and `test_gpt2cu`.
+`gpt2_validate` is the forward-only GPT-2 loss gate; `profile_gpt2cu` is
+available as a separate target. `profile_gpt2cu.py --csv-input` exercises the
+report parser and tensor-utilization gate from an exported raw CSV, and
+`profile_gpt2cu.py --gelu-fusion 1` profiles the opt-in epilogue path. GPT-2's
+`-ge 1` flag opts the MLP up-projection into the TK finish-path bias+GELU
+epilogue; default remains `-ge 0` until H100 numerics are validated.
+`train_llama3cu` builds the
+Llama trainer loop with TK GQA forward and supported-shape backward where
+available, with CUDA fallback elsewhere. TK-supported GQA shapes rotate Q/K
+inside the tile-load path; fallback shapes use fused materialization/unpermute.
+The Llama trainer also writes model + per-rank optimizer/dataloader checkpoint
+state, writes rank-0 `main.log` metrics, and supports `-y 1` resume from the
+latest completed checkpoint. H100 runtime validation remains M6 work — see
+[`goal.md`](goal.md).
+
+Requirements: CUDA Toolkit ≥ 12.4, GCC ≥ 11 (or Clang ≥ 14), a ThunderKittens
+checkout (header-only), optionally NCCL + OpenMPI for multi-GPU / multi-node
+(`NCCL_DIR=/path/to/nccl` or an explicit `NCCL_INCLUDE_PATH` /
+`NCCL_LIB_PATH` pair is supported for cluster/module installs),
+Python ≥ 3.10 for `dev/data/*.py` preprocessing scripts. Full toolchain detail:
+[`docs/build-and-run.md`](docs/build-and-run.md).
+
+## Smoke test (today)
+
+```bash
+make test_matmul
+./test_matmul
+
+make test_attention
+./test_attention
+
+make test_layernorm
+./test_layernorm
+
+make test_rope
+./test_rope
+
+make test_rmsnorm
+./test_rmsnorm
+
+make test_swiglu
+./test_swiglu
+
+make test_attention_gqa
+./test_attention_gqa
+python dev/validate_attention_gqa_reference.py
+scripts/validate_goal_h100.sh gqa-runtime
+python dev/validate_profile_parser.py
+python dev/validate_log_tools.py
+python dev/validate_llama3_converter.py --cpp-validate --train-binary ./train_llama3cu
+python dev/validate_nccl_source.py
+python dev/validate_build_contracts.py
+python dev/validate_epilogue_source.py
+python dev/validate_gqa_source.py
+python dev/validate_runtime_markers.py
+python dev/validate_training_source.py
+python dev/validate_profile_source.py
+python dev/validate_llama_conversion_source.py
+python dev/validate_goal_harness_coverage.py
+python dev/validate_zero_layout.py
+
+make test_dataloader
+./test_dataloader
+
+scripts/validate_goal_h100.sh llama-converter-smoke
+scripts/validate_goal_h100.sh llama-checkpoint-smoke
+
+make gpt2_validate
+./gpt2_validate
+```
+
+The H100 harness asserts the final success markers from these runtime binaries,
+including `<binary> smoke OK`, `CUDA runtime check passed.`, `gpt2_validate OK`,
+and `test_gpt2cu OK`, rather than relying only on process exit status.
+Use `scripts/validate_goal_h100.sh host-core` on local machines that can compile
+and run host-only checks but do not have a working CUDA runtime.
+`ALLOW_NON_H100=1` may be used with the `preflight` and `cuda-runtime` probes
+only for dry debugging on unsupported GPUs; real runtime gates still require
+H100/sm90-class hardware.
+`goal-complete` refuses to run with that override set.
+On a target machine where every remaining `goal.md` gate should run in one
+intentional pass, use
+`ALLOW_FULL_GOAL_RUN=1 scripts/validate_goal_h100.sh goal-complete`; this runs
+the ZeRO-3 smoke plus long H100/NCCL/profile/conversion/full-run phases after
+`goal-core`.
+That completion pass requires `GPT2_FULL_EXPECTED_VAL_LOSS` and
+`GPT2_FULL_EXPECTED_HELLASWAG` so the GPT-2 full reproduction is checked against
+explicit published metrics, plus explicit max/min thresholds for the GPT-2
+smoke, ZeRO-3 GPT-2 smoke, GPT-2 two-node comparison, Llama resume,
+Llama-3 1B stability/full, and Llama-3 8B full phases. GPT-2 smoke, ZeRO-3
+smoke, Llama resume, and long training phases
+validate rank-0 `main.log` with `dev/validate_training_log.py` after launch;
+full-run gates also require captured `run.log` launch metadata and final
+checkpoint markers/artifacts.
+`gpt2-two-node` runs the filesystem Slurm script for 100 steps by default and
+compares the single-node vs two-node train-loss curves with
+`dev/compare_training_logs.py`, requiring both curves to decrease over the
+compared window. Llama resume and the 8B Slurm gate
+also header-validate the expected checkpoint artifacts. The 8B Slurm gate uses
+`sbatch --wait` unless `LLAMA8B_FULL_VALIDATE_ONLY=1` is set for an existing
+output directory.
+
+Sweeps three forward GEMM shapes (a 1024³ square, the GPT-2 124M MLP
+up-projection, and the GPT-2 124M LM head), the opt-in forward bias+GELU
+epilogue shape, plus both dWeight `A^T*B` paths: overwrite and accumulated
+`+=` through the scratch-backed TK path. All compare against naive bf16
+references with FP32 accumulation. Requires an H100 to be
+meaningful at runtime.
+
+`test_attention` checks GPT-style packed Q/K/V attention against an independent
+CPU reference, including direct TK forward, padded TK forward, fallback
+backward, and supported-shape TK backward.
+
+`test_layernorm` checks GPT LayerNorm forward, fused residual+LayerNorm forward,
+saved `mean`/`rstd`, and backward `+=` accumulation into `dinp`, `dweight`, and
+`dbias` against independent CPU references.
+
+## Quickstart (compile-ready, runtime parity pending)
+
+```bash
+# 1. Reference checkpoints + tokenizer for GPT-2 124M.
+./dev/download_starter_pack.sh
+
+# 2. Tokenize a smoke-test dataset.
+python dev/data/tinyshakespeare.py
+
+# 3. Build the trainer.
+make train_gpt2cu
+
+# 4. Train 100 steps from the bf16 124M checkpoint.
+./train_gpt2cu \
+    -i dev/data/tinyshakespeare/tiny_shakespeare_train.bin \
+    -j dev/data/tinyshakespeare/tiny_shakespeare_val.bin \
+    -e gpt2_124M_bf16.bin \
+    -b 4 -t 1024 -x 100 -v 20 -s 0
+```
+
+For the full GPT-2 124M reproduction on 8×H100 (M4 milestone), see
+`scripts/run_gpt2_124M.sh`. The single-node and multi-node script list is in
+[`docs/multi-gpu.md`](docs/multi-gpu.md#per-script-status).
+
+## Layout
+
+```
+llm.kittens/
+├── train_gpt2.cu          GPT-2 / GPT-3 entrypoint  [compile-ready; runtime parity pending]
+├── train_gpt2.py          PyTorch reference / .bin exporter (verbatim)
+├── train_llama3.cu        Llama-3 trainer/checkpoint-resume [compile-ready; H100 validation pending]
+├── train_llama3.py        Llama-3 HF→.bin converter
+├── dev/validate_gpt2_starter_pack.py Host-only GPT-2 artifact checker
+├── dev/validate_data_artifacts.py Host-only GPT-2/Llama train/eval data checker
+├── dev/validate_attention_gqa_reference.py CPU-only GQA/RoPE PyTorch reference checker
+├── dev/validate_profile_parser.py Host-only profile CSV parser/threshold checker
+├── dev/validate_llama3_converter.py Host-only Llama write_model header/payload checker
+├── dev/validate_nccl_source.py Host-only NCCL/ZeRO runtime-contract source guard
+├── dev/validate_build_contracts.py Host-only BF16/H100/TK build-contract source guard
+├── dev/validate_epilogue_source.py Host-only GPT-2 bias+GELU epilogue/profile source guard
+├── dev/validate_gqa_source.py Host-only GQA/RoPE routing and gradient-unpermute source guard
+├── dev/validate_runtime_markers.py Host-only runtime success-marker source guard
+├── dev/validate_training_source.py Host-only rank-0 training-log evidence source guard
+├── dev/validate_profile_source.py Host-only Nsight Compute profile-gate source guard
+├── dev/validate_llama_conversion_source.py Host-only Llama-3.1 8B conversion source guard
+├── dev/validate_goal_harness_coverage.py Host-only compile/goal-complete coverage guard
+├── dev/test_dataloader.cpp Host-only GPT-2/Llama DataLoader/EvalLoader smoke
+├── test_gpt2.cu           Numerical parity test     [compile-ready; runtime parity pending]
+├── profile_gpt2.cu        ncu profiling target      [compile-ready; supports --gelu-fusion 0|1; runtime pending]
+├── llmc/                  Kernel + utility headers (C-style API)
+│   ├── matmul.cuh         TK-backed GEMM fwd + dInp/dWeight/dbias backward
+│   ├── attention.cuh      TK MHA fwd/bwd; padded fwd dispatch; CUDA bwd fallback
+│   ├── attention_gqa.cuh  Llama-3 GQA + RoPE attention (TK fwd/supported bwd; CUDA fallback)
+│   ├── layernorm.cuh      TK LayerNorm fwd + fused-residual; TK warp-sum bwd reductions
+│   ├── rmsnorm.cuh        Llama-3 RMSNorm (TK fwd + fused residual; CUDA bwd)
+│   ├── rope.cuh           Llama-3 rotary embeddings (TK; compile-ready)
+│   ├── encoder.cuh        token+position embedding (verbatim)
+│   ├── gelu.cuh           GELU (verbatim)
+│   ├── swiglu.cuh         Llama-3 SwiGLU activation (plain CUDA)
+│   ├── fused_classifier.cuh  cross-entropy + softmax (verbatim)
+│   ├── adamw.cuh          AdamW step (verbatim)
+│   ├── global_norm.cuh    grad-clip norm (verbatim)
+│   ├── zero.cuh           NCCL + ZeRO-0/1/2/3; ZeRO-3 parameter shards all-gather into the full compute layout
+│   ├── dataloader.h      GPT-2/Llama train+eval loaders (header-dispatched)
+│   ├── tokenizer.h, sampler.h, schedulers.h, ...   (verbatim)
+│   └── tk/                ThunderKittens template-heavy implementations
+│       ├── tk_common.cuh  Bridge: bf16 alias, TK_ALIGN, smem helper, BF16 static_assert
+│       ├── gemm_h100.cuh  TK bf16 GEMM in header form (✓)
+│       ├── attention_h100.cuh   TK MHA fwd (T%192) + bwd (T%256) H100 kernels
+│       ├── attention_gqa_h100.cuh   TK GQA fwd + supported bwd [M6 partial; tile-load RoPE compile; runtime pending]
+│       ├── layernorm_tk.cuh     TK LayerNorm forward + fused-residual (✓)
+│       ├── rmsnorm_tk.cuh       TK RMSNorm forward + fused-residual wrapper (✓ compile-ready)
+│       └── rope_tk.cuh          TK RoPE wrapper (✓ compile-ready)
+├── dev/
+│   ├── cuda/test_matmul.cu         GEMM smoke test (✓)
+│   ├── cuda/test_attention.cu      GPT MHA smoke harness (✓ compile; runtime pending)
+│   ├── cuda/test_layernorm.cu      GPT LayerNorm smoke harness (✓ compile; runtime pending)
+│   ├── cuda/test_rope.cu           RoPE smoke harness (✓ compile; runtime pending)
+│   ├── cuda/test_rmsnorm.cu        RMSNorm smoke harness (✓ compile; runtime pending)
+│   ├── cuda/test_swiglu.cu         SwiGLU smoke harness (✓ compile; runtime pending)
+│   ├── cuda/test_attention_gqa.cu  GQA + RoPE smoke harness (✓ compile; runtime pending)
+│   ├── data/                  dataset preprocessing (mirror of llm.c/dev/data/)
+│   ├── test_dataloader.cpp    host-only GPT-2/Llama DataLoader/EvalLoader smoke
+│   ├── download_starter_pack.sh
+│   ├── validate_data_artifacts.py  host-only prepared-data artifact validator
+│   ├── validate_attention_gqa_reference.py  CPU-only GQA/RoPE PyTorch reference check
+│   ├── validate_profile_parser.py  host-only profile CSV parser/threshold check
+│   ├── validate_llama3_converter.py  host-only Llama write_model header/payload smoke
+│   └── download_llama3.py     gated HF Llama-3 converter wrapper + synthetic checkpoint validator
+├── scripts/                   Single-node + multi-node training scripts  [GPT/GPT-3/Llama scripts ported; runtime pending]
+│   └── validate_goal_h100.sh   H100 validation harness for remaining goal gates
+├── docs/                      Operational documentation
+└── doc/                       In-tree tutorial / porting notes  [present; runtime notes still pending]
+```
+
+The rule for `llmc/`: every wrapper in `llmc/*.cuh` exposes a C-style function
+signature. Only files under `llmc/tk/` `#include <kittens.cuh>` and use the
+`kittens::` namespace. This keeps `train_*.cu` free of template noise. Full
+explanation in [`docs/architecture.md`](docs/architecture.md).
+
+## What changed vs. llm.c
+
+| Component | llm.c | llm.kittens |
+|---|---|---|
+| Matmul | cuBLASLt (with bias + GELU epilogue fusion) | TK H100 bf16 GEMM (`A*B^T` model-weight path); default bias/GELU are separate passes, with opt-in GPT-2 MLP bias+GELU epilogue compile-wired behind `-ge 1` |
+| Attention forward | cuDNN flash-attn or fallback CUDA | TK MHA forward (bf16, head_dim ∈ {64, 128}) |
+| Attention backward | cuDNN flash-attn-bwd | TK MHA backward |
+| LayerNorm forward | hand-written CUDA | TK layernorm (forked, dropout removed, `D` re-templated) |
+| LayerNorm backward | hand-written CUDA | hand-written CUDA accumulator with TK warp reductions |
+| Encoder, GELU, SwiGLU, fused_classifier, AdamW, global_norm | plain CUDA | plain CUDA, **kept verbatim from llm.c** |
+| ZeRO / multi-node init | plain CUDA + NCCL | ZeRO-0/1/2/3 and NCCL init wired; ZeRO-3 parameter shards all-gather into the current full compute layout; H100/NCCL validation pending |
+| Precision | BF16 / FP16 / FP32 | BF16 only |
+| Allocator alignment | 16 bytes | 128 bytes (TMA descriptors) |
+| Build | nvcc + cuBLAS + cuBLASLt + (optional) cuDNN | nvcc + TK headers, single binary |
+
+The principle: **TK earns its keep on tile-MMA ops** (GEMM, MHA, LayerNorm).
+Everywhere else, `llm.c`'s plain CUDA kernels are kept verbatim — TK adds
+nothing on element-wise / gather-scatter / 1D-reduction workloads.
+
+## License
+
+MIT, matching `llm.c` and ThunderKittens.
+
+## Acknowledgements
+
+- [karpathy/llm.c](https://github.com/karpathy/llm.c) — the structural template
+  for this project. Most of `llmc/*` is ported verbatim.
+- [HazyResearch/ThunderKittens](https://github.com/HazyResearch/ThunderKittens)
+  — the kernel framework everything tile-shaped is built on.
+================================================================================
+## 2. goal.md
+================================================================================
+
+# Goal — port `llm.c` onto ThunderKittens, feature-for-feature
+
+This file is the **single source of truth** for what is done and what is left.
+Every docs page links here. Every PR should tick a box.
+
+The shape of the finished project is laid out in [`docs/architecture.md`](docs/architecture.md).
+The kernel-by-kernel mapping is in [`docs/kernel-reference.md`](docs/kernel-reference.md).
+History of what changed and when is in [`CHANGELOG.md`](CHANGELOG.md).
+
+## Status at a glance
+
+| Milestone | Scope | State |
+|-----------|-------|-------|
+| **M1** | Skeleton, Makefile, verbatim ports, BF16 lock, dataset prep, starter-pack download | ✅ done |
+| **M2** | Single-GPU GPT-2 forward (TK GEMM + TK MHA-fwd + TK LayerNorm-fwd + adapted `train_gpt2.cu`) | 🟡 partial — GPT-2 forward wrappers, forward-only validation binary, and MHA/LayerNorm smoke harnesses are compile-wired; H100 forward-loss validation still pending |
+| **M3** | Single-GPU GPT-2 backward + AdamW + numerical parity (`test_gpt2.cu`) | 🟡 partial — GPT-2 backward kernels, AdamW, global norm, MHA/LayerNorm smoke harnesses, and parity harness compile; H100 parity still pending |
+| **M4** | Multi-GPU NCCL + ZeRO 0/1, full GPT-2 124M reproduction on 8×H100 | 🟡 scripts + log verifier landed; H100 run pending |
+| **M5** | GPT-3 variants + multi-node (MPI/TCP/FS) + ZeRO 2/3 | 🟡 descriptor + scripts + GPT dry-runs landed; ZeRO-2 compile-wired; ZeRO-3 parameter-shard runtime path compile-wired; H100/NCCL validation pending |
+| **M6** | Llama-3 1B (RMSNorm, RoPE, GQA attention, SwiGLU) | 🟡 converter + kernels + trainer loop + dataloaders/checkpoint-resume/logging compile; TK GQA forward + supported-shape bwd compile; TK tile-load RoPE compile-wired for supported shapes; H100 validation pending |
+| **M7** | Llama-3 8B multi-node | 🟡 Slurm script + converter validation hooks landed; gated HF conversion/runtime validation pending |
+| **M8** | Polish: docs index, profiling output, optional v1.1 cuBLAS-style bias-fusion in TK GEMM | 🟡 docs + profile/log verifier wired; profile helper enforces the 70% tensor-util gate; parser threshold logic has a synthetic CSV check; GEMM epilogue compile/profile-wired; `ncu`/H100 validation pending |
+
+Legend: ✅ done · 🟡 partial · ⬜ not started.
+
+---
+
+## M1 — Skeleton (✅ done)
+
+- [x] `Makefile` — `sm_90a`, `c++20`, `--use_fast_math`, TK include paths, BF16-only, NCCL/MPI optional, GPU-capability sniff with warning. See [`docs/build-and-run.md`](docs/build-and-run.md).
+- [x] `llmc/cuda_common.h` — `floatX = __nv_bfloat16` locked; compile error if `ENABLE_FP16`/`ENABLE_FP32` is defined.
+- [x] `llmc/cuda_utils.cuh` — `x128`, `f128`, `stochastic_rounding` ported verbatim from llm.c.
+- [x] `llmc/cublas_common.h` — kept as a stub; cuBLAS is removed in v1.
+- [x] Verbatim element-wise ports from llm.c: `encoder.cuh`, `gelu.cuh`, `fused_classifier.cuh`, `adamw.cuh`, `global_norm.cuh`.
+- [x] `zero.cuh` — NCCL + ZeRO-0/1/2/3 and MPI/TCP/FS init are wired. ZeRO-3 owns a local parameter shard, updates that shard, and all-gathers into the existing full compute layout; full compute and gradient buffers are still allocated by the current kernels.
+- [x] Utility headers: `dataloader.h` (extended to dispatch GPT-2 uint16 and Llama-3 uint32 training/eval files by header magic), plus verbatim `tokenizer.h`, `sampler.h`, `schedulers.h`, `rand.h`, `mfu.h`, `outlier_detector.h`, `logger.h`, `utils.h`.
+- [x] `llmc/tk/tk_common.cuh` — `bf16` aliases, `TK_ALIGN = 128` (TMA-aligned allocator constant), `tk_set_max_dynamic_smem`, hard `static_assert` on `floatX == __nv_bfloat16`, hard `#error` if `KITTENS_SM90` is undefined.
+- [x] `dev/data/` — full mirror of `llm.c/dev/data/` (`tinyshakespeare.py`, `tinystories.py`, `fineweb.py`, `fineweb.sh`, `edu_fineweb.sh`, `hellaswag.py`, `mmlu.py`, `data_common.py`, `README.md`). `dev/validate_data_artifacts.py` validates prepared GPT-2/Llama train and eval `.bin` metadata without CUDA; `--self-test` writes synthetic GPT/Llama train/eval artifacts and checks expected parser failures.
+- [x] `dev/download_starter_pack.sh` — fetches `gpt2_tokenizer.bin`, `gpt2_124M.bin`, `gpt2_124M_bf16.bin`, `gpt2_124M_debug_state.bin` from Karpathy's HF mirror. `dev/validate_gpt2_starter_pack.py` verifies the tokenizer, fp32/BF16 checkpoint metadata, and debug-state payload shape/size without CUDA; `--self-test` writes tiny synthetic starter-pack artifacts and checks expected parser failures.
+- [x] `requirements.txt` — `tqdm`, `numpy<2`, `torch`, `tiktoken`, `transformers`, `datasets`, `requests`.
+- [x] `profile_gpt2cu.py` — nsight-compute post-processing helper, adapted to the TK-only build flags. It supports `--csv-input` for host-only parser/threshold validation without invoking `ncu`, and `--gelu-fusion 0|1` to profile the default path or the opt-in GPT-2 MLP bias+GELU epilogue.
+
+## M2 — Single-GPU GPT-2 forward (🟡 partial)
+
+What is done:
+
+- [x] `llmc/tk/gemm_h100.cuh` — TK bf16 H100 GEMM ported into header form. Specialisations cover both `A*B` and `A*B^T`; the `A*B^T` path is used for llm.c model weights stored as `(OC, C)`. Two N-block sizes are exposed: `matmul_default<2,4,8>` (N % 256, default) and `matmul_small_n<2,2,8>` (N % 128, used by the GPT-2 LM head). Persistent grid (132 SMs), TMA producer, WGMMA consumer.
+- [x] `llmc/matmul.cuh` — C-style `matmul_forward(out, inp, weight, bias, B, T, C, OC, stream)`. Dispatches to the TK `A*B^T` GEMM based on `OC % 256`, matching llm.c's `(OC, C)` weight layout. The default path applies bias in a separate pass (`add_bias_kernel`); the GPT-2 MLP up-projection can opt into the compile-wired TK finish-path bias+GELU epilogue through `matmul_forward_gelu` / `-ge 1`, pending H100 numerical validation.
+- [x] `llmc/matmul.cuh` — `matmul_backward_bias_kernel9` and `reduce_add_sum_kernel` ported verbatim from llm.c. They are the column-reduction kernels the M3 backward will call.
+- [x] `llmc/tk/attention_h100.cuh` + `llmc/attention.cuh` — TK MHA forward fast path for `T % 192 == 0`, plus padded TK dispatch for other sequence lengths (including GPT-2 `T=1024`). Keeps the verbatim llm.c QKV permute/unpermute glue.
+- [x] `llmc/layernorm.cuh` — llm.c LayerNorm / fused residual / backward correctness baseline ported so the GPT-2 trainer API compiles. Forward and fused-residual forward now dispatch to the TK fork for supported widths; CUDA baseline remains as fallback.
+- [x] `llmc/tk/layernorm_tk.cuh` — TK LayerNorm forward fork compile-wired for widths `{768, 1024, 1280, 1600, 2048, 4096}`. Dropout stripped, internal sync removed, `cudaStream_t` launchers added, and `mean`/`rstd` saved for GPT-2 backward.
+- [x] `train_gpt2.cu` — ported from llm.c, cuBLAS/cuDNN paths stripped, matmul/attention/layernorm call sites routed through local wrappers, default GELU path kept as explicit `matmul_forward` + `gelu_forward`, 128-byte parameter-offset assertions added, CLI preserved. `-ge 1` now opts GPT-2 MLP up-projection into the TK finish-path bias+GELU epilogue; default remains `0` until H100 numerics are validated.
+- [x] `dev/cuda/test_matmul.cu` — GEMM smoke test. Sweeps three forward shapes (1024³ square, GPT-2 124M MLP up `4096×3072×768`, GPT-2 124M LM head `4096×50304×768`), the opt-in forward bias+GELU epilogue shape, plus overwrite and accumulated dWeight `A^T*B` shapes, comparing against naive bf16 references with FP32 accumulation. Tolerance `0.5` (loose because bf16 + K=768/1024).
+- [x] `dev/cuda/test_attention.cu` — GPT-style MHA smoke harness with an independent CPU reference for packed Q/K/V, causal forward, and packed Q/K/V gradients. It covers direct TK forward with fallback backward at `T=192`, and padded TK forward plus supported-shape TK backward at `T=256`. Compile-checked with `make test_attention NO_MULTI_GPU=1 NO_USE_MPI=1 FORCE_NVCC_O=0`; runtime is blocked locally by the CUDA driver/runtime mismatch.
+- [x] `dev/cuda/test_layernorm.cu` — GPT-style LayerNorm smoke harness with an independent CPU reference for forward, fused residual+LayerNorm forward, saved `mean`/`rstd`, and backward `+=` accumulation into `dinp`, `dweight`, and `dbias`. Compile-checked with `make test_layernorm NO_MULTI_GPU=1 NO_USE_MPI=1 FORCE_NVCC_O=0`; runtime is blocked locally by the CUDA driver/runtime mismatch.
+- [x] `dev/cuda/gpt2_validate.cu` + `make gpt2_validate` — forward-only M2 validation binary. It loads `gpt2_124M_debug_state.bin`, runs `gpt2_validate()` on the reference batch, and checks the forward loss without entering backward or AdamW. Compile-checked with `make gpt2_validate NO_MULTI_GPU=1 NO_USE_MPI=1 FORCE_NVCC_O=0`; runtime is blocked locally by the CUDA driver/runtime mismatch.
+- [x] `make all` — builds `test_matmul`, `train_gpt2cu`, and `test_gpt2cu` with the current compile-ready GPT-2 path.
+
+What remains:
+
+- [x] **Finish TK MHA forward wrapper** — `llmc/attention.cuh` + `llmc/tk/attention_h100.cuh`.
+  - Port from `ThunderKittens/kernels/attention/mha_h100/mha_h100.cu` (`fwd_attend_ker`).
+  - Keep llm.c's `permute_kernel` / `unpermute_kernel` (`llm.c/llmc/attention.cuh:14-83`) so QKV layout `(B,T,3,NH,HS)` becomes the `(B,NH,T,HS)` TK kernel expects.
+  - Constraint: TK MHA `head_dim ∈ {64, 128}`. GPT-2 = 64, Llama-3 = 128. Anything else needs a new TK specialization.
+  - Match llm.c's wrapper signature at `llm.c/llmc/attention.cuh:195`.
+  - Non-192-aligned lengths are padded in scratch, run through TK at `Tpad`, then unpadded into the normal output.
+  - Verification so far: compile-only (`make all`, `make test_attention`). H100 numerical validation remains covered by `gpt2_validate` below.
+- [x] **TK LayerNorm forward wrapper** — `llmc/layernorm.cuh` + `llmc/tk/layernorm_tk.cuh`.
+  - Fork `ThunderKittens/kernels/layernorm/layernorm.cu`. Re-template the hidden width `D` over GPT-2 / Llama widths {768, 1024, 1280, 1600, 2048, 4096}. Strip the dropout path. Remove the internal `cudaDeviceSynchronize`. Add a `cudaStream_t` parameter.
+  - Also expose `fused_residual_forward5` matching `llm.c/llmc/layernorm.cuh:467`.
+  - Verification so far: compile-only (`make all`, `make test_layernorm`). H100 numerical validation remains covered by `gpt2_validate` below.
+- [ ] `./gpt2_validate` returns a sane forward loss against `gpt2_124M_debug_state.bin` on H100 (forward only — 10-step optimizer match comes in M3).
+
+## M3 — Single-GPU GPT-2 backward (🟡 partial)
+
+- [x] **TK MHA backward** wrapper in `llmc/attention.cuh` + `llmc/tk/attention_h100.cuh`. Ported `bwd_attend_prep_ker` + `bwd_attend_ker` from `ThunderKittens/kernels/attention/mha_h100/mha_h100.cu`. The fast path supports `head_dim ∈ {64, 128}` and `T % 256 == 0`, uses the forward-saved LSE in `att`, and falls back to the slow CUDA recompute baseline for unsupported shapes. `dev/cuda/test_attention.cu` compile-wires a CPU-reference forward/backward smoke harness; H100 numerical parity still pending.
+- [x] **Hand-written LayerNorm backward** in `llmc/layernorm.cuh`. `layernorm_backward_kernel10` keeps the llm.c cross-block atomic-counter accumulator pattern and uses a TK `kittens::warp::sum` shared-vector helper for the row-wise backward reductions. `dev/cuda/test_layernorm.cu` compile-wires a CPU-reference forward/fused/backward smoke harness; H100 numerical parity still pending.
+- [x] **TK `matmul_backward`** in `llmc/matmul.cuh`.
+  - `dInp = dOut · W` is wired through the existing TK `A*B` GEMM because `W` is stored `(OC, C)`.
+  - `dWeight = dOutᵀ · Inp` uses TK `A^T*B` when the destination is known to be zero (`micro_step == 0`).
+  - Accumulated `dWeight += dOutᵀ · Inp` uses a dedicated aligned `matmul_scratch` activation buffer for the TK product, then adds the temporary result into the gradient tensor. The slow CUDA `+=` kernel remains only as a fallback for unsupported shapes or missing scratch.
+  - `dBias = column-reduction of dOut` uses `matmul_backward_bias_kernel9` + `reduce_add_sum_kernel` when the auxiliary buffer is available.
+- [x] **AdamW step** wired through (`llmc/adamw.cuh` already has the kernel; just call it from `train_gpt2.cu`).
+- [x] **`global_norm` grad-clip** wired through.
+- [x] **`test_gpt2.cu`** ported from `llm.c/test_gpt2.cu` and compile-checked. Loads `gpt2_124M_debug_state.bin`, runs forward + 10 AdamW steps, compares against the PyTorch reference.
+  - The gradient tolerance table is now explicit in `test_gpt2.cu`, with inherited llm.c BF16 thresholds, current TK thresholds, tensor names, and notes for tensors likely to move after the first H100 TK MHA-bwd parity run.
+- [ ] `make test_gpt2cu && ./test_gpt2cu` passes on H100.
+
+## M4 — Multi-GPU GPT-2 124M reproduction (🟡 partial)
+
+- [x] Wire `zero.cuh` into the `train_gpt2.cu` we land in M2 — NCCL init, ZeRO-0 and ZeRO-1 sharding, gradient all-reduce, master-weight broadcast. Compile-wired; distributed runtime still needs H100/NCCL validation.
+- [x] `scripts/run_gpt2_124M.sh` — port from `llm.c/scripts/run_gpt2_124M.sh`. B=64, T=1024, LR=6e-4, warmup=700, cosine→0, 18,865 steps. ZeRO-1. The script passes `-x "$MAX_STEPS"`, writes `run.log` launch metadata, and derives `DONE_*` from the same value so the harness final-step check matches the launched run.
+- [ ] 8×H100 end-to-end: final HellaSwag accuracy and val loss within 0.5% of llm.c's published numbers. `scripts/validate_goal_h100.sh gpt2-full` now verifies the rank-0 `main.log` final metrics, `run.log` launch metadata, and final checkpoint marker/artifacts after launch; `GPT2_FULL_VALIDATE_ONLY=1` validates existing completed evidence instead of relaunching. `goal-complete` requires `GPT2_FULL_EXPECTED_VAL_LOSS` plus `GPT2_FULL_EXPECTED_HELLASWAG` so the published-metric comparison is explicit.
+- [x] `scripts/run_gpt2_350M.sh`, `run_gpt2_774M.sh`, `run_gpt2_1558M.sh` — ported with ZeRO-1; larger-model scripts pass `-ge 1` to opt into the GPT-2 MLP bias+GELU epilogue path once H100 validation clears it. They pass `-x "$MAX_STEPS"` and derive `DONE_*` from that value so bounded validation runs cannot drift from their completion guards.
+- [x] `scripts/pyrun_gpt2_124M.sh` — ported (PyTorch reference run). Added upstream `train_gpt2.py` reference helper; `MAX_STEPS` feeds `--num_iterations` for bounded reference runs.
+
+## M5 — GPT-3 variants + multi-node + ZeRO 2/3 (🟡 partial)
+
+- [x] Descriptor parser handles `gpt3:c384` … `gpt3:c12288`, including the canonical `gpt3:c5120` 13B shape. `train_gpt2cu -x 0` now has a host-only metadata dry-run path that validates GPT-2/GPT-3 descriptor parsing, checkpoint headers, parameter payload sizes, and per-tensor ZeRO-1/2 shardability before CUDA/NCCL init. The `gpt-dry` harness asserts descriptor source, channel count, and ZeRO-2 layout output for every built-in GPT-3 descriptor. **No new training C++ paths** — GPT-3 differences are flag-only.
+- [x] `scripts/run_gpt3_125M.sh` — `-t 2048`, `-q 0.1`, `-sl 7.0 -sg 7.0`, `-ge 1`, with `MAX_STEPS` routed through `-x` and the matching `DONE_*` guard.
+- [ ] ZeRO-2 and ZeRO-3 paths in `zero.cuh` implemented and exercised end-to-end. `-z 2` is compile-wired through the sharded optimizer/reduce-scatter path and host-only GPT/Llama dry-runs validate 8-process ZeRO-2 tensor layout plus runtime shard-count setup. `-x 0 -z 3` GPT/Llama dry-runs now validate the ZeRO-3 parameter-shard layout and local shard count. Runtime `-z 3` is compile-wired for GPT and Llama with an authoritative BF16 parameter-shard buffer, AdamW updates on the owned shard, and a compute-stream-ordered all-gather back into the full parameter layout used by the existing forward/backward kernels. Scalar NCCL all-reduces use element count `1` instead of `sizeof(float)`, shard all-gathers wait on AdamW updates from the compute stream before reading updated parameter shards, trainer update paths synchronize after the parameter all-gather before the next full-layout read, and `scripts/validate_goal_h100.sh source-guards` checks the regression-prone contracts plus standalone local-shard offset coverage for GPT-2, all built-in GPT-3 descriptors, and Llama-3 1B/8B at 1/2/4/8/16 processes. H100/NCCL end-to-end validation is still pending, and the current backward/compute kernels still allocate full gradient and full compute parameter buffers.
+- [x] `scripts/multi_node/run_gpt2_124M_mpi.sh` — MPI init.
+- [x] `scripts/multi_node/run_gpt2_124M_fs.sbatch` — Slurm + filesystem rendezvous.
+- [x] `scripts/multi_node/run_gpt2_124M_tcp.sbatch` — Slurm + TCP rendezvous.
+- [x] H100-pod NCCL env vars documented in each script (`NCCL_NVLS_ENABLE=1`, `NCCL_IB_HCA=mlx5`, `NCCL_NET_GDR_LEVEL=2`, `NCCL_IB_DISABLE=0`). See [`docs/multi-gpu.md`](docs/multi-gpu.md).
+- [ ] 2-node sanity run: same loss curve as single-node within the first 100 steps. `dev/compare_training_logs.py` and `scripts/validate_goal_h100.sh gpt2-two-node` can launch a bounded filesystem Slurm run with `MAX_STEPS=100`, then require paired rank-0 `main.log` train-loss steps and explicit tolerance via `GPT2_TWO_NODE_REL_TOL`; the real two-node H100/NCCL evidence is still pending.
+
+## M6 — Llama-3 1B single-node (🟡 partial)
+
+This is the highest-risk milestone — the GQA + RoPE-fused attention kernel has no full TK reference.
+
+- [x] `llmc/rmsnorm.cuh` + `llmc/tk/rmsnorm_tk.cuh` — RMSNorm forward + hand-written backward + fused-residual variant. Mirrors `layernorm_tk` minus mean subtraction and bias. Forward and fused-residual forward dispatch through TK for widths `{768, 1024, 1280, 1600, 2048, 4096}`; backward is a plain CUDA correctness baseline. `dev/cuda/test_rmsnorm.cu` now checks forward, fused-residual forward, `rstd`, `dinp`, and `dweight` against an independent CPU reference. Compile-checked with `make test_rmsnorm NO_MULTI_GPU=1 NO_USE_MPI=1 FORCE_NVCC_O=0`.
+- [x] `llmc/rope.cuh` + `llmc/tk/rope_tk.cuh` — wrap `ThunderKittens/kernels/rotary/rotary.cu`. Backward is the inverse rotation (`sin -> -sin`). `dev/cuda/test_rope.cu` now checks HS=64 and HS=128 forward/backward against an independent CPU reference. Compile-checked with `make test_rope NO_MULTI_GPU=1 NO_USE_MPI=1 FORCE_NVCC_O=0`.
+- [x] `llmc/swiglu.cuh` — plain CUDA forward/backward for `out = silu(gate) * up`. `dev/cuda/test_swiglu.cu` checks forward, `dgate`, and `dup` against an independent CPU reference. Compile-checked with `make test_swiglu NO_MULTI_GPU=1 NO_USE_MPI=1 FORCE_NVCC_O=0`.
+- [ ] `llmc/attention_gqa.cuh` + `llmc/tk/attention_gqa_h100.cuh` — **new TK kernel**. TK causal forward and supported-shape TK backward paths have landed for BF16 H100 shapes, mapping query heads to shared KV heads with `n_rep = n_q / n_kv` and accumulating `dK`/`dV` into KV-head buffers. For shapes where both TK forward and TK backward are available, `attention_gqa.cuh` keeps saved Q/K unrotated and `attention_gqa_h100.cuh` applies RoPE to Q/K after the TK tile loads before WGMMA; the wrapper then inverse-rotates `dQ`/`dK` during packed-gradient unpermute before writing `dinp`. Unsupported/fallback shapes still use fused Q/K materialization and packed-gradient unpermute. `scripts/validate_goal_h100.sh gqa-runtime` is the dedicated H100 gate for the CPU reference plus CUDA/TK smoke comparison. Runtime numerical validation on H100 remains pending.
+- [x] `dev/cuda/test_attention_gqa.cu` — GQA + RoPE forward/backward smoke harness with an independent CPU reference for packed Llama Q/K/V, RoPE, causal GQA softmax, and packed gradients. It now covers and prints explicit success markers for a `T=128` TK-forward/fallback-backward case plus a `T=256` supported-shape TK-backward case. Compile-checked with `make test_attention_gqa NO_MULTI_GPU=1 NO_USE_MPI=1 FORCE_NVCC_O=0`; runtime is blocked locally by the CUDA driver/runtime mismatch.
+- [x] `dev/validate_attention_gqa_reference.py` — CPU-only PyTorch reference check for the same `B=1 T=128` and `B=1 T=256` GQA/RoPE smoke shapes. It compares materialized-RoPE attention with repeated KV heads against a grouped/tile-load-style formulation, including backward gradients into packed Q/K/V, without initializing CUDA.
+- [x] `train_llama3.cu` — sibling to `train_gpt2.cu`. Compile-ready trainer loop has landed: `LlamaConfig`, parameter layout, descriptor parser for `llama3:1B`, `llama3:8B`, `llama3.1:8B`, header magic `20240803` v5 parsing, host-side checkpoint payload-size validation, random/checkpoint initialization, Llama forward/backward/update, val/HellaSwag eval wiring, rank-0 `main.log` metric logging, AdamW, grad norm, ZeRO-0/1/2 reduction hooks, rank-0 model checkpoint files, per-rank optimizer/dataloader state files, and `-y 1` resume from the latest completed checkpoint. Host-only dry-runs use `set_zero_configs` and report the validated local ZeRO shard parameter count. Runtime validation is still blocked on H100 access and a compatible CUDA driver/runtime.
+- [x] `train_llama3.py` — Python helper. Port `from_pretrained_llama3_hf` and `write_model` from `llm.c/train_llama3.py:850-920`. `dev/validate_llama3_converter.py` validates the tiny `write_model` header, BF16 payload order, and host-only C++ dry-parse path without gated HF weights.
+- [x] `dev/download_llama3.py` — produces `llama3.1_8B_bf16.bin` from HF `meta-llama/Meta-Llama-3.1-8B`. Requires `huggingface-cli login`; runtime conversion still needs HF access and GPU memory. Post-write validation now checks the llm.kittens header, expected payload size, hidden-dim metadata, and optionally `train_llama3cu -e CHECKPOINT -x 0`; `--cpp-zero-stage` and `--cpp-processes` route that C++ dry-run through host-only ZeRO layouts. `--write-synthetic-checkpoint` creates a tiny deterministic BF16 Llama checkpoint for repeatable parser and ZeRO layout smoke tests.
+- [x] `scripts/run_llama3_1B.sh` — B=32, T=2048, LR=3e-4, warmup=2000, cosine→0.1, defaulting to Llama-tokenized FineWeb-edu 100B paths. It passes `-x "$MAX_STEPS"` and derives `DONE_*` from that value; runtime awaits H100 validation and TK GQA numerical validation.
+- [x] Llama-3 dataset prep: every script in `dev/data/` supports `--model_desc llama-3`, including `hellaswag.py`. GPT-2 training shards remain uint16 magic `20240520` v1; Llama-3 training shards use uint32 magic `20240801` v7; GPT-2 eval remains magic `20240522` v1; Llama-3 eval writes `hellaswag_val_llama3.bin` with uint32 tokens and magic `20240802` v7. `dataloader.h` dispatches training and eval files by header magic. Syntax, writer, host-side artifact metadata validation, and host-side C++ loader smoke tests are wired.
+- [ ] Forward+backward stable on FineWeb-edu, GQA numerics match PyTorch/reference checks on the B=1 T=128 and T=256 smoke shapes. The CPU-only PyTorch reference equivalence now passes for both shapes; `scripts/validate_goal_h100.sh gqa-runtime` is wired for the H100 TK comparison, and `scripts/validate_goal_h100.sh llama1b-stability` is wired for the bounded 1000-step FineWeb-edu stability run plus `main.log` validation for final train/val/eval evidence and train-loss decrease. Runtime execution is still pending.
+
+## M7 — Llama-3 8B multi-node (🟡 partial)
+
+8B does not fit on 8×H100-80GB without ZeRO-2 (~96 GB optimizer + params + grads before activations).
+
+- [x] `scripts/multi_node/run_llama3_8B_fs.sbatch` — 2-node Slurm + filesystem rendezvous target for ZeRO-2. Syntax-checked; runtime awaits ZeRO-2 H100/NCCL validation, HF weights, TK GQA numerical validation, and a real two-node H100 allocation.
+- [ ] HF checkpoint converter validated end-to-end (8B weights load correctly). Local validation hooks exist (`dev/validate_llama3_converter.py --cpp-validate`, `scripts/validate_goal_h100.sh llama-converter-smoke`, `dev/download_llama3.py --validate-only ... --cpp-validate`, `dev/download_llama3.py --write-synthetic-checkpoint ... --cpp-validate`, `scripts/validate_goal_h100.sh llama-checkpoint-smoke`, `scripts/validate_goal_h100.sh llama8b-convert`, plus `LLAMA_DRY_CHECKPOINT=... scripts/validate_goal_h100.sh llama-dry`), but the real gated HF 8B conversion/load has not been run here.
+
+## M8 — Polish (🟡 partial)
+
+- [x] [`doc/`](doc/) (in-tree tutorial pages, mirroring llm.c's layernorm tutorial) + porting notes — `doc/` is the literate "how each kernel was ported" archive; `docs/` (this rewrite) is the operational documentation.
+- [x] `profile_gpt2.cu` — port from `llm.c/profile_gpt2.cu`. Compile-checked with `make profile_gpt2cu NO_MULTI_GPU=1 NO_USE_MPI=1 FORCE_NVCC_O=0`. It accepts `--gelu-fusion 0|1` so Nsight Compute can profile both the default explicit-GELU path and the opt-in TK bias+GELU epilogue.
+- [ ] `scripts/validate_goal_h100.sh profile` on H100. It runs Nsight Compute through `profile_gpt2cu.py` for `PROFILE_GELU_FUSIONS="${PROFILE_GELU_FUSIONS:-0 1}"` and fails if averaged MMA tensor-core utilization is below 70% for the GEMM-heavy ops. `PROFILE_VALIDATE_ONLY=1 PROFILE_CSV_DIR=...` validates existing raw `profile_ge*.csv` exports without local `ncu`; `PROFILE_VALIDATE_ONLY=1 PROFILE_REPORT_DIR=...` validates `profile_ge*.ncu-rep` reports through the same parser/gate when local `ncu` is available for CSV export. Standalone `profile` can narrow `PROFILE_GELU_FUSIONS` for debugging, but `goal-complete` forces/requires both `profile_ge0` and `profile_ge1` evidence so the default explicit-GELU and opt-in fused epilogue paths are both covered. `dev/validate_profile_parser.py` covers the CSV parser and threshold pass/fail logic with synthetic data; the real H100 `ncu` reports are still pending.
+- [ ] **Optional v1.1**: cuBLAS-style bias / GELU epilogue fusion inside the TK GEMM template. The GPT-2 MLP up-projection forward path is compile-wired behind `-ge 1`, covered by a `test_matmul` smoke case, and included in the profile matrix through `PROFILE_GELU_FUSIONS="0 1"`. `dev/validate_epilogue_source.py` keeps the TK epilogue, matmul wrapper, GPT-2 switch/fallback, profile switch, larger-model scripts, and smoke coverage aligned, but H100 numerical validation and real `ncu` profiling are still pending.
+- [x] [`docs/`](docs/) tree — index, architecture, kernel-reference, build-and-run, multi-gpu, llama3, testing, precision, porting-notes, agents.
+- [x] [`llms.txt`](llms.txt) and [`llms-full.txt`](llms-full.txt).
+- [x] [`CHANGELOG.md`](CHANGELOG.md).
+- [x] Repo-local agent skills under [`.claude/skills/`](.claude/skills/).
+- [x] `scripts/validate_goal_h100.sh` — executable H100 validation harness for the remaining runtime gates: preflight, compile, launch/Python syntax, source-level CUDA/NCCL/ZeRO, GQA/RoPE source-contract, BF16/H100/TK build-contract, GELU-epilogue source-contract, profile-gate source-contract, Llama conversion source-contract, rank-0 training-log evidence, launch-script, and runtime-marker contract guards, synthetic and prepared-data artifact metadata checks, host-only C++ dataloader smoke, CPU-only GQA/RoPE reference checks, dedicated GQA/RoPE CUDA runtime comparison, synthetic profile parser/threshold checks, synthetic training-log verifier checks, synthetic Llama converter writer smoke, synthetic Llama checkpoint parser smoke, synthetic GPT-2 starter-pack checks, real gated HF Llama-3.1 8B conversion/validation, CUDA runtime probe, GPT-2 starter-pack validation, kernel smoke tests, GPT-2 validation/parity, GPT/Llama dry-run/resume smoke, Llama checkpoint artifact header checks, host-only ZeRO-2/3 layout dry-run checks, standalone ZeRO shard offset validation, bounded Llama-3 1B FineWeb-edu stability, ZeRO request guard checks, ZeRO-3 runtime smoke, rank-0 training-log verification for GPT-2 smoke, Llama resume, and long runs, profiling, guarded completion, and final-artifact/log validation for full-run phases. `host-core`/`all-local` aggregates the non-CUDA-runtime host-side gates for machines without a working CUDA driver.
+- [x] `dev/validate_training_log.py` — host-only `main.log` verifier for GPT-2 smoke, Llama resume, and long H100 phases. It checks final train/validation/eval steps, finite metrics, optional published/threshold values, and train-loss decrease where required after the launched job completes.
+- [x] `dev/compare_training_logs.py` — host-only first-100-step loss-curve comparator for the M5 two-node sanity gate; it can require both compared curves to decrease over the selected window.
+- [x] `dev/validate_log_tools.py` — synthetic host-only smoke for the training-log validator and two-node loss-curve comparator. It exercises passing logs plus failing loss-decrease, max-val-loss, expected val/eval tolerance, final-step, relative-tolerance, and non-decreasing curve cases.
+- [x] `dev/validate_launch_scripts.py` — host-only launch-script guard that keeps `MAX_STEPS`, trainer step-count arguments, and `DONE_*` contracts aligned.
+- [x] `dev/validate_build_contracts.py` — host-only source guard that keeps the BF16/H100/TK build contract aligned: Makefile `sm_90a`, C++20, TK include paths, `KITTENS_SM90`, `ENABLE_BF16`, no FP16/FP32/cuBLAS/cuBLASLt/cuDNN build flags, BF16 `floatX`, TK bridge static guards, 128-byte alignment, dynamic shared-memory opt-in, and the empty cuBLAS shim.
+- [x] `dev/validate_epilogue_source.py` — host-only source guard that keeps the optional GPT-2 bias+GELU epilogue aligned across the TK GEMM template, `llmc/matmul.cuh`, `train_gpt2.cu` `-ge` routing/fallback, profile `--gelu-fusion`, larger-model launch scripts, and `test_matmul` smoke coverage.
+- [x] `dev/validate_gqa_source.py` — host-only source guard for the custom GQA/RoPE path. It keeps tile-load RoPE routing limited to TK forward+backward shapes, checks GQA query-to-KV head mapping and shape gates, requires supported-shape TK backward to receive RoPE tables and still inverse-rotate packed `dQ`/`dK` gradients afterward, and ties the T=128 fallback-bwd/T=256 TK-bwd smoke plus CPU reference coverage to the source contract.
+- [x] `dev/validate_runtime_markers.py` — host-only source guard that keeps CUDA runtime, kernel-smoke, GPT-2 validation, and GQA runtime success markers aligned with the harness assertions.
+- [x] `dev/validate_training_source.py` — host-only source guard that keeps `llmc/logger.h`, both trainers, `dev/validate_training_log.py`, and the harness long-phase log-validation arguments aligned around the rank-0 `main.log` evidence format.
+- [x] `dev/validate_profile_source.py` — host-only source guard that keeps `profile_gpt2cu.py`, `profile_gpt2.cu`, `dev/validate_profile_parser.py`, and the harness `profile` phase aligned around the Nsight Compute raw metrics, tensor-core utilization threshold, default/fused GELU profiling modes, validate-only CSV replay, and validate-only report mode.
+- [x] `dev/validate_llama_conversion_source.py` — host-only source guard that keeps the gated Llama-3.1 8B HF alias, BF16 checkpoint header/size validation, synthetic checkpoint path, C++ dry-parse options, and `llama8b-convert` harness phase aligned.
+- [x] `dev/validate_goal_harness_coverage.py` — host-only source guard that keeps compile-target coverage, unchecked runtime evidence mapping, `goal-complete` phase coverage, completion prerequisites, full-run validate-only log paths, replay negative evidence checks, and required explicit metric thresholds aligned with `goal.md`.
+- [x] `dev/validate_zero_layout.py` — host-only ZeRO shard offset checker for GPT-2, every built-in GPT-3 descriptor, and Llama-3 1B/8B at 1/2/4/8/16 processes.
+- [x] `dev/validate_llama_checkpoint_artifacts.py` — host-only Llama resume artifact checker. It validates `DONE_*`, model checkpoint headers, and rank state headers for expected magic/version, step, rank, and process count; `--self-test` exercises synthetic pass/fail artifact headers inside `llama-checkpoint-smoke`.
+
+---
+
+## Top risks (kept honest)
+
+1. **Custom GQA + RoPE-fused attention (M6)** — no full upstream TK reference. Forward and supported-shape backward are compile-wired; TK-supported shapes now rotate Q/K in the tile-load path, while fallback shapes use fused materialization/unpermute. H100 numerical validation is still pending.
+2. **GPT-2 backward runtime parity is compile-wired but unverified** — TK MHA backward and LayerNorm backward both compile, and `test_attention`/`test_layernorm` cover focused GPT kernel shapes at compile time, but MHA reduction order and LayerNorm partial-sum geometry still need real H100 parity runs.
+3. **Numerical-parity tolerances** — re-derived per tensor; expect ~10× looser than llm.c on attention bwd. Document in [`docs/testing.md`](docs/testing.md).
+4. **TK MHA `head_dim ∈ {64, 128}`** — adequate for GPT-2 (64) and Llama-3 (128). Any future config (HS=80, 96) needs a new TK specialization.
+5. **Llama-3 8B fits poorly on 8×H100-80GB** — requires ZeRO-2 or 2-node ZeRO-1. v1's single-node Llama target is 1B; 8B is multi-node only.
+
+## Out of scope for v1
+
+- FP16 and FP32 activations (TK H100 GEMM/MHA are bf16-only; re-introducing them is v2 work).
+- A100 / RTX 4090 / RTX 5090 / B200 backends (TK has experimental sm_100/103/120 support; revisit after v1).
+- FP8 / int8 / mxfp8 (TK ships H100 kernels for these; this is the more interesting v2 story than FP16/FP32).
+================================================================================
+## 3. docs/architecture.md
+================================================================================
+
+# Architecture
+
+llm.kittens is a single-binary C++/CUDA trainer. Same shape as `llm.c`, but
+every tile-shaped kernel is built on ThunderKittens (TK) primitives. Element-wise
+and gather/scatter kernels stay as plain CUDA — TK adds nothing on those workloads.
+
+This page covers the **layering rule**, the file-by-file responsibility map, the
+**allocator alignment** constraint, and where to put new code.
+
+## Layering
+
+Three layers, strictly enforced:
+
+```mermaid
+flowchart TD
+    A["train_gpt2.cu / train_llama3.cu<br/>(orchestration; C-style API only)"]
+    B["llmc/*.cuh<br/>(C-style wrappers; thin glue + plain-CUDA verbatim ports)"]
+    C["llmc/tk/*.cuh<br/>(ThunderKittens template-heavy implementations)"]
+    D["ThunderKittens headers (kittens.cuh, prototype.cuh)"]
+    A --> B
+    B --> C
+    C --> D
+```
+
+**Rule 1 — `train_*.cu` `#include`s only `llmc/*.cuh`.** Never `llmc/tk/*.cuh`
+directly. The training source stays free of TK template noise.
+
+**Rule 2 — Only files under `llmc/tk/` may `#include <kittens.cuh>` or use the
+`kittens::` namespace.** This makes `llmc/tk/tk_common.cuh` the single bridge
+between the C-style world and TK's template world.
+
+**Rule 3 — `llmc/*.cuh` wrappers expose C-style function signatures.** Concrete
+shape: take raw `floatX*` buffers (where `floatX = __nv_bfloat16` is locked) and
+a `cudaStream_t`. No TK templates leak through this boundary.
+
+The bridge file [`llmc/tk/tk_common.cuh`](../llmc/tk/tk_common.cuh) hard-asserts
+the BF16 constraint, requires `KITTENS_SM90`, and provides:
+
+- `llmk::bf16` aliasing `kittens::bf16` (which itself aliases `__nv_bfloat16`).
+- `llmk::to_bf16(...)` reinterpret-cast helpers.
+- `llmk::TK_ALIGN = 128` — the TMA-descriptor alignment constant.
+- `llmk::tk_set_max_dynamic_smem(fn)` — the boilerplate `cudaFuncSetAttribute` opt-in for the full H100 dynamic shared-memory budget that TK kernels expect.
+
+## File-by-file map
+
+```
+llm.kittens/
+├── Makefile                  Build (sm_90a, c++20, BF16, TK include paths). docs/build-and-run.md.
+├── README.md                 Project story.
+├── goal.md                   Master TODO. Single source of truth.
+├── CHANGELOG.md              Append-only history.
+├── docs/                     This documentation set.
+├── llms.txt                  Concise LLM index.
+├── llms-full.txt             Full-tree ingestion bundle.
+│
+├── train_gpt2.cu             GPT-2 / GPT-3 entrypoint, compile-ready; runtime parity pending.
+├── train_llama3.cu           [M6 trainer/checkpoint-resume ✓ / H100 validation pending] Llama-3 entrypoint.
+├── train_gpt2.py             PyTorch reference / .bin exporter (verbatim).
+├── train_llama3.py           HF→.bin converter.
+├── dev/validate_gpt2_starter_pack.py Host-only GPT-2 starter-pack artifact validator.
+├── dev/validate_data_artifacts.py Host-only GPT-2/Llama train/eval data artifact validator.
+├── dev/validate_attention_gqa_reference.py CPU-only GQA/RoPE PyTorch reference check.
+├── dev/validate_profile_parser.py Host-only profile CSV parser/threshold validator.
+├── dev/validate_llama3_converter.py Host-only Llama write_model header/payload validator.
+├── dev/validate_nccl_source.py Host-only source guard for brittle NCCL count, stream-order, and ZeRO runtime contracts.
+├── dev/validate_build_contracts.py Host-only source guard for BF16/H100/TK build contracts.
+├── dev/validate_epilogue_source.py Host-only source guard for the opt-in GPT-2 bias+GELU epilogue and profile mode.
+├── dev/validate_gqa_source.py Host-only source guard for GQA/RoPE routing, gradient-unpermute, and coverage contracts.
+├── dev/validate_runtime_markers.py Host-only source guard for runtime success-marker contracts.
+├── dev/validate_training_source.py Host-only source guard for rank-0 training-log evidence contracts.
+├── dev/validate_profile_source.py Host-only source guard for Nsight Compute profile-gate contracts.
+├── dev/validate_llama_conversion_source.py Host-only source guard for Llama-3.1 8B conversion contracts.
+├── dev/validate_goal_harness_coverage.py Host-only source guard for compile, goal-complete, runtime-evidence coverage, and replay negative evidence checks.
+├── dev/validate_zero_layout.py Host-only ZeRO shard offset coverage.
+├── dev/cuda/gpt2_validate.cu Forward-only GPT-2 loss gate, compile-ready; runtime pending.
+├── test_gpt2.cu              Numerical-parity test, compile-ready; runtime parity pending.
+├── profile_gpt2.cu           ncu profiling target, compile-ready; supports --gelu-fusion 0|1; runtime pending.
+├── profile_gpt2cu.py         ncu post-processor, adapted to TK-only build flags; supports raw CSV input and --gelu-fusion.
+├── requirements.txt          Python deps for dataset prep only.
+│
+├── llmc/                     Kernel + utility headers (the C-style API).
+│   ├── cuda_common.h         floatX = __nv_bfloat16 (locked); compile-error on FP16/FP32.
+│   ├── cuda_utils.cuh        x128, f128, stochastic_rounding (verbatim).
+│   ├── cublas_common.h       Stub. cuBLAS removed in v1.
+│   ├── matmul.cuh            [M2 fwd ✓ / M3 bwd ✓ / M8 epilogue compile] TK-backed GEMM wrapper + bias-grad reduce.
+│   ├── attention.cuh         [M2 fwd ✓ / M3 bwd ✓] TK MHA fwd/bwd with fallback for unsupported bwd shapes.
+│   ├── attention_gqa.cuh     [M6 TK fwd ✓ / supported bwd ✓] GQA + RoPE attention.
+│   ├── layernorm.cuh         [M2 fwd ✓ / M3 bwd ✓] TK LayerNorm fwd + fused-residual; TK warp-sum bwd reductions.
+│   ├── rmsnorm.cuh           [M6 ✓ / test_rmsnorm compile] Llama-3 RMSNorm: TK fwd + fused-residual, CUDA bwd.
+│   ├── rope.cuh              [M6 ✓ / test_rope compile] Llama-3 rotary embedding wrapper.
+│   ├── encoder.cuh           Token+pos embedding (verbatim plain CUDA).
+│   ├── gelu.cuh              GELU (verbatim plain CUDA).
+│   ├── swiglu.cuh            [M6 ✓ / test_swiglu compile] Llama-3 SwiGLU activation (plain CUDA).
+│   ├── fused_classifier.cuh  Cross-entropy + softmax + dlogits (verbatim plain CUDA).
+│   ├── adamw.cuh             AdamW step (verbatim plain CUDA).
+│   ├── global_norm.cuh       Grad-clip norm (verbatim plain CUDA).
+│   ├── zero.cuh              NCCL + ZeRO-0/1/2/3 + multi-node init; ZeRO-3 parameter shards all-gather into the full compute layout.
+│   ├── dataloader.h          Distributed train/eval loaders (GPT-2/Llama header dispatch).
+│   ├── tokenizer.h, sampler.h, schedulers.h, rand.h, mfu.h,
+│   ├── outlier_detector.h, logger.h, utils.h    (all verbatim from llm.c)
+│   └── tk/                   ThunderKittens-namespace files.
+│       ├── tk_common.cuh                  Bridge: bf16 alias, TK_ALIGN, smem helper, BF16 static_assert.
+│       ├── gemm_h100.cuh                  TK bf16 GEMM in header form; opt-in bias+GELU epilogue compile-wired.
+│       ├── attention_h100.cuh             TK MHA fwd (`T % 192 == 0`) + bwd (`T % 256 == 0`) kernels
+│       ├── attention_gqa_h100.cuh         TK GQA fwd + supported bwd [M6 partial; tile-load RoPE compile; runtime pending]
+│       ├── layernorm_tk.cuh               TK LayerNorm forward + fused-residual wrappers (✓)
+│       ├── rmsnorm_tk.cuh                 TK RMSNorm forward + fused-residual wrapper (✓ compile-ready)
+│       └── rope_tk.cuh                    TK RoPE wrapper (✓ compile-ready)
+│
+├── dev/
+│   ├── cuda/                 Scratch / kernel smoke tests.
+│   │   ├── test_matmul.cu          GEMM forward, opt-in bias+GELU epilogue, and dWeight smoke test (✓; `make test_matmul`).
+│   │   ├── test_attention.cu       GPT MHA smoke harness (✓ compile; runtime pending).
+│   │   ├── test_layernorm.cu       GPT LayerNorm smoke harness (✓ compile; runtime pending).
+│   │   ├── test_rope.cu            RoPE smoke harness (✓ compile; runtime pending).
+│   │   ├── test_rmsnorm.cu         RMSNorm smoke harness (✓ compile; runtime pending).
+│   │   ├── test_swiglu.cu          SwiGLU smoke harness (✓ compile; runtime pending).
+│   │   └── test_attention_gqa.cu   GQA + RoPE smoke harness (✓ compile; runtime pending).
+│   ├── data/                 Mirror of llm.c/dev/data/. Tokenizers + dataset prep.
+│   ├── test_dataloader.cpp        Host-only C++ train/eval loader format smoke.
+│   ├── download_starter_pack.sh   Fetches GPT-2 124M reference checkpoints.
+│   ├── validate_gpt2_starter_pack.py  Checks GPT-2 tokenizer/checkpoints/debug-state without CUDA.
+│   ├── validate_data_artifacts.py      Checks prepared GPT-2/Llama train/eval `.bin` files without CUDA.
+│   ├── validate_attention_gqa_reference.py  Checks GQA/RoPE reference math without CUDA.
+│   ├── validate_profile_parser.py      Checks profile parser thresholds without `ncu`.
+│   ├── validate_llama3_converter.py    Checks Llama `write_model` header/payload order without HF weights.
+│   ├── validate_nccl_source.py          Checks scalar NCCL count, all-gather stream-order, and ZeRO runtime contracts.
+│   ├── validate_build_contracts.py      Checks Makefile, BF16 precision, TK bridge, and cuBLAS shim contracts.
+│   ├── validate_epilogue_source.py      Checks TK/template, matmul, GPT-2 `-ge`, profile mode, launch-script, and smoke coverage for bias+GELU epilogue.
+│   ├── validate_gqa_source.py           Checks GQA/RoPE tile-load routing, head mapping, TK backward gradient unpermute ordering, and smoke/reference coverage.
+│   ├── validate_runtime_markers.py      Checks runtime success markers asserted by the H100 harness.
+│   ├── validate_training_source.py      Checks logger/trainer/harness rank-0 training-log evidence contracts.
+│   ├── validate_profile_source.py       Checks ncu metric, threshold, parser, binary, and harness profile contracts.
+│   ├── validate_llama_conversion_source.py Checks HF alias, checkpoint validation, C++ dry-parse, and llama8b-convert contracts.
+│   ├── validate_goal_harness_coverage.py Checks compile targets, goal-complete phases, fail-fast prerequisites, thresholds, and unchecked runtime evidence mapping.
+│   ├── validate_zero_layout.py          Checks host-only ZeRO local shard offset coverage.
+│   └── download_llama3.py         Converts gated HF Llama-3 weights to `.bin` and validates checkpoint headers/sizes.
+│
+├── scripts/                  H100×8 single-node training scripts.
+│   ├── run_gpt2_124M.sh      [ported M4; runtime pending]
+│   ├── run_gpt2_350M.sh      [ported M4; runtime pending]
+│   ├── run_gpt2_774M.sh      [ported M4; runtime pending]
+│   ├── run_gpt2_1558M.sh     [ported M4; runtime pending]
+│   ├── run_gpt3_125M.sh      [ported M5; runtime pending]
+│   ├── pyrun_gpt2_124M.sh    [ported M4; PyTorch reference]
+│   ├── run_llama3_1B.sh      [ported M6; H100/TK GQA numerical validation pending]
+│   └── multi_node/
+│       ├── run_gpt2_124M_mpi.sh        [ported M5; runtime pending]
+│       ├── run_gpt2_124M_fs.sbatch     [ported M5; runtime pending]
+│       ├── run_gpt2_124M_tcp.sbatch    [ported M5; runtime pending]
+│       └── run_llama3_8B_fs.sbatch     [ported M7; H100/TK GQA numerical validation pending]
+│
+├── doc/                      Tutorial / "how this kernel was ported" notes.
+└── build/                    Object-file output (created at build time).
+```
+
+## How a forward step flows (target state, M2+M3)
+
+This is the dependency shape of the intended forward+backward pass. Boxes are
+kernel calls; the ones currently in the tree are bold.
+
+```mermaid
+flowchart LR
+    subgraph fwd["Forward (M2 target)"]
+        E[encoder_forward<br/>plain CUDA verbatim] --> LN1[layernorm_forward<br/>TK]
+        LN1 --> QKV["matmul_forward<br/><b>TK GEMM ✓</b>"]
+        QKV --> ATT[attention_forward<br/>TK MHA]
+        ATT --> PROJ["matmul_forward<br/><b>TK GEMM ✓</b>"]
+        PROJ --> LN2[layernorm_forward<br/>TK]
+        LN2 --> FC1["matmul_forward<br/><b>TK GEMM ✓</b><br/>(or -ge 1 epilogue)"]
+        FC1 --> GELU[gelu_forward<br/>plain CUDA verbatim<br/>(default path)]
+        GELU --> FC2["matmul_forward<br/><b>TK GEMM ✓</b>"]
+        FC2 -.repeat per layer.-> LN1
+        FC2 --> LMHEAD["matmul_forward<br/>(small_n: V%128) <b>✓</b>"]
+        LMHEAD --> LOSS[fused_classifier<br/>plain CUDA verbatim]
+    end
+```
+
+The backward pass (M3) reverses the same graph: `fused_classifier` produces
+`dLogits`; `matmul_backward` produces `dInp`/`dWeight`/`dBias`; `attention_backward`
+backprops through TK MHA for supported shapes and uses the slow CUDA fallback
+otherwise; `layernorm_backward` (hand-written on TK primitives) finishes the loop.
+
+## Allocator alignment
+
+llm.c's parameter-tensor allocator aligns to **16 bytes** (cuBLAS requirement).
+ThunderKittens' TMA descriptors require **128-byte alignment** of the underlying
+global allocation. `train_gpt2.cu` now asserts 128-byte parameter tensor
+offsets; the GPT-2/GPT-3 tensor shapes are naturally aligned under BF16.
+
+The constant is exposed as `llmk::TK_ALIGN = 128` and the rounding helper as
+`llmk::tk_align(bytes)` in [`llmc/tk/tk_common.cuh`](../llmc/tk/tk_common.cuh).
+Use both at every parameter allocation site.
+
+## Shared-memory opt-in
+
+H100 kernels need `cudaFuncSetAttribute(cudaFuncAttributeMaxDynamicSharedMemorySize, ...)`
+to access the full 228 KB SMEM budget. The default is 48 KB. TK kernels assume
+the opt-in has been done.
+
+`llmk::tk_set_max_dynamic_smem(kernel_fn)` does this once-per-kernel-symbol;
+[`llmc/tk/gemm_h100.cuh`](../llmc/tk/gemm_h100.cuh) demonstrates the pattern with
+a `static bool smem_attr_set = false;` first-call latch (see `launch<>` near the
+bottom of the file).
+
+## Where to put new code
+
+| Adding… | Goes in | Notes |
+|---|---|---|
+| A new TK-backed kernel | New header in `llmc/tk/` and a thin C-style wrapper in `llmc/` | Wrapper exposes `floatX*` and `cudaStream_t`; `tk/` file may use templates and `kittens::`. |
+| A plain-CUDA verbatim port from llm.c | `llmc/<name>.cuh` | Keep the comment that names the source line in llm.c. Don't simplify. |
+| A test for a kernel | `dev/cuda/test_<name>.cu` | Follow the pattern in [`dev/cuda/test_matmul.cu`](../dev/cuda/test_matmul.cu): naive reference kernel + tolerance comparison. Wire the target into the Makefile. |
+| Training entrypoint glue | `train_*.cu` (root) | Don't `#include` `llmc/tk/*` directly. |
+| Multi-node init / NCCL | Don't add new rendezvous paths — `llmc/zero.cuh` already covers MPI / TCP / FS. ZeRO-2 is compile-wired through the sharded optimizer/reduce-scatter path; ZeRO-3 now owns a local parameter shard and all-gathers into the current full compute layout, while full compute/gradient buffers remain allocated by the kernels. |
+| Dataset prep | `dev/data/*.py` | Mirror llm.c's per-script structure; honor `--model_desc gpt-2|llama-3`. |
+| Training script | `scripts/run_*.sh` or `scripts/multi_node/*.{sh,sbatch}` | Mirror the corresponding llm.c script. |
+
+## Why this layering
+
+The training source must stay grokable. llm.c is famous because its
+1900-line `train_gpt2.cu` reads top-to-bottom. TK is template-heavy; if its
+templates leaked into `train_gpt2.cu`, that property would die. So we draw a
+line: TK lives behind a C-style wall.
+================================================================================
+## 4. docs/build-and-run.md
+================================================================================
+
+# Build and run
+
+Today the project builds **`make all`** end-to-end for the compile-ready GPT-2
+path: `test_matmul`, `train_gpt2cu`, and `test_gpt2cu`. `make train_llama3cu`
+also compiles the Llama trainer loop with checkpoint/resume, TK GQA forward,
+and supported-shape backward where available, with CUDA fallback elsewhere.
+TK-supported GQA shapes rotate Q/K inside the tile-load path, while fallback
+shapes use fused materialization/unpermute. Runtime H100 parity is still pending — see
+[`../goal.md`](../goal.md).
+
+## Toolchain
+
+| Requirement | Why |
+|---|---|
+| CUDA Toolkit ≥ 12.4 | nvcc with `-std=c++20` and `sm_90a` |
+| GCC ≥ 11 (or Clang ≥ 14) | host compiler for c++20 |
+| ThunderKittens checkout | header-only; expected at `../ThunderKittens` by default |
+| H100 (sm_90a) | runtime; `validate_goal_h100.sh preflight` / `cuda-runtime` reject other GPUs unless `ALLOW_NON_H100=1` is set for dry debug |
+| NCCL ≥ 2.x + libnccl-dev | optional, multi-GPU |
+| OpenMPI | optional, multi-node MPI init |
+| Python ≥ 3.10 | only for `dev/data/*.py` preprocessing scripts |
+
+`requirements.txt`: `tqdm`, `numpy<2`, `torch`, `tiktoken`, `transformers`, `datasets`, `requests`.
+
+## TK_ROOT
+
+The Makefile resolves the ThunderKittens checkout via `TK_ROOT`:
+
+```bash
+make                                  # default: TK_ROOT=$(abspath ../ThunderKittens)
+make TK_ROOT=/path/to/ThunderKittens
+```
+
+If `$(TK_ROOT)/include/kittens.cuh` is missing the Makefile prints a warning
+and the compile will fail at the first `#include <kittens.cuh>`.
+
+## Targets
+
+```bash
+make                  # default = test_matmul + train_gpt2cu + test_gpt2cu
+make test_matmul      # GEMM forward, opt-in bias+GELU epilogue, and dWeight smoke tests
+make test_attention   # GPT MHA fwd/bwd smoke harness against CPU reference
+make test_layernorm   # GPT LayerNorm fwd/fused/bwd smoke harness against CPU reference
+make test_rope        # M6 RoPE fwd/bwd smoke harness against CPU reference
+make test_rmsnorm     # M6 RMSNorm fwd/fused/bwd smoke harness against CPU reference
+make test_swiglu      # M6 SwiGLU fwd/bwd smoke harness against CPU reference
+make test_attention_gqa # M6 GQA + RoPE smoke harness against CPU reference
+make train_gpt2cu     # GPT-2/GPT-3 trainer compile path
+make gpt2_validate    # M2 forward-only GPT-2 loss gate against debug_state
+make test_gpt2cu      # GPT-2 numerical parity test compile path
+make train_llama3cu   # M6 Llama trainer/checkpoint-resume; TK GQA fwd/supported bwd path
+
+# Separate optional target:
+make profile_gpt2cu   # M8 profiling binary compile path
+
+make clean            # removes binaries and build/*.o
+```
+
+The default invocation prints the build configuration banner before compiling:
+
+```
+---------------------------------------------
+llm.kittens build configuration
+---------------------------------------------
+TK_ROOT          : /…/ThunderKittens
+NVCC arch        : sm_90a
+Precision        : BF16 (locked)
+---------------------------------------------
+✓ OpenMP found
+✓ NCCL found, multi-GPU enabled
+✓ MPI enabled
+---------------------------------------------
+```
+
+## Build flags
+
+The Makefile picks these defaults; override on the command line if needed.
+
+| Flag | Default | Effect |
+|---|---|---|
+| `TK_ROOT=` | `$(abspath ../ThunderKittens)` | ThunderKittens checkout |
+| `FORCE_NVCC_O=` | `3` | nvcc optimisation level |
+| `NO_OMP=1` | unset | Disable OpenMP host parallelism |
+| `NO_MULTI_GPU=1` | unset | Disable NCCL even if installed |
+| `NCCL_DIR=` | unset | Enable NCCL from a custom prefix containing `include/nccl.h` and `lib*/libnccl.so` |
+| `NCCL_INCLUDE_PATH=` | derived from `NCCL_DIR` when set | Override NCCL headers when using a custom install |
+| `NCCL_LIB_PATH=` | derived from `NCCL_DIR` when set | Override NCCL library path when using a custom install |
+| `NO_USE_MPI=1` | unset | Disable OpenMPI even if installed |
+| `OPENMPI_DIR=` | `/usr/lib/x86_64-linux-gnu/openmpi` | OpenMPI prefix |
+
+The Makefile hard-codes:
+
+- `--use_fast_math -std=c++20`
+- `--expt-extended-lambda --expt-relaxed-constexpr`
+- `-DKITTENS_SM90 -gencode arch=compute_90a,code=sm_90a`
+- `-DENABLE_BF16`
+- `-I$(TK_ROOT)/include -I$(TK_ROOT)/prototype`
+
+`PRECISION=FP16` and `PRECISION=FP32` are not supported in v1. The compile
+errors out fast — see [precision.md](precision.md).
+
+## GPU sniff
+
+When `nvidia-smi` is available, the Makefile prints a warning if the lowest-CC
+GPU is not Hopper (sm_90):
+
+```
+⚠ Detected GPU compute capability 86; llm.kittens v1 targets sm_90a (H100).
+  Build will still proceed.
+```
+
+Build still proceeds — useful when cross-compiling on a non-Hopper machine for
+a Hopper deployment. Set `CI=true` to suppress the sniff.
+
+This build-time warning is intentionally weaker than the goal harness. The
+target-host `scripts/validate_goal_h100.sh preflight` and `cuda-runtime` probes
+reject non-H100 / non-sm90-class GPUs unless `ALLOW_NON_H100=1` is set for dry
+compile/debug runs.
+
+## Smoke test
+
+```bash
+make test_matmul
+./test_matmul
+
+make test_attention
+./test_attention
+
+make test_layernorm
+./test_layernorm
+```
+
+Expected output on an H100:
+
+```
+Device: NVIDIA H100 80GB HBM3 (sm_90)
+
+──── 1024^3 square (default)  M=1024 N=1024 K=1024 ────
+  max abs diff = 0.???  (tolerance 0.50)  PASS
+
+──── GPT-2 124M MLP up (default)  M=4096 N=3072 K=768 ────
+  max abs diff = 0.???  (tolerance 0.50)  PASS
+
+──── GPT-2 124M LM head (small_n fallback)  M=4096 N=50304 K=768 ────
+  max abs diff = 0.???  (tolerance 0.50)  PASS
+
+──── forward bias+GELU epilogue (default)  M=1024 N=4096 K=1024 ────
+  pre-GELU max abs diff = 0.????  GELU max abs diff = 0.????  (tolerance 0.50)  PASS
+
+... dWeight overwrite and accumulated cases ...
+
+──── 6/6 passed ────
+```
+
+Run on a non-H100 GPU prints a warning and continues (TK kernels will fail at
+runtime — the test is only meaningful on an H100). On non-Hopper hardware,
+treat a clean compile as the only useful signal; the goal harness preflight
+still requires an H100/sm90-class target for runtime evidence.
+
+`test_attention` checks GPT-style packed Q/K/V attention against an independent
+CPU reference. It covers direct TK forward with fallback backward (`T=192`) and
+padded TK forward with supported-shape TK backward (`T=256`).
+
+`test_layernorm` checks GPT LayerNorm forward, fused residual+LayerNorm forward,
+saved `mean`/`rstd`, and backward accumulation into `dinp`, `dweight`, and
+`dbias` against independent CPU references.
+
+## Quickstart (compile-ready, runtime parity pending)
+
+The intended end-to-end command for the smallest training path is unchanged
+from `llm.c`:
+
+```bash
+# 1. Reference checkpoints + tokenizer for GPT-2 124M (4 files, ~600 MB).
+./dev/download_starter_pack.sh
+python dev/validate_gpt2_starter_pack.py
+
+# 2. Tokenize tiny-shakespeare for a smoke run.
+python dev/data/tinyshakespeare.py
+python dev/validate_data_artifacts.py
+
+# 3. Build.
+make train_gpt2cu
+
+# 4. Train 100 steps from the bf16 124M checkpoint.
+./train_gpt2cu \
+    -i dev/data/tinyshakespeare/tiny_shakespeare_train.bin \
+    -j dev/data/tinyshakespeare/tiny_shakespeare_val.bin \
+    -e gpt2_124M_bf16.bin \
+    -b 4 -t 1024 -x 100 -v 20 -s 0
+```
+
+This compiles today, but a real run still needs H100 access, the downloaded
+starter pack, and the remaining parity work tracked in [`../goal.md`](../goal.md).
+Add `-ge 1` to opt GPT-2's MLP up-projection into the compile-wired TK
+bias+GELU epilogue after validating numerics on your H100 host.
+When `-o OUTPUT_DIR` is set, rank 0 writes `OUTPUT_DIR/main.log` with
+validation loss (`tel`), eval accuracy (`eval`), and train loss/LR/grad-norm
+(`trl`, `lr`, `norm`) entries. The long H100 harness phases use
+`dev/validate_training_log.py` to turn that file into pass/fail evidence.
+
+## Single-node and multi-node scripts (M4–M7)
+
+The GPT-2/GPT-3 scripts under `scripts/` now mirror their `llm.c/scripts/`
+counterparts, with repo-local paths and inline H100 NCCL defaults. The Llama-3
+single-node and 8B filesystem-rendezvous scripts are also present. All launch
+scripts syntax-check; distributed/runtime parity is still gated on H100/NCCL
+runs and TK GQA numerical validation.
+The full status table is in [multi-gpu.md](multi-gpu.md#per-script-status).
+
+## H100 goal validation
+
+On the target H100 machine, run the bounded validation harness before checking
+off any remaining runtime gate in [`../goal.md`](../goal.md):
+
+```bash
+scripts/validate_goal_h100.sh
+```
+
+The default `goal-core` phases check H100/CUDA/NCCL/MPI prerequisites, build
+the compile targets, syntax-check launch/data shell scripts and Python
+data/converter/profile helpers, run source-level CUDA/NCCL/ZeRO,
+GQA/RoPE, BF16/H100/TK build, GELU-epilogue source, profile-gate source, Llama conversion source, rank-0 training-log evidence, launch-script, and runtime-marker contract guards, run
+a tiny CUDA runtime/device-allocation probe, validate any prepared GPT-2/Llama training and HellaSwag `.bin`
+artifacts found in the known data directories, run the host-only C++
+DataLoader/EvalLoader smoke, run the CPU-only GQA/RoPE reference check, validate
+the profile CSV parser/threshold path with synthetic data, validate the Llama
+converter writer header/payload order with a tiny model, verify the GPT-2
+starter-pack files, checkpoint metadata, tokenizer, and debug-state payload,
+run kernel smoke tests, run GPT-2 forward/parity binaries, run GPT-2/GPT-3 and
+Llama descriptor dry-runs with host-only 8-process ZeRO layout validation, write
+and validate a tiny synthetic Llama checkpoint through the host-only parser,
+validate host-only ZeRO-3 layouts, and check ZeRO request diagnostics.
+Set `GPT_DRY_CHECKPOINT=/path/to/model.bin` when running `gpt-dry` to include
+GPT checkpoint header and payload-size validation without CUDA initialization.
+Set `LLAMA_DRY_CHECKPOINT=/path/to/llama.bin` when running `llama-dry` to run
+the same host-only C++ checkpoint parser and payload-size validation for
+converted Llama weights.
+Use `scripts/validate_goal_h100.sh llama-checkpoint-smoke` for a repeatable
+local checkpoint parser smoke that does not need gated HF weights.
+Use `scripts/validate_goal_h100.sh llama-converter-smoke` to validate
+`train_llama3.py::write_model` itself without gated HF weights.
+Use `scripts/validate_goal_h100.sh llama8b-convert` for the real gated HF
+Llama-3.1 8B conversion/load gate; it validates an existing checkpoint or
+converts `${LLAMA8B_MODEL:-llama3.1:8B}` and dry-parses it through the C++
+ZeRO layout.
+Use `scripts/validate_goal_h100.sh source-guards` to check brittle source-level
+NCCL contracts such as scalar all-reduce element counts, plus the ZeRO-3
+parameter-shard runtime contract, launch-script step contracts, runtime success-marker
+contracts, GQA/RoPE source-routing invariants, BF16/H100/TK build-contract
+invariants, GELU-epilogue source contracts, profile-gate source contracts, Llama conversion source contracts,
+rank-0 training-log evidence contracts, compile-target coverage, and
+`goal-complete` coverage before running a distributed job.
+Use `scripts/validate_goal_h100.sh gqa-runtime` for the dedicated H100 GQA/RoPE
+CUDA comparison against the CPU reference smoke shapes.
+Set `NCCL_DIR`, `NCCL_INCLUDE_PATH`, or `NCCL_LIB_PATH` before running the
+harness when the target cluster provides NCCL through a module or custom
+prefix. The preflight phase first requires an H100/sm90-class GPU, then checks
+the same NCCL paths the Makefile uses. The `cuda-runtime` phase independently
+checks the same GPU class contract inside the compiled runtime probe.
+`ALLOW_NON_H100=1` bypasses only the GPU class gate for dry compile/debug runs;
+it is not valid goal-completion evidence, and `goal-complete` refuses to run
+while it is set.
+Longer phases such as `profile`, `llama1b-stability`, `gpt2-full`,
+`gpt2-two-node`, `llama1b-full`, `llama8b-convert`, and `llama8b-full` must be
+requested explicitly because they invoke Nsight Compute, gated conversion,
+bounded stability runs, loss-curve comparisons, or full training scripts.
+The `goal-complete` phase fail-fast checks `gpt2_124M_bf16.bin`, `ncu` for live
+or `.ncu-rep` profile validation, and `sbatch` when the two-node/full 8B phases
+are not in validate-only mode. In validate-only mode it checks the pre-existing
+two-node reference/candidate logs, full-run launch metadata, and full-run
+checkpoint/log artifacts before entering `goal-core`.
+Use `scripts/validate_goal_h100.sh goal-complete-prereqs` to check those
+completion prerequisites without launching `goal-core` or long jobs.
+The training phases do not stop at process exit: `gpt2-smoke`, `zero3-smoke`,
+`llama-resume`, `llama1b-stability`, `gpt2-full`, `llama1b-full`, and
+`llama8b-full` validate the rank-0 `main.log` after launch. The full-run gates
+also require `run.log` launch metadata and final checkpoint evidence.
+Short H100 gates can replay captured evidence with `PREFLIGHT_VALIDATE_ONLY`,
+`CUDA_RUNTIME_VALIDATE_ONLY`, `SMOKE_VALIDATE_ONLY`, `GPT2_RUNTIME_VALIDATE_ONLY`,
+`GQA_RUNTIME_VALIDATE_ONLY`,
+`GPT2_SMOKE_VALIDATE_ONLY`, `LLAMA_RESUME_VALIDATE_ONLY`, and
+`LLAMA1B_STABILITY_VALIDATE_ONLY`; point the corresponding log/output variables
+at the captured files.
+`scripts/validate_goal_h100.sh goal-replay-smoke` exercises those replay paths
+with synthetic temporary evidence and checks that weak prereq evidence is
+rejected.
+`goal-complete` forces Llama-3 1B stability HellaSwag on, and any
+`LLAMA1B_STABILITY_MIN_HELLASWAG` threshold requires final-step eval evidence.
+Validate-only `zero3-smoke` also requires `ZERO3_SMOKE_RUN_LOG` with the
+ZeRO-3 stage banner, so a plain rank-0 metric log cannot stand in for a
+ZeRO-3 runtime smoke.
+`LLAMA8B_CONVERT_VALIDATE_ONLY=1` requires an existing `LLAMA8B_CHECKPOINT`
+instead of attempting the gated HF conversion.
+Set `GPT2_FULL_VALIDATE_ONLY=1` or `LLAMA1B_FULL_VALIDATE_ONLY=1` to validate
+existing full-run evidence instead of relaunching those single-node full phases.
+Set `PROFILE_VALIDATE_ONLY=1 PROFILE_CSV_DIR=...` to validate existing raw
+`profile_ge*.csv` exports without requiring Nsight Compute locally; use
+`PROFILE_REPORT_DIR=...` for `profile_ge*.ncu-rep` reports on a host with
+`ncu`. `goal-complete` forces/requires both `profile_ge0` and `profile_ge1`
+evidence, even if a standalone profile replay narrows `PROFILE_GELU_FUSIONS`.
+`gpt2-smoke` requires final validation/train metrics and train-loss decrease.
+`llama-resume` requires header-validated initial and final checkpoint artifacts
+plus final validation/train metrics after the restarted run.
+`gpt2-full` checks final validation loss and HellaSwag accuracy at step 18,865;
+`goal-complete` requires `GPT2_FULL_EXPECTED_VAL_LOSS` and
+`GPT2_FULL_EXPECTED_HELLASWAG` so that comparison is explicit. Llama phases
+require final validation/train/eval evidence and train-loss decrease, with
+optional `LLAMA1B_STABILITY_*` and `LLAMA1B_FULL_*` thresholds.
+
+## Dataset preparation
+
+```bash
+# GPT-2 (default; uint16 tokens, vocab 50257, magic 20240520 v1)
+python dev/data/tinyshakespeare.py
+python dev/data/tinystories.py
+python dev/data/fineweb.py
+python dev/data/hellaswag.py
+
+# Llama-3 (uint32 tokens, vocab 128256, magic 20240801 v7)
+python dev/data/tinyshakespeare.py --model_desc llama-3
+python dev/data/tinystories.py --model_desc llama-3
+python dev/data/fineweb.py        --model_desc llama-3
+python dev/data/hellaswag.py      --model_desc llama-3
+```
+
+`dataloader.h` dispatches training and eval files on the header magic at load
+time; no flag is needed on the C++ side. **Shards are not interchangeable** —
+a `gpt-2` shard cannot be loaded by Llama-3 and vice versa.
+
+HellaSwag writes `hellaswag_val.bin` for GPT-2 and `hellaswag_val_llama3.bin`
+for Llama-3. The Llama eval file uses uint32 tokens and magic `20240802` v7;
+`EvalLoader` consumes both GPT-2 and Llama-3 eval formats.
+================================================================================
+## 5. docs/kernel-reference.md
+================================================================================
+
+# Kernel reference
+
+Every operator in the training loop, where its implementation lives, and what
+state it is in. Rows are listed in roughly the order they fire during a
+forward pass.
+
+The principle: **TK earns its keep on tile-MMA ops** (GEMM, MHA, LayerNorm).
+Element-wise / gather-scatter / 1D-reduction kernels are kept verbatim from
+`llm.c` — TK adds nothing there.
+
+## Mapping table
+
+| Op | Wrapper | TK template | llm.c source kept identical | Status |
+|---|---|---|---|---|
+| Token + position embedding | [`llmc/encoder.cuh`](../llmc/encoder.cuh) | — | `llm.c/llmc/encoder.cuh:157,169` | ✅ verbatim |
+| Matmul forward | [`llmc/matmul.cuh`](../llmc/matmul.cuh) | [`llmc/tk/gemm_h100.cuh`](../llmc/tk/gemm_h100.cuh) | signature parallels `llm.c/llmc/matmul.cuh:231` | ✅ TK-backed |
+| Matmul backward (2 GEMMs + bias-grad reduce) | [`llmc/matmul.cuh`](../llmc/matmul.cuh) | [`llmc/tk/gemm_h100.cuh`](../llmc/tk/gemm_h100.cuh) | `llm.c/llmc/matmul.cuh:17,83,244` | ✅ M3 compile-wired — TK `A*B` dInp, TK `A^T*B` dWeight, verbatim bias reduction |
+| Bias-grad reduction (`matmul_backward_bias_kernel9`, `reduce_add_sum_kernel`) | `llmc/matmul.cuh` | — | verbatim from `llm.c/llmc/matmul.cuh:17,83` | ✅ verbatim |
+| Bias-add (default forward) | `llmc/matmul.cuh::add_bias_kernel` | — | new (cuBLASLt epilogue replacement) | ✅ |
+| Bias+GELU epilogue (opt-in GPT-2 MLP up-projection) | `llmc/matmul.cuh::matmul_forward_gelu` | [`llmc/tk/gemm_h100.cuh`](../llmc/tk/gemm_h100.cuh) | parallels llm.c's fused GELU aux path | 🟡 compile-wired behind `-ge 1`; H100 runtime pending |
+| Attention forward (MHA) | [`llmc/attention.cuh`](../llmc/attention.cuh) | [`llmc/tk/attention_h100.cuh`](../llmc/tk/attention_h100.cuh) | `llm.c/llmc/attention.cuh:195` | ✅ M2 compile-wired — TK fast path for `T % 192 == 0`; padded TK path for other lengths |
+| Attention backward (MHA) | [`llmc/attention.cuh`](../llmc/attention.cuh) | [`llmc/tk/attention_h100.cuh`](../llmc/tk/attention_h100.cuh) | `llm.c/llmc/attention.cuh:239` | ✅ M3 compile-wired — TK `bwd_attend_prep_ker` / `bwd_attend_ker` fast path; slow CUDA fallback for unsupported shapes; runtime parity pending |
+| QKV permute / unpermute | [`llmc/attention.cuh`](../llmc/attention.cuh) | — | verbatim from `llm.c/llmc/attention.cuh:14-83` | ✅ verbatim |
+| Attention forward (GQA + RoPE, Llama-3) | [`llmc/attention_gqa.cuh`](../llmc/attention_gqa.cuh) | [`llmc/tk/attention_gqa_h100.cuh`](../llmc/tk/attention_gqa_h100.cuh) | none — new kernel | 🟡 M6 — TK causal forward for supported H100 shapes; Q/K tile-load RoPE for supported shapes; CUDA fallback |
+| Attention backward (GQA + RoPE, Llama-3) | [`llmc/attention_gqa.cuh`](../llmc/attention_gqa.cuh) | [`llmc/tk/attention_gqa_h100.cuh`](../llmc/tk/attention_gqa_h100.cuh) | none — new kernel | 🟡 M6 — TK supported-shape backward compile-wired with tile-load RoPE; CUDA fallback; runtime pending |
+| LayerNorm forward | [`llmc/layernorm.cuh`](../llmc/layernorm.cuh) | [`llmc/tk/layernorm_tk.cuh`](../llmc/tk/layernorm_tk.cuh) | `llm.c/llmc/layernorm.cuh:433` | ✅ M2 compile-wired; `test_layernorm` compile-ready — TK fork for supported widths, CUDA fallback retained |
+| LayerNorm backward | [`llmc/layernorm.cuh`](../llmc/layernorm.cuh) | TK `kittens::warp::sum` helper inside the hand-written CUDA accumulator | `llm.c/llmc/layernorm.cuh:233` (`layernorm_backward_kernel10`) | ✅ M3 compile-wired; `test_layernorm` compile-ready; runtime parity pending |
+| Fused-residual + LN forward | [`llmc/layernorm.cuh::fused_residual_forward5`](../llmc/layernorm.cuh) | [`llmc/tk/layernorm_tk.cuh`](../llmc/tk/layernorm_tk.cuh) | `llm.c/llmc/layernorm.cuh:467` | ✅ M2 compile-wired; `test_layernorm` compile-ready — TK fused residual+LN for supported widths, CUDA fallback retained |
+| RMSNorm forward / backward (Llama-3) | [`llmc/rmsnorm.cuh`](../llmc/rmsnorm.cuh) | [`llmc/tk/rmsnorm_tk.cuh`](../llmc/tk/rmsnorm_tk.cuh) | none in TK; mirrors layernorm minus mean and bias | ✅ M6 compile-wired; `test_rmsnorm` compile-ready; runtime pending |
+| RoPE forward / backward (Llama-3) | [`llmc/rope.cuh`](../llmc/rope.cuh) | [`llmc/tk/rope_tk.cuh`](../llmc/tk/rope_tk.cuh) | wrap `ThunderKittens/kernels/rotary/rotary.cu`; backward = inverse rotation with `sin -> -sin` | ✅ M6 compile-wired; `test_rope` compile-ready; runtime pending |
+| GELU forward / backward-inplace | [`llmc/gelu.cuh`](../llmc/gelu.cuh) | — | `llm.c/llmc/gelu.cuh:50,59` | ✅ verbatim |
+| SwiGLU (Llama-3) | [`llmc/swiglu.cuh`](../llmc/swiglu.cuh) | — | none — new, plain CUDA elementwise fwd/bwd | ✅ M6 compile-wired; `test_swiglu` compile-ready; runtime pending |
+| Cross-entropy + softmax + dlogits (fused) | [`llmc/fused_classifier.cuh`](../llmc/fused_classifier.cuh) | — | `llm.c/llmc/fused_classifier.cuh:140` | ✅ verbatim |
+| AdamW step | [`llmc/adamw.cuh`](../llmc/adamw.cuh) | — | `llm.c/llmc/adamw.cuh:75,91` | ✅ verbatim |
+| `init_from_master` | `llmc/adamw.cuh` | — | verbatim | ✅ |
+| `global_norm_squared` (grad-clip norm) | [`llmc/global_norm.cuh`](../llmc/global_norm.cuh) | — | `llm.c/llmc/global_norm.cuh:69` | ✅ verbatim |
+| ZeRO-0/1/2/3 + NCCL init (MPI/TCP/FS) | [`llmc/zero.cuh`](../llmc/zero.cuh) | — | based on `llm.c/llmc/zero.cuh` | ✅ ZeRO-0/1/2 wired; ZeRO-3 parameter-shard runtime path compile-wired; H100/NCCL runtime pending |
+| Distributed dataloaders | [`llmc/dataloader.h`](../llmc/dataloader.h) | — | adapted from llm.c | ✅ GPT-2 uint16 + Llama-3 uint32 training/eval files dispatch by header magic |
+| Tokenizer / sampler / schedulers / rand / mfu / outlier_detector / logger / utils | `llmc/{tokenizer,sampler,schedulers,rand,mfu,outlier_detector,logger,utils}.h` | — | verbatim | ✅ |
+
+Legend: ✅ done · ⬜ not started · 🟡 partial.
+
+## TK GEMM (`llmc/tk/gemm_h100.cuh`, `llmc/matmul.cuh`)
+
+Two specialisations are exposed:
+
+```cpp
+namespace llmk::gemm {
+    using matmul_default = matmul_template<2, 4, 8>;   // M_BLOCK=2, N_BLOCK=4, SUPER_M=8
+    using matmul_small_n = matmul_template<2, 2, 8>;   // M_BLOCK=2, N_BLOCK=2, SUPER_M=8
+    using matmul_default_nt_bias_gelu = matmul_template<2, 4, 8, false, true, true, true, true>;
+}
+```
+
+`matmul_template<M_BLOCK, N_BLOCK, SUPER_M, A_TRANSPOSED, B_TRANSPOSED,
+APPLY_BIAS, APPLY_GELU, STORE_PRE_GELU>` is ported from
+`ThunderKittens/kernels/gemm/bf16_h100/bf16_h100_gemm.cu` (lines 1-106). It uses
+the LCF (Load-Compute-Finish) prototype with a persistent grid (132 SMs, the
+H100 SM count), TMA async loads on the producer warpgroup, and WGMMA on the
+consumer warpgroup. `B_TRANSPOSED=true` switches the consumer to `mma_ABt` and
+loads B as row-major `(N, K)`, matching llm.c's dense weight layout `(OC, C)`.
+`A_TRANSPOSED=true` switches the consumer to `mma_AtB` for dWeight. The opt-in
+bias+GELU aliases add bias and GELU in the finish path after WGMMA and can TMA
+store a pre-GELU auxiliary buffer for backward.
+
+### Shape constraints
+
+| Symbol | Constraint | Why |
+|---|---|---|
+| `M = B*T` | `M % (64 * M_BLOCK) == 0` (so `M % 128 == 0` at default) | TK MMA tile geometry |
+| `N = OC` | `N % (64 * N_BLOCK) == 0` (256 default, 128 for `small_n`) | as above |
+| `K = C` | `K % 64 == 0` | TK base tile is 64×64 |
+
+`matmul_forward` `assert`s these at runtime. `OC % 256 == 0` selects the default
+`A*B^T` specialization; `OC % 128 == 0` selects the small-N `A*B^T` fallback.
+The GPT-2 124M LM head with `V_padded = 50304` is the canonical small-N case.
+
+### Forward signature
+
+```cpp
+inline void matmul_forward(floatX* out, const floatX* inp, const floatX* weight,
+                           const floatX* bias, int B, int T, int C, int OC,
+                           cudaStream_t stream);
+```
+
+`out (B*T, OC) = inp (B*T, C) · weight(OC, C)^T + bias (OC)`.
+
+The default path keeps bias and GELU separate: bias is added in
+`add_bias_kernel`, and the trainer calls `gelu_forward` when needed. GPT-2's
+MLP up-projection can opt into `matmul_forward_gelu(out, pre_gelu, ...)`, which
+uses the TK finish path to apply bias, store the pre-GELU buffer, and write GELU
+output. The trainer exposes this behind `-ge 1`, but the default remains `-ge 0`
+until H100 numerical validation and profiling are done.
+
+### Backward signature (M3)
+
+```cpp
+inline void matmul_backward(floatX* dinp, floatX* dweight, floatX* dbias,
+                            const floatX* dout, const floatX* inp, const floatX* weight,
+                            float* dbias_buffer,
+                            int B, int T, int C, int OC, cudaStream_t stream,
+                            bool dweight_accumulate = true,
+                            floatX* dweight_accum_scratch = nullptr,
+                            size_t dweight_accum_scratch_elements = 0);
+```
+
+Current status:
+
+1. `dinp (B*T, C) = dout (B*T, OC) · weight(OC, C)` — wired through the existing TK `A*B` GEMM.
+2. `dweight (OC, C) = doutᵀ (OC, B*T) · inp (B*T, C)` — wired through TK `A^T*B`. For accumulated micro-steps, the product lands in the caller-provided aligned scratch buffer and a small add kernel applies `dweight += scratch`.
+3. `dbias (OC) = column-sum of dout over B*T` — `matmul_backward_bias_kernel9` followed by `reduce_add_sum_kernel` when `dbias_buffer` is available. Both kernels are verbatim from llm.c.
+
+The slow CUDA dWeight kernel remains only as a fallback for unsupported TK shapes
+or missing scratch capacity.
+
+## TK MHA (`llmc/attention.cuh`, `llmc/tk/attention_h100.cuh`) — M2/M3
+
+Wrap `fwd_attend_ker`, `bwd_attend_prep_ker`, and `bwd_attend_ker` from
+`ThunderKittens/kernels/attention/mha_h100/mha_h100.cu`.
+
+### Constraints
+
+- `head_dim ∈ {64, 128}` only. GPT-2 uses 64; Llama-3 uses 128. Anything else
+  needs a new TK specialization. Confirmed adequate for everything in scope.
+- The copied TK forward launch covers sequence lengths divisible by
+  `3 * 16 * 4 = 192`. `llmc/attention.cuh` pads non-aligned sequence lengths
+  into scratch, runs TK at `Tpad`, then unpads directly to the normal output.
+- The copied TK backward launch covers sequence lengths divisible by
+  `4 * 16 * 4 = 256`. GPT-2 `T=1024` is covered. Other backward shapes fall
+  back to the slow CUDA recompute baseline until padded backward dispatch lands.
+- BF16 only (same as the rest of v1).
+
+### Layout glue
+
+llm.c's `permute_kernel` and `unpermute_kernel` (`llm.c/llmc/attention.cuh:14-83`)
+reshape between the QKV layout `(B, T, 3, NH, HS)` produced by the QKV matmul
+and the `(B, NH, T, HS)` layout the TK MHA kernel expects. Port verbatim.
+
+### Signatures
+
+```cpp
+inline void attention_forward(floatX* out, floatX* qkvr, floatX* att,
+                              floatX* inp,
+                              int B, int T, int C, int NH,
+                              cudaStream_t stream);
+inline void attention_backward(floatX* dinp, floatX* dqkvr,
+                               floatX* datt, floatX* scratch,
+                               const floatX* dout, const floatX* qkvr, const floatX* att,
+                               int B, int T, int C, int NH,
+                               cudaStream_t stream);
+```
+
+Match `llm.c/llmc/attention.cuh:195,239`.
+
+The M3 backward fast path reads the forward-saved LSE from `att`, permutes the
+saved forward output from `scratch`, permutes `dout`, calls TK
+`bwd_attend_prep_ker` and `bwd_attend_ker`, converts float Q/K/V gradients back
+to bf16, then reuses the verbatim `permute_kernel_backward` glue. Unsupported
+head dimensions or sequence lengths use the slow recompute baseline.
+
+Validation plan: [`dev/cuda/test_attention.cu`](../dev/cuda/test_attention.cu)
+compile-wires an independent CPU-reference smoke harness. It covers direct TK
+forward plus fallback backward at `T=192`, and padded TK forward plus
+supported-shape TK backward at `T=256`. Runtime numerical validation still
+needs a compatible H100 driver/runtime.
+
+## TK LayerNorm (`llmc/layernorm.cuh`, `llmc/tk/layernorm_tk.cuh`) — M2/M3
+
+### Forward (M2)
+
+Fork `ThunderKittens/kernels/layernorm/layernorm.cu`. Three changes from the
+upstream TK kernel:
+
+1. Re-template the hidden width `D` over GPT-2 / Llama-3 widths
+   `{768, 1024, 1280, 1600, 2048, 4096}`. Pre-instantiate all six.
+2. Strip the dropout path. We never use it.
+3. Remove the internal `cudaDeviceSynchronize` and add a `cudaStream_t` parameter.
+
+Current implementation: `llmc/tk/layernorm_tk.cuh` is wired into
+`llmc/layernorm.cuh` for the supported widths and saves `mean` / `rstd` for the
+existing GPT-2 backward path. Runtime numerical validation is still gated on an
+accessible H100 plus the GPT-2 debug-state files.
+
+[`dev/cuda/test_layernorm.cu`](../dev/cuda/test_layernorm.cu) compile-wires a
+CPU-reference smoke harness for forward, fused residual+LayerNorm forward,
+saved `mean`/`rstd`, and backward `+=` accumulation into `dinp`, `dweight`, and
+`dbias`.
+
+### `fused_residual_forward5`
+
+Match `llm.c/llmc/layernorm.cuh:467` — fuses `residual = x + skip; out = LN(residual)`
+into one pass.
+
+### Backward (M3)
+
+TK does not ship a layernorm backward. Port `layernorm_backward_kernel10` from
+`llm.c/llmc/layernorm.cuh:233` onto TK primitives:
+
+- Replace warp-loop sums with `kittens::warp::sum`.
+- Replace warp-loop row-max-style reductions with `kittens::warp::row_max` (where applicable).
+- Keep the cross-block atomic-counter accumulator pattern unchanged.
+
+This is the second-highest-risk kernel in the project (after Llama-3 GQA/RoPE) —
+the partial-sum accumulator has subtle dependencies on which threads write
+which counters.
+
+## Llama-3 kernels — M6
+
+Llama-3 introduces four new operators. Three are TK-backed; one is plain CUDA.
+
+### RMSNorm (`llmc/rmsnorm.cuh`, `llmc/tk/rmsnorm_tk.cuh`)
+
+Mirrors layernorm_tk minus the mean subtraction and bias term. Forward and
+fused-residual forward dispatch through the TK fork for widths
+`{768, 1024, 1280, 1600, 2048, 4096}`. Backward is a plain CUDA correctness
+baseline that computes `dinp` per row and `dweight` per column.
+
+Signatures:
+
+```cpp
+void rmsnorm_forward(floatX* out, float* rstd,
+                     const floatX* inp, const floatX* weight,
+                     int N, int C, float eps, cudaStream_t stream);
+void fused_residual_rmsnorm_forward(floatX* residual, floatX* normed, float* rstd,
+                                    const floatX* inp1, const floatX* inp2,
+                                    const floatX* weight,
+                                    int N, int C, float eps, cudaStream_t stream);
+void rmsnorm_backward(floatX* dinp, floatX* dweight,
+                      const floatX* dout, const floatX* inp,
+                      const floatX* weight, const float* rstd,
+                      int N, int C, cudaStream_t stream);
+```
+
+Compile-check: `nvcc -gencode arch=compute_90a,code=sm_90a -x cu -c
+llmc/rmsnorm.cuh`. `dev/cuda/test_rmsnorm.cu` adds a CPU-reference smoke
+harness for forward, fused-residual forward, `rstd`, `dinp`, and `dweight`.
+Runtime numerical validation waits for a compatible H100 driver/runtime.
+
+### RoPE (`llmc/rope.cuh`, `llmc/tk/rope_tk.cuh`)
+
+Wrap `ThunderKittens/kernels/rotary/rotary.cu`. Backward is the same forward
+op with `(sin, -cos)` swapped — no separate kernel needed.
+
+`dev/cuda/test_rope.cu` adds a CPU-reference smoke harness for HS=64 and
+HS=128 forward plus inverse-rotation backward. Runtime execution waits for a
+compatible H100 driver/runtime.
+
+### GQA + RoPE attention (`llmc/attention_gqa.cuh`, `llmc/tk/attention_gqa_h100.cuh`)
+
+**Highest-risk kernel.** No full TK reference. The current wrapper permutes
+packed Q/K/V and dispatches TK causal forward plus supported-shape TK backward
+paths for H100 BF16 shapes. Where both TK forward and TK backward are available,
+Q/K stay unrotated in the saved workspace and the TK kernels apply RoPE after
+tile load before WGMMA. Unsupported shapes still use the slow plain-CUDA
+correctness baseline with fused materialization/unpermute. The wrapper treats
+TK backward gradients as gradients with respect to rotated Q/K and still
+inverse-rotates `dQ`/`dK` during packed-gradient unpermute before writing
+`dinp`.
+
+The adapted MHA template now covers:
+
+- Accept `n_q_heads`, `n_kv_heads`, `n_rep = n_q / n_kv`.
+- Forward: repeat KV across query groups inside the kernel (landed for supported shapes; no host-side replication).
+- Backward: accumulate `dK`/`dV` into KV-head gradient buffers across the `n_rep` Q heads (landed for supported shapes; H100 numerical validation pending).
+Remaining gate: runtime validation against the CPU/PyTorch references on H100.
+
+Validation plan: `dev/cuda/test_attention_gqa.cu` compile-wires CPU-reference
+smoke cases at B=1, head_dim=128. `T=128` covers TK forward plus CUDA fallback
+backward with the materialized fallback path; `T=256` covers the supported-shape
+TK backward path with tile-load RoPE. `dev/validate_attention_gqa_reference.py`
+checks the CPU-only PyTorch equivalence for those same shapes by comparing
+materialized-RoPE repeated-KV attention with grouped/tile-load-style RoPE,
+including backward gradients into packed Q/K/V. The remaining gate is the H100
+TK runtime comparison, exposed as `scripts/validate_goal_h100.sh gqa-runtime`.
+
+### SwiGLU (`llmc/swiglu.cuh`)
+
+Plain CUDA. Forward computes `out = silu(gate) * up`; backward writes `dgate`
+and `dup` from the saved gate/up tensors. No TK benefit.
+`dev/cuda/test_swiglu.cu` adds a CPU-reference smoke harness for forward,
+`dgate`, and `dup`.
+
+## Plain-CUDA kernels (kept verbatim)
+
+These are imported from llm.c with no changes beyond `#include`s. The comment
+header in each file points to the upstream source.
+
+| File | Purpose | Notes |
+|---|---|---|
+| [`llmc/encoder.cuh`](../llmc/encoder.cuh) | Token + position embedding fwd/bwd | Sparse gather + bucketed deterministic scatter — wrong workload for TK |
+| [`llmc/gelu.cuh`](../llmc/gelu.cuh) | GELU fwd + in-place backward | TK's flux GELU is fused with matmul, not standalone |
+| [`llmc/fused_classifier.cuh`](../llmc/fused_classifier.cuh) | Cross-entropy + softmax + dlogits, fused | Block-wide online softmax over `V = 50304` (GPT-2) or `128256` (Llama-3). Optional v2 TK-ification. |
+| [`llmc/adamw.cuh`](../llmc/adamw.cuh) | AdamW step + `init_from_master` | Element-wise |
+| [`llmc/global_norm.cuh`](../llmc/global_norm.cuh) | Grad-clip norm | Element-wise reduction |
+| [`llmc/zero.cuh`](../llmc/zero.cuh) | NCCL + ZeRO-0/1/2/3 + multi-node init; ZeRO-3 parameter shards all-gather into the full compute layout | NCCL operates on opaque buffers — compatible with TK kernels |
+| [`llmc/dataloader.h`](../llmc/dataloader.h) | Distributed train/eval loaders | Dispatches GPT-2 uint16 and Llama-3 uint32 files on header magic |
+| [`llmc/tokenizer.h`](../llmc/tokenizer.h) | GPT-2 BPE detokenizer | Used by sampling |
+| [`llmc/sampler.h`](../llmc/sampler.h) | Top-k / top-p sampler | |
+| [`llmc/schedulers.h`](../llmc/schedulers.h) | Cosine + linear LR schedules | |
+| [`llmc/rand.h`](../llmc/rand.h) | Stateless RNG (Mersenne + Philox) | |
+| [`llmc/mfu.h`](../llmc/mfu.h) | Model-FLOPs-utilization meter | |
+| [`llmc/outlier_detector.h`](../llmc/outlier_detector.h) | Loss-outlier detection | |
+| [`llmc/logger.h`](../llmc/logger.h) | Append-only training log | |
+| [`llmc/utils.h`](../llmc/utils.h) | `fopenCheck`, `freadCheck`, `mallocCheck`, etc. | |
+
+`llmc/cublas_common.h` is a stub kept only for symbol-name compatibility — no
+cuBLAS / cuBLASLt symbol is referenced in v1.
+================================================================================
+## 6. docs/precision.md
+================================================================================
+
+# Precision
+
+llm.kittens v1 is **BF16 only** for activations and parameters on the GPU.
+Master weights, gradient accumulation, and AdamW state remain FP32 — same
+invariants as `llm.c`.
+
+This is the only feature-parity deviation from `llm.c`.
+
+## Why
+
+ThunderKittens H100 GEMM and MHA kernels are bf16. Forcing FP16/FP32 would
+require new TK kernel specializations. The cost of writing those is high; the
+benefit is low (BF16 is the consensus mixed-precision dtype for training in
+2024+). v2 will more likely adopt FP8 / int8 / mxfp8 (TK already ships H100
+kernels for those) than re-introduce FP16/FP32.
+
+## What is locked, where
+
+- [`llmc/cuda_common.h`](../llmc/cuda_common.h):
+  ```cpp
+  #if defined(ENABLE_FP32) || defined(ENABLE_FP16)
+  #error "llm.kittens v1 is BF16-only..."
+  #endif
+  typedef __nv_bfloat16 floatX;
+  #define PRECISION_MODE PRECISION_BF16
+  ```
+  Compile-time `#error` if anyone passes `-DENABLE_FP16` or `-DENABLE_FP32`.
+
+- [`llmc/tk/tk_common.cuh`](../llmc/tk/tk_common.cuh):
+  ```cpp
+  static_assert(std::is_same_v<floatX, __nv_bfloat16>,
+                "llm.kittens v1 requires PRECISION=BF16. ThunderKittens H100 "
+                "GEMM/MHA kernels are bf16; FP16/FP32 paths are not implemented.");
+  ```
+  Hard `static_assert` at the bridge layer, so the GEMM template fails to
+  instantiate on a non-BF16 `floatX`.
+
+- The Makefile sets `-DENABLE_BF16` and never sets `-DENABLE_FP16` /
+  `-DENABLE_FP32`. The `PrecisionMode` enum exists in `cuda_common.h` for
+  symbol-name parity with llm.c, but `PRECISION_MODE` is hard-coded to
+  `PRECISION_BF16`.
+
+## What stays FP32
+
+Following llm.c's invariants:
+
+- **Master weights** — kept FP32, downcast to BF16 only for the forward path.
+- **Gradient accumulation** — when grad-accum > 1, partial gradient sums use
+  FP32 buffers; the BF16 grad is written at the end.
+- **AdamW state** (`m`, `v`) — FP32 always.
+- **`global_norm` reduction** — FP32 accumulators.
+- **Stochastic rounding** — FP32 → BF16 rounding uses the Philox-based
+  `stochastic_rounding` helper from `llmc/cuda_utils.cuh`. Verbatim from llm.c.
+- **`mfu.h` arithmetic** — FP32, host-side.
+
+## Practical numerical implications
+
+- **Loss and gradient noise.** BF16 has 8-bit mantissa (~3e-3 relative). For
+  the GPT-2 family this is well within the noise floor. We expect loss curves
+  indistinguishable from llm.c's BF16 path.
+- **Test tolerances will widen.** TK MHA bwd uses a different reduction order
+  than cuDNN flash-attn, so per-tensor mismatches against the PyTorch reference
+  will be ~1e-2 not ~1e-3. We maintain a tolerance table in
+  [testing.md](testing.md) and expect ~10× looser bounds on attention bwd
+  tensors than llm.c uses.
+- **Numerical parity vs llm.c BF16 path.** Should match within bf16 noise on
+  forward + AdamW step, except for attention bwd (different reduction order).
+
+## What v2 might look like
+
+Two plausible directions; pick one:
+
+1. **FP8 / mxfp8 training.** TK ships H100 kernels for these. The big-ticket
+   change is master-weight quantization (E4M3 vs E5M2 vs mxfp8 scaling), the
+   matmul wrapper grows a `dtype` template parameter, and AdamW gains an FP8
+   variant. Aligns with the TK ecosystem direction.
+2. **Reinstate FP16 / FP32.** Useful for parity with the rest of llm.c, but
+   needs new TK template specializations. Lower priority unless a specific
+   user request lands.
+
+Either way, removing the `static_assert` in `tk_common.cuh` and the `#error`
+in `cuda_common.h` is the first PR.
+================================================================================
+## 7. docs/multi-gpu.md
+================================================================================
+
+# Multi-GPU and multi-node
+
+`llmc/zero.cuh` is based on `llm.c`'s multi-GPU layer. ZeRO-0/1/2/3 and the
+NCCL init paths are wired. ZeRO-3 owns a local BF16 parameter shard, runs AdamW
+on that shard, and all-gathers back into the existing full parameter layout used
+by the current forward/backward kernels. NCCL operates on opaque device buffers;
+ThunderKittens kernels write into those buffers. The two are independent.
+
+Scalar NCCL collectives in the trainers and ZeRO helper code use NCCL element
+counts, not byte sizes. Run `scripts/validate_goal_h100.sh source-guards` before
+distributed validation to catch regressions such as passing `sizeof(float)` to
+`ncclAllReduce` for a single-float buffer.
+The same guard checks that parameter-shard `ncclAllGather` calls are ordered
+after the AdamW update kernels on the compute stream. Without that event wait,
+NCCL can read stale shards from `nccl_stream`.
+
+This page is for orientation. The current implementation details live in
+`llmc/zero.cuh`.
+
+## ZeRO levels
+
+| Level | Sharded across ranks | Where it kicks in | Notes |
+|---|---|---|---|
+| 0 | nothing | always | All-reduce on gradients |
+| 1 | optimizer state (`m`, `v`, master weights) | M4 + | Uses reduce-scatter for averaged gradient shards before the local update, matching llm.c's update path |
+| 2 | + reduced gradient ownership | M5 | `-z 2` now uses the sharded optimizer/reduce-scatter path; backward still allocates full gradient accumulation buffers because kernels write the full parameter layout |
+| 3 | + parameters | M5 | Runtime path is compile-wired with a local parameter shard plus all-gather into the full compute layout; full compute/gradient buffers are still allocated by the current kernels; H100/NCCL validation pending |
+
+Llama-3 8B does **not** fit comfortably on 8×H100-80GB at ZeRO-1 (~96 GB
+optimizer + params + grads before activations). M7's
+`multi_node/run_llama3_8B_fs.sbatch` targets ZeRO-2 across two nodes. The code
+path is compile-wired, but the real two-node H100/NCCL run remains pending.
+
+## Build switches
+
+The Makefile sniffs NCCL and OpenMPI at configure time. System NCCL installs
+are detected through `ldconfig`/package metadata plus `nccl.h`; cluster or
+module installs can be selected explicitly:
+
+```
+✓ NCCL found, multi-GPU enabled         # adds -DMULTI_GPU -lnccl
+✓ MPI found                              # adds -DUSE_MPI -lmpi
+```
+
+For a custom NCCL prefix:
+
+```bash
+make NCCL_DIR=/path/to/nccl
+make NCCL_INCLUDE_PATH=/path/to/include NCCL_LIB_PATH=/path/to/lib64
+```
+
+The H100 validation harness uses the same variables in its `preflight` phase,
+so set them before `scripts/validate_goal_h100.sh` on module-based clusters.
+
+To force-disable:
+
+```bash
+make NO_MULTI_GPU=1     # single-GPU build, no NCCL
+make NO_USE_MPI=1       # NCCL-only build, no MPI (TCP/FS init still works)
+```
+
+If NCCL is missing the Makefile prints:
+
+```
+✗ NCCL not found, multi-GPU disabled
+    install libnccl2/libnccl-dev or set NCCL_DIR/NCCL_INCLUDE_PATH/NCCL_LIB_PATH
+```
+
+## NCCL init paths
+
+`zero.cuh` supports four init methods, selected at runtime via CLI flags
+(`-pi <method>` etc., same as llm.c):
+
+1. **Single-process, multi-GPU on one node** — process spawns N CUDA contexts.
+2. **MPI** — OpenMPI launches one process per rank; rank/world come from
+   `MPI_Comm_rank` / `MPI_Comm_size`. Used by `run_gpt2_124M_mpi.sh`.
+3. **Filesystem rendezvous (FS)** — ranks discover each other through a
+   shared file. Used by `*_fs.sbatch` Slurm scripts.
+4. **TCP rendezvous** — ranks discover each other through a master TCP
+   address. Used by `*_tcp.sbatch`.
+
+All four are wired in upstream and require no changes to the kernels.
+
+## H100-pod NCCL env vars
+
+Add these to multi-node scripts (commented as "tune per pod"):
+
+```bash
+# H100 NVLink-SHARP — usually a measurable throughput gain on H100 pods
+export NCCL_NVLS_ENABLE=1
+
+# Adjust to match your fabric. mlx5 = Mellanox/NVIDIA InfiniBand HDR/NDR.
+export NCCL_IB_HCA=mlx5
+
+# These are llm.c's defaults; keep unless your pod requires otherwise.
+export NCCL_NET_GDR_LEVEL=2
+export NCCL_IB_DISABLE=0
+
+# Fabric-specific (set per pod):
+# export NCCL_SOCKET_IFNAME=...
+# export NCCL_IB_GID_INDEX=...
+```
+
+These vary per pod. The plan's instruction is to **keep these prominently
+documented in each multi-node script** rather than burying them in environment
+files.
+
+## Topology
+
+```mermaid
+flowchart LR
+    subgraph node1["Node 1"]
+        n1g0[GPU 0] -.NVLink/NVLS.- n1g1[GPU 1]
+        n1g1 -.- n1g2[GPU 2]
+        n1g2 -.- n1g3[GPU 3]
+        n1g3 -.- n1g0
+    end
+    subgraph node2["Node 2"]
+        n2g0[GPU 0] -.- n2g1[GPU 1]
+        n2g1 -.- n2g2[GPU 2]
+        n2g2 -.- n2g3[GPU 3]
+        n2g3 -.- n2g0
+    end
+    node1 -- "InfiniBand (NCCL_IB_HCA=mlx5)" --- node2
+```
+
+## Per-script status
+
+Same as the [build-and-run](build-and-run.md) target list; copied here for the
+multi-node-specific scripts:
+
+| Script | Status | Milestone |
+|---|---|---|
+| `scripts/run_gpt2_124M.sh` (8×H100, ZeRO-1) | ✅ ported; runtime pending | M4 |
+| `scripts/run_gpt2_350M.sh` | ✅ ported; runtime pending | M4 |
+| `scripts/run_gpt2_774M.sh` (`-ge 1` epilogue opt-in) | ✅ ported; runtime pending | M4 |
+| `scripts/run_gpt2_1558M.sh` (`-ge 1` epilogue opt-in) | ✅ ported; runtime pending | M4 |
+| `scripts/pyrun_gpt2_124M.sh` | ✅ ported; runtime pending | M4 |
+| `scripts/run_gpt3_125M.sh` | ✅ ported; runtime pending | M5 |
+| `scripts/multi_node/run_gpt2_124M_mpi.sh` | ✅ ported; runtime pending | M5 |
+| `scripts/multi_node/run_gpt2_124M_fs.sbatch` | ✅ ported; runtime pending | M5 |
+| `scripts/multi_node/run_gpt2_124M_tcp.sbatch` | ✅ ported; runtime pending | M5 |
+| `scripts/run_llama3_1B.sh` | ✅ ported; trainer loop compile-wired; defaults to FineWeb-edu 100B; H100/TK GQA numerical validation pending | M6 |
+| `scripts/multi_node/run_llama3_8B_fs.sbatch` (ZeRO-2 across 2 nodes) | ✅ ported; ZeRO-2 compile-wired; H100/NCCL/TK GQA numerical validation pending | M7 |
+
+Step times scale roughly as 2.5× llm.c's A100 numbers (H100 SXM5 ≈ 2.5×
+A100 throughput on bf16 dense matmul + flash-attn). The full table is in
+[`../goal.md`](../goal.md#m4--multi-gpu-gpt-2-124m-reproduction--not-started).
+
+## Verification
+
+Multi-node sanity test (M5+): a 2-node `run_gpt2_124M_fs.sbatch` should produce
+the same loss curve as the single-node 8×H100 run within the first 100 steps.
+Larger drift implies a desync in the gradient all-reduce or master-weight
+broadcast — usually a bad NCCL env var.
+Before launching, run `scripts/validate_goal_h100.sh source-guards` so scalar
+all-reduce counts and optimizer all-gather stream ordering are checked without
+requiring a live NCCL job. Run `scripts/validate_goal_h100.sh zero-guards` to
+validate host-only ZeRO-3 layouts and assert that unsupported stages such as
+`-z 4` fail with the supported-stage message. The same phase checks that
+impossible GPT/Llama ZeRO-2 process counts fail with the partitioning
+diagnostic.
+================================================================================
+## 8. docs/llama3.md
+================================================================================
+
+# Llama-3 (M6 + M7)
+
+Llama-3 is a sibling entrypoint, `train_llama3.cu`, that shares `llmc/` with
+`train_gpt2.cu`. The Python converter path, RoPE, RMSNorm, SwiGLU, GQA with TK
+forward plus supported-shape TK backward paths, dataloaders, and the C++ trainer
+loop have landed. RoPE is folded into GQA Q/K materialization and
+packed-gradient unpermute for fallback shapes, and TK-supported shapes now
+rotate Q/K in the tile-load path. H100 runtime validation remains the core
+M6/M7 work.
+
+The full TODO is in [`../goal.md`](../goal.md#m6--llama-3-1b-single-node--partial).
+
+## What changes vs GPT-2
+
+| Component | GPT-2 | Llama-3 |
+|---|---|---|
+| LayerNorm | LayerNorm (mean + variance + bias) | RMSNorm (variance only, no bias) |
+| Position encoding | Learned `wpe` embedding | Rotary (RoPE), applied to Q/K |
+| Attention | Multi-head attention (MHA) | Grouped-query attention (GQA), with RoPE fused into tile loads for supported shapes |
+| MLP | `up → GELU → proj` | `silu(gate) * up → proj` (SwiGLU) |
+| Bias terms | yes (matmul + LN) | no (none anywhere) |
+| LM head | tied with embedding | untied |
+| Tokenizer | GPT-2 BPE, vocab 50257 | Llama-3 BPE, vocab 128256 |
+| Header magic | `20240326` v3/v5 | `20240803` v5 |
+
+## New kernels
+
+All four sit alongside their GPT-2 counterparts in `llmc/`:
+
+- **`llmc/rmsnorm.cuh` + `llmc/tk/rmsnorm_tk.cuh`** — RMSNorm forward /
+  backward + fused-residual variant. Forward and fused-residual forward use the
+  TK fork for supported widths; backward is a plain CUDA correctness baseline.
+  Landed, integrated into `train_llama3.cu`, and covered by the compile-ready
+  `make test_rmsnorm` CPU-reference smoke harness. Runtime validation remains
+  pending.
+- **`llmc/rope.cuh` + `llmc/tk/rope_tk.cuh`** — wraps
+  `ThunderKittens/kernels/rotary/rotary.cu`. Backward is the inverse rotation
+  with `sin -> -sin`. Landed, integrated into `train_llama3.cu`, and covered
+  by the compile-ready `make test_rope` CPU-reference smoke harness; numerical
+  runtime validation remains pending.
+- **`llmc/attention_gqa.cuh` + `llmc/tk/attention_gqa_h100.cuh`** — the
+  highest-risk component in the project. TK causal forward and supported-shape
+  TK backward paths have landed for BF16 H100 shapes, with slow CUDA fallback
+  for unsupported shapes. The remaining target kernel work should extend the
+  MHA template:
+  - Accept `n_q_heads`, `n_kv_heads`, `n_rep = n_q / n_kv`.
+  - Forward: repeat KV across query groups *inside* the kernel (landed for
+    supported shapes; no host-side replication).
+  - Backward: accumulate `dK`/`dV` into KV-head gradient buffers across the
+    `n_rep` Q heads (landed for supported shapes; H100 validation pending).
+  - RoPE: supported TK shapes rotate Q/K inside the tile-load path; fallback
+    shapes keep the fused materialization/unpermute path.
+  `dev/validate_attention_gqa_reference.py` validates the matching CPU-only
+  PyTorch reference math for `B=1 T=128` and `B=1 T=256`, including backward
+  gradients into packed Q/K/V.
+- **`llmc/swiglu.cuh`** — plain CUDA forward/backward
+  (`out = silu(gate) * up`). No TK benefit. Landed and covered by the
+  compile-ready `make test_swiglu` CPU-reference smoke harness.
+
+## Model spec (`LlamaConfig`)
+
+Per `llm.c/train_llama3.py:245-262`:
+
+| Variant | Layers | Heads (Q / KV) | Hidden | FFN hidden | Context |
+|---|---|---|---|---|---|
+| `llama3:1B` | 16 | 16 / 8 | 2048 | 8192 (~5632 effective with SwiGLU) | 2048 |
+| `llama3:8B` / `llama3.1:8B` | 32 | 32 / 8 | 4096 | 14336 | 2048 (8192 for 3.1) |
+
+`ParameterTensors` differs from GPT-2:
+
+- No biases anywhere.
+- Three MLP weights per layer: `fcw_up`, `fcw_gate`, `fcprojw`. This matches
+  the checkpoint writer order: Python `c_fc` / Meta `w3` first, then Python
+  `c_fc2` / Meta `w1` gate.
+- Untied `lm_head` (separate from input embedding).
+- RMSNorm scales only — no bias.
+
+Port the layout from `llm.c/train_llama3.py:245-262` and the descriptor parser
+from `llm.c/train_llama3.py:879` (header magic `20240803` v5). The C++ surface
+also validates that a checkpoint's payload byte count matches the parsed
+parameter layout before CUDA startup.
+
+`train_llama3.cu` currently implements the config/parser/parameter-layout
+surface plus the forward/backward/update loop. Running it with default
+`-x 0` is a dry run that prints the resolved config and validates checkpoint
+payload size without touching CUDA. Passing `-x >0` trains with TK GQA forward
+and supported-shape TK backward where available, with slow CUDA fallback for
+unsupported shapes.
+
+Checkpointing mirrors the GPT-2 trainer: rank 0 writes `model_%08d.bin`, every
+rank writes `state_%08d_%05d.bin`, and rank 0 publishes `DONE_%08d` after the
+barrier. The state file stores AdamW moments, optional FP32 master weights, RNG
+state, and dataloader cursor/shuffle state. `-y 1` resumes from the highest
+completed `DONE_*` step in `-o OUTPUT_DIR`; this path is compile-checked, but a
+real restart still needs H100 runtime validation.
+The Llama trainer also writes the same rank-0 `OUTPUT_DIR/main.log` format as
+the GPT-2 trainer: `tel` validation loss, `eval` HellaSwag/eval accuracy, and
+`trl` train loss with learning rate and gradient norm. The H100 harness uses
+`dev/validate_training_log.py` to check those metrics after stability and full
+runs.
+
+## Checkpoint converter
+
+`train_llama3.py` (in repo root) ports `from_pretrained_llama3_hf` and
+`write_model` from `llm.c/train_llama3.py`. This produces
+`llama3.1_8B_bf16.bin` from HuggingFace `meta-llama/Meta-Llama-3.1-8B`.
+Requires `huggingface-cli login` because the Llama-3 weights are gated.
+The writer now emits the same hidden-dim header field as the C++ checkpoint
+writer. `dev/validate_llama3_converter.py` exercises `write_model` directly on a
+tiny deterministic model, checks the header and BF16 payload tensor order, and
+can dry-parse the result with `train_llama3cu -x 0 -z 2`.
+
+`dev/download_llama3.py` is the user-facing wrapper:
+
+```bash
+huggingface-cli login
+python dev/download_llama3.py llama3.1:8B    # → llama3.1_8B_bf16.bin
+python dev/validate_llama3_converter.py --cpp-validate --train-binary ./train_llama3cu
+python dev/download_llama3.py --validate-only llama3.1_8B_bf16.bin --cpp-validate
+python dev/download_llama3.py --write-synthetic-checkpoint /tmp/llama_synthetic.bin --cpp-validate
+```
+
+Post-write validation checks the magic/version, parameter payload byte count,
+and hidden-dim metadata. `--cpp-validate` additionally runs
+`train_llama3cu -e CHECKPOINT -x 0`, which parses the checkpoint and validates
+payload size without initializing CUDA. Add `--cpp-zero-stage` and
+`--cpp-processes` to run that C++ parser through a host-only ZeRO layout path in
+the same command.
+`--write-synthetic-checkpoint` writes a tiny deterministic BF16 checkpoint with
+valid Llama metadata, useful for parser and ZeRO layout smoke tests when gated
+HF weights are unavailable.
+The H100 harness can run that C++ parser later without re-downloading weights:
+
+```bash
+LLAMA_DRY_CHECKPOINT=llama3.1_8B_bf16.bin scripts/validate_goal_h100.sh llama-dry
+scripts/validate_goal_h100.sh llama-converter-smoke
+scripts/validate_goal_h100.sh llama-checkpoint-smoke
+scripts/validate_goal_h100.sh llama8b-convert
+```
+
+`llama8b-convert` is the real gated HF conversion gate. It validates
+`${LLAMA8B_CHECKPOINT:-./llama3.1_8B_bf16.bin}` when present, otherwise it
+converts `${LLAMA8B_MODEL:-llama3.1:8B}` into `${LLAMA8B_OUTPUT_DIR:-.}`. In
+both cases it runs `--cpp-validate` through the default ZeRO-2/16-process dry
+layout expected by the 2-node 8×H100 target.
+
+## Datasets
+
+Llama-3 shards are not interchangeable with GPT-2 shards (different vocab,
+different token width). Pass `--model_desc llama-3` to every dataset prep
+script:
+
+```bash
+python dev/data/tinyshakespeare.py --model_desc llama-3
+python dev/data/tinystories.py     --model_desc llama-3
+python dev/data/fineweb.py         --model_desc llama-3
+python dev/data/hellaswag.py       --model_desc llama-3
+```
+
+Header magic `20240801` v7, **uint32** tokens, vocab 128256. The training
+`DataLoader` dispatches on that header magic and still accepts GPT-2 uint16
+shards for GPT runs.
+
+HellaSwag uses a separate eval-file format: GPT-2 remains
+`hellaswag_val.bin` with magic `20240522` v1 and uint16 tokens; Llama-3 writes
+`hellaswag_val_llama3.bin` with magic `20240802` v7 and uint32 tokens.
+`EvalLoader` consumes both formats, and `train_llama3.cu` routes Llama HellaSwag
+eval to `hellaswag_val_llama3.bin`.
+
+## Single-node target (M6) — `scripts/run_llama3_1B.sh`
+
+8×H100 ZeRO-1, B=32 T=2048, LR=3e-4, warmup=2000, cosine→0.1, ~250 ms/step,
+~36 hours for 30 B tokens on Llama-tokenized FineWeb-edu 100B. The script is
+present and syntax-checked; runtime awaits H100 validation and TK GQA numerical
+validation. `scripts/validate_goal_h100.sh llama1b-stability` is the bounded
+1000-step version of this gate. After the run it validates
+`log_goal_llama1b_stability/main.log`, requiring final validation/train metrics,
+train-loss decrease, and final HellaSwag/eval metrics unless
+`LLAMA1B_STABILITY_HELLASWAG=0`.
+
+Why 1B and not 8B for the single-node target: 8B exceeds 80 GB at ZeRO-1
+because optimizer state (FP32 m+v+master) alone is ~96 GB. ZeRO-2 fixes this
+and is compile-wired through the reduce-scatter/sharded-optimizer path. ZeRO-3
+now owns local BF16 parameter shards and all-gathers into the current full
+compute layout; H100/NCCL validation is still pending.
+
+## Multi-node target (M7) — `scripts/multi_node/run_llama3_8B_fs.sbatch`
+
+2 nodes × 8×H100, ZeRO-2 across the 16 ranks, FS rendezvous. The Slurm script
+mirrors `run_gpt2_124M_fs.sbatch` (M5) plus Llama-specific defaults, but it is
+still pending real H100/NCCL validation. It accepts `MODEL_DESC=llama3.1:8B
+SEQ_LEN=8192` for the longer-context variant.
+
+## Validation plan
+
+1. **GQA forward/backward** — compare against the CPU-reference smoke harness
+   and PyTorch. `dev/cuda/test_attention_gqa.cu` covers `B=1 T=128` for TK
+   forward plus fallback backward and `B=1 T=256` for supported-shape TK
+   backward. `dev/validate_attention_gqa_reference.py` covers the CPU-only
+   PyTorch reference equivalence for both shapes; `scripts/validate_goal_h100.sh
+   gqa-runtime` is the H100 TK comparison gate.
+2. **Tile-load RoPE validation** — re-validate the supported-shape tile-load
+   path against the materialized fallback path and a PyTorch reference.
+3. **Checkpoint/restart** — run a short `run_llama3_1B.sh` job with `-n`, then
+   restart with `-y 1` and confirm loss/RNG/dataloader continuity. The harness
+   checks the `DONE_*`, model, and rank-0 state files for the initial and final
+   checkpoint steps with `dev/validate_llama_checkpoint_artifacts.py`, then
+   validates the resumed `main.log`.
+4. **End-to-end Llama-3 1B** — run `scripts/validate_goal_h100.sh
+   llama1b-stability` for 1000 steps on FineWeb-edu-100B. Loss decreases
+   overall, no NaNs; HellaSwag accuracy tracks expected curve. The log verifier
+   checks final validation/train/eval evidence and optional
+   `LLAMA1B_STABILITY_MAX_VAL_LOSS` / `LLAMA1B_STABILITY_MIN_HELLASWAG`
+   thresholds; a configured HellaSwag threshold always requires final-step eval
+   evidence. The longer `run_llama3_1B.sh` target continues from there toward
+   the full run, and `scripts/validate_goal_h100.sh llama1b-full` applies the
+   same `main.log` checks plus `run.log` launch-metadata and final checkpoint
+   evidence checks at the full-run final step.
+
+See [testing.md](testing.md) for the rest of the test pyramid.
+================================================================================
+## 9. docs/testing.md
+================================================================================
+
+# Testing and verification
+
+llm.kittens borrows llm.c's test pyramid. Today step 1a is live, and the
+`train_gpt2cu` / `test_gpt2cu` compile paths are wired. Runtime forward/parity
+checks still need H100 access and the starter-pack `.bin` files.
+
+The executable checklist for a target H100 box is
+[`../scripts/validate_goal_h100.sh`](../scripts/validate_goal_h100.sh). With no
+arguments it runs the `goal-core` H100 gates: preflight, full compile,
+launch-script and Python helper syntax checks, source-level CUDA/NCCL/ZeRO,
+GQA/RoPE, BF16/H100/TK build, GELU-epilogue source, profile-gate source, Llama conversion source, rank-0 training-log evidence, launch-script, and runtime-marker contract guards, CUDA runtime/device-allocation probe, synthetic and prepared GPT-2/Llama
+data artifact metadata checks, host-only C++
+DataLoader/EvalLoader smoke, CPU-only GQA/RoPE PyTorch reference checks,
+synthetic profile parser/threshold checks, synthetic training-log verifier
+checks, synthetic Llama converter writer checks, starter-pack file, tokenizer,
+checkpoint metadata, and debug-state
+payload checks, kernel smoke tests, GPT-2 forward/parity checks, GPT-2/GPT-3
+and Llama descriptor dry-runs with host-only 8-process ZeRO layout validation,
+host-only ZeRO-3 layout validation, standalone ZeRO shard offset coverage, and
+ZeRO request guard checks.
+It also writes and validates a tiny synthetic Llama checkpoint through the same
+host-only parser and ZeRO-2 layout path used for converted HF checkpoints.
+For local machines without a usable CUDA runtime, `scripts/validate_goal_h100.sh
+host-core` runs the non-CUDA-runtime subset using existing built binaries and
+artifacts.
+The target preflight and CUDA runtime probe are stricter than local build
+probes: they require H100/sm90-class GPUs and reject A100, RTX, and Blackwell
+cards unless `ALLOW_NON_H100=1` is set for dry compile/debug runs. That
+override is only for local debugging and does not count as runtime evidence for
+unchecked `goal.md` items; `goal-complete` refuses to run while it is set.
+Longer phases are explicit:
+
+```bash
+scripts/validate_goal_h100.sh host-core
+scripts/validate_goal_h100.sh zero-guards
+scripts/validate_goal_h100.sh script-syntax
+scripts/validate_goal_h100.sh python-syntax
+scripts/validate_goal_h100.sh source-guards
+scripts/validate_goal_h100.sh data-artifacts
+scripts/validate_goal_h100.sh dataloader-smoke
+scripts/validate_goal_h100.sh gqa-reference
+scripts/validate_goal_h100.sh gqa-runtime
+scripts/validate_goal_h100.sh profile-parser
+scripts/validate_goal_h100.sh llama-converter-smoke
+scripts/validate_goal_h100.sh llama-checkpoint-smoke
+scripts/validate_goal_h100.sh cuda-runtime
+scripts/validate_goal_h100.sh starter-pack
+scripts/validate_goal_h100.sh gpt-dry
+scripts/validate_goal_h100.sh llama-dry
+scripts/validate_goal_h100.sh profile
+scripts/validate_goal_h100.sh gpt2-smoke
+scripts/validate_goal_h100.sh llama-resume
+scripts/validate_goal_h100.sh llama1b-stability
+scripts/validate_goal_h100.sh gpt2-full
+scripts/validate_goal_h100.sh llama1b-full
+scripts/validate_goal_h100.sh llama8b-convert
+scripts/validate_goal_h100.sh llama8b-full
+scripts/validate_goal_h100.sh goal-complete
+```
+
+For a target machine where you intentionally want to prove every remaining
+`goal.md` gate in one pass, use:
+
+```bash
+ALLOW_FULL_GOAL_RUN=1 scripts/validate_goal_h100.sh goal-complete
+```
+
+`goal-complete` runs `goal-core` and then the long
+H100/NCCL/profile/conversion/full-run phases: GPT-2 smoke, ZeRO-3 GPT-2 smoke,
+Llama resume, GQA runtime, Llama-3 1B stability, `ncu` profiling, GPT-2 124M
+full reproduction, GPT-2 two-node loss-curve comparison, Llama-3 1B full run, real gated HF
+Llama-3.1 8B conversion/validation, and the Llama-3 8B multi-node Slurm run.
+It is guarded by
+`ALLOW_FULL_GOAL_RUN=1` so the default harness cannot accidentally launch
+multi-hour jobs. It fail-fast checks `gpt2_124M_bf16.bin`, `ncu` for live or
+`.ncu-rep` profile validation, and `sbatch` when the two-node/full 8B phases are
+not in validate-only mode. In validate-only mode it checks the pre-existing
+two-node reference/candidate logs and 8B checkpoint/log artifacts before
+entering `goal-core`.
+Use `scripts/validate_goal_h100.sh goal-complete-prereqs` to check those
+completion prerequisites without launching `goal-core` or long jobs. It also
+requires explicit smoke/full metric thresholds:
+Captured short-gate evidence can be replayed with `PREFLIGHT_VALIDATE_ONLY`,
+`CUDA_RUNTIME_VALIDATE_ONLY`, `SMOKE_VALIDATE_ONLY`, `GPT2_RUNTIME_VALIDATE_ONLY`,
+`GQA_RUNTIME_VALIDATE_ONLY`,
+`GPT2_SMOKE_VALIDATE_ONLY`, `LLAMA_RESUME_VALIDATE_ONLY`, and
+`LLAMA1B_STABILITY_VALIDATE_ONLY`.
+`scripts/validate_goal_h100.sh goal-replay-smoke` exercises those replay paths
+with synthetic temporary evidence and checks that weak prereq evidence is
+rejected.
+`goal-complete` forces Llama-3 1B stability HellaSwag on, and any
+`LLAMA1B_STABILITY_MIN_HELLASWAG` threshold requires final-step eval evidence.
+Validate-only `zero3-smoke` also requires `ZERO3_SMOKE_RUN_LOG` with the
+ZeRO-3 stage banner, so a plain rank-0 metric log cannot stand in for a
+ZeRO-3 runtime smoke.
+`LLAMA8B_CONVERT_VALIDATE_ONLY=1` requires an existing `LLAMA8B_CHECKPOINT`
+instead of attempting the gated HF conversion.
+Set `GPT2_FULL_VALIDATE_ONLY=1` or `LLAMA1B_FULL_VALIDATE_ONLY=1` to validate
+existing GPT-2 124M or Llama-3 1B full-run `main.log`, `run.log`, and final
+checkpoint evidence instead of relaunching those single-node full phases.
+Set `PROFILE_VALIDATE_ONLY=1 PROFILE_CSV_DIR=...` to validate existing raw
+`profile_ge*.csv` exports without requiring Nsight Compute locally; use
+`PROFILE_REPORT_DIR=...` for `profile_ge*.ncu-rep` reports on a host with
+`ncu`. `goal-complete` forces/requires both `profile_ge0` and `profile_ge1`
+evidence, even if a standalone profile replay narrows `PROFILE_GELU_FUSIONS`.
+`GPT2_SMOKE_MAX_VAL_LOSS`, `ZERO3_SMOKE_MAX_VAL_LOSS`,
+`LLAMA_RESUME_MAX_VAL_LOSS`, `LLAMA1B_STABILITY_MAX_VAL_LOSS`,
+`LLAMA1B_STABILITY_MIN_HELLASWAG`, `GPT2_FULL_EXPECTED_VAL_LOSS`,
+`GPT2_FULL_EXPECTED_HELLASWAG`, `GPT2_TWO_NODE_REL_TOL`,
+`LLAMA1B_FULL_MAX_VAL_LOSS`,
+`LLAMA1B_FULL_MIN_HELLASWAG`, `LLAMA8B_FULL_MAX_VAL_LOSS`, and
+`LLAMA8B_FULL_MIN_HELLASWAG`. Optional `GPT2_FULL_METRIC_REL_TOL` controls the
+GPT-2 published-metric tolerance. The prereq gate validates these values before
+launch: loss and tolerance thresholds must be positive finite numbers, and
+HellaSwag accuracy thresholds must be finite values in `[0,1]`.
+The 8B Slurm phase uses `sbatch --wait` by default, then validates the captured
+`run.log` launch metadata, final rank-0 checkpoint headers, and `main.log`; set
+`LLAMA8B_FULL_VALIDATE_ONLY=1` to check an already completed
+`LLAMA8B_FULL_OUT_DIR`.
+
+`GPT_DRY_CHECKPOINT=/path/to/model.bin scripts/validate_goal_h100.sh gpt-dry`
+adds a host-only GPT checkpoint header and payload-size check to the descriptor
+dry-runs. The built-in descriptor dry-runs and optional checkpoint branch
+assert output text, including GPT-2 ZeRO-1/3 layout validation and descriptor
+source, channel count, and ZeRO-2 layout markers for every built-in GPT-3
+descriptor.
+`python dev/validate_gpt2_starter_pack.py` is the host-only GPT-2 starter-pack
+validator used by `starter-pack`; it checks the tokenizer, fp32/BF16 checkpoint
+sizes, debug-state token ranges, expected loss, sampled logits/gradients, and
+exact debug-state byte count before GPU model code runs. The `starter-pack`
+phase first runs `--self-test` with tiny synthetic starter-pack artifacts, then
+asserts the real metadata success marker and the follow-up GPT-2 ZeRO-1 dry-run
+output.
+`python dev/validate_nccl_source.py` is the source-level guard used by
+`source-guards`; it checks `ncclAllReduce` calls in the trainer and ZeRO code
+so scalar collectives use an element count such as `1`, not `sizeof(float)`.
+It also checks that optimizer shard `ncclAllGather` calls are preceded by a
+compute-stream to NCCL-stream event dependency, so all-gather reads updated
+parameter shards after AdamW kernels have produced them.
+The same guard checks the ZeRO-3 parameter-shard runtime contract in both
+trainers: an authoritative local BF16 shard buffer, AdamW updates against the
+owned shard, and an all-gather into the full parameter layout used by the
+current compute kernels. It also checks that each trainer synchronizes after
+the update-time parameter all-gather before subsequent full-layout reads. The
+harness asserts the source-guard success marker.
+`python dev/validate_zero_layout.py` is also part of `source-guards`; it checks
+that GPT-2, every built-in GPT-3 descriptor, and Llama-3 1B/8B local ZeRO shard
+intervals are divisible, non-overlapping, contiguous, and cover exactly
+`total_params / nproc` for 1/2/4/8/16 processes.
+`python dev/validate_build_contracts.py` is also part of `source-guards`; it
+keeps the BF16/H100/TK build contract source-checked by asserting the Makefile
+still builds with `sm_90a`, C++20, TK include paths, `KITTENS_SM90`, and
+`ENABLE_BF16`, while rejecting FP16/FP32 and cuBLAS/cuBLASLt/cuDNN link flags.
+It also checks the BF16 `floatX` lock, the TK bridge static guards, 128-byte
+alignment, dynamic shared-memory opt-in, and the intentionally empty
+`cublas_common.h` shim.
+`python dev/validate_epilogue_source.py` is also part of `source-guards`; it
+keeps the opt-in GPT-2 MLP bias+GELU epilogue tied together across the TK GEMM
+template, matmul wrapper, `train_gpt2.cu` `-ge` switch and fallback, larger GPT
+launch scripts, and `test_matmul` smoke coverage.
+`python dev/validate_gqa_source.py` is also part of `source-guards`; it locks
+down the custom Llama GQA/RoPE contract by checking that tile-load RoPE is used
+only for TK forward+backward-supported shapes, that query heads map to shared
+KV heads through the expected ratio, that supported-shape TK backward receives
+the RoPE tables and still inverse-rotates packed `dQ`/`dK` gradients afterward,
+and that the T=128 fallback-backward, T=256 TK-backward, and CPU reference
+paths remain wired.
+`python dev/validate_runtime_markers.py` is also part of `source-guards`; it
+checks that CUDA runtime, kernel-smoke, GPT-2 validation, and GQA runtime
+success markers exist in the corresponding sources and are asserted by the H100
+harness.
+`python dev/validate_training_source.py` is also part of `source-guards`; it
+checks that `llmc/logger.h` writes rank-0 `main.log` with the exact `tel`,
+`eval`, and `trl/lr/norm` formats parsed by `dev/validate_training_log.py`,
+that both trainers initialize the logger with the actual `resuming` state, and
+that the smoke/full-run harness phases pass the expected final-step and
+required-metric arguments into the log validator.
+`python dev/validate_profile_source.py` is also part of `source-guards`; it
+keeps the H100 profiling gate tied to `profile_gpt2cu.py`, the one-step
+`profile_gpt2cu` binary, the Nsight Compute raw metric list, the tensor-core
+utilization threshold, `PROFILE_MIN_TENSOR_UTIL`, and the default/fused
+`PROFILE_GELU_FUSIONS` harness wiring.
+`python dev/validate_llama_conversion_source.py` is also part of
+`source-guards`; it keeps the real gated HF Llama-3.1 8B conversion gate tied
+to the supported model alias, BF16 checkpoint header/size validation,
+synthetic-checkpoint path, C++ dry-parse options, and the harness
+`llama8b-convert` phase.
+`python dev/validate_goal_harness_coverage.py` keeps the compile,
+runtime-evidence, and `goal-complete` coverage contract honest by checking that
+`phase_compile`, `goal-core`, the long H100 phases, every unchecked `goal.md`
+runtime item, and the required explicit metric-threshold environment variables
+stay wired. It also checks that the replay smoke retains the negative
+`goal-complete-prereqs` evidence cases.
+`python dev/validate_data_artifacts.py` is the host-only prepared-data validator
+used by `data-artifacts`; it skips absent default datasets, validates exact
+train/eval file sizes and magic/version pairs when files are present, samples
+training token ranges, and parses the full HellaSwag-style eval stream. The
+harness first runs its synthetic `--self-test` pass/fail path, then asserts the
+real-file metadata success marker.
+`make test_dataloader && ./test_dataloader` is the host-only C++ loader smoke
+used by `dataloader-smoke`; it writes synthetic GPT-2/Llama train/eval files
+under `/tmp` and loads them through `DataLoader` and `EvalLoader`. The harness
+asserts the loader smoke success marker.
+`python dev/validate_attention_gqa_reference.py` is the CPU-only GQA/RoPE
+reference check used by `gqa-reference`; it compares materialized-RoPE
+attention with repeated KV heads against a grouped/tile-load-style formulation
+and checks backward gradients for `B=1 T=128` and `B=1 T=256`. The harness
+asserts the final reference success marker.
+`scripts/validate_goal_h100.sh gqa-runtime` runs that CPU reference check and
+then executes `test_attention_gqa`, which is the H100 CUDA/TK comparison for the
+same `B=1 T=128` and `B=1 T=256` smoke shapes. It asserts the per-shape
+`GQA case T=128 backward=fallback OK` and `GQA case T=256 backward=tk OK`
+markers plus the final `test_attention_gqa smoke OK` marker, so missing shape
+coverage, CUDA launch failures, or numerical failures cannot be hidden by
+partial output.
+`scripts/validate_goal_h100.sh cuda-runtime` asserts the `CUDA runtime check
+passed.` marker after the driver/runtime/device-allocation probe completes.
+The probe independently enforces the same H100/sm90-class runtime contract as
+`preflight`; `ALLOW_NON_H100=1` is accepted only as a dry-debug override.
+`scripts/validate_goal_h100.sh smoke` asserts `<binary> smoke OK` from each
+kernel smoke binary: `test_matmul`, `test_attention`, `test_layernorm`,
+`test_rope`, `test_rmsnorm`, `test_swiglu`, and `test_attention_gqa`.
+`scripts/validate_goal_h100.sh gpt2` asserts both `gpt2_validate OK` and
+`test_gpt2cu OK`, so the M2/M3 runtime gates must reach their explicit final
+success markers.
+`python dev/validate_profile_parser.py` is the host-only profiling parser check
+used by `profile-parser`; it feeds synthetic Nsight Compute raw CSV into
+`profile_gpt2cu.py --csv-input` and asserts both passing and failing
+tensor-utilization thresholds. The harness asserts the parser success marker.
+`python dev/validate_log_tools.py` is the host-only training-log verifier check
+used by `log-tools`; it feeds synthetic rank-0 logs through
+`dev/validate_training_log.py` and `dev/compare_training_logs.py`, asserting
+both passing and failing threshold, expected-metric tolerance, final-step,
+loss-curve, and non-decreasing curve paths. The harness asserts the log-tool
+success marker.
+`python dev/validate_llama3_converter.py --cpp-validate --train-binary
+./train_llama3cu` is the host-only Llama converter writer check used by
+`llama-converter-smoke`; it builds a tiny `LLaMA` model, fills each named
+parameter with a distinct BF16 value, runs `train_llama3.py::write_model`, checks
+the header and payload tensor order, then dry-parses the file with
+`train_llama3cu -x 0 -z 2`. The harness asserts the converter success marker so
+a later unrelated dry-run failure cannot be mistaken for this check passing.
+`LLAMA_DRY_CHECKPOINT=/path/to/llama.bin scripts/validate_goal_h100.sh
+llama-dry` adds the same host-only C++ checkpoint parser and payload-size check
+for converted Llama checkpoints; it defaults to ZeRO-2 layout validation and
+can be overridden with `LLAMA_DRY_ZERO_STAGE`. The Llama dry-run goes through
+the same `set_zero_configs` helper as runtime, so the printed local shard
+parameter count is part of the checked contract. The built-in Llama dry-runs
+assert representative descriptor and ZeRO layout text for `llama3:1B` and
+`llama3.1:8B`; the optional checkpoint branch also asserts the selected ZeRO
+layout or parser success marker.
+`dev/download_llama3.py --cpp-validate` accepts `--cpp-zero-stage` and
+`--cpp-processes`, so real gated HF conversions and synthetic checkpoints can
+run the C++ parser through the same ZeRO layout dry-run without a second manual
+command.
+`scripts/validate_goal_h100.sh zero-guards` checks that host-only `-x 0 -z 3`
+GPT/Llama layout validation succeeds. The negative cases assert that
+unsupported stages such as `-z 4` fail with the explicit supported-stage
+message instead of falling through to a later error. It also checks impossible
+process counts for GPT and Llama ZeRO-2 layouts, so non-divisible parameter
+shards fail with the intended partitioning diagnostic.
+`scripts/validate_goal_h100.sh llama-checkpoint-smoke` is the repeatable local
+version: it uses `dev/download_llama3.py --write-synthetic-checkpoint` to write
+a tiny BF16 Llama checkpoint under `/tmp`, runs `--cpp-validate`, then checks
+the ZeRO layout with `train_llama3cu -x 0`.
+`scripts/validate_goal_h100.sh llama8b-convert` is the real gated HF conversion
+gate. If `LLAMA8B_CHECKPOINT` exists, it validates that file with
+`dev/download_llama3.py --validate-only --cpp-validate`; otherwise it converts
+`${LLAMA8B_MODEL:-llama3.1:8B}` into `${LLAMA8B_OUTPUT_DIR:-.}` and runs the
+same C++ dry parser. The default dry-run layout is ZeRO-2 across 16 processes,
+matching the 2-node 8×H100 M7 target.
+`scripts/validate_goal_h100.sh gpt2-two-node` runs the filesystem Slurm script
+with `sbatch --wait` and `MAX_STEPS=100` by default, then compares the first
+100 train-loss steps from a single-node/reference `main.log` and the
+two-node/candidate `main.log`. It uses `dev/compare_training_logs.py`, requires
+`GPT2_TWO_NODE_REL_TOL`, requires both compared train-loss curves to decrease
+over the selected window, and defaults the reference log to the GPT-2 full-run
+output. Set `GPT2_TWO_NODE_VALIDATE_ONLY=1` to compare existing logs.
+`python dev/validate_training_log.py` is the rank-0 `main.log` evidence checker
+used after GPT-2 smoke, Llama resume, and long training phases. It parses `s:<step> tel:<loss>` validation
+loss lines, `s:<step> eval:<accuracy>` HellaSwag/eval lines, and
+`s:<step> trl:<loss> lr:<lr> norm:<grad_norm>` train lines. The
+`gpt2-smoke`, `llama-resume`, `llama1b-stability`, `gpt2-full`, and `llama1b-full` phases fail if the
+expected final metric steps are missing, non-finite, outside the requested
+published/threshold values, or if required train loss does not decrease.
+
+Use `MAKE_EXTRA="NO_MULTI_GPU=1 NO_USE_MPI=1"` only for compile/debug hosts.
+For goal completion on H100, leave multi-GPU enabled and install NCCL/MPI.
+
+## The pyramid
+
+```mermaid
+flowchart TD
+    L1["1a. Per-kernel smoke<br/>(test_matmul ✓; test_attention compile ✓; test_layernorm compile ✓; test_attention_gqa compile ✓; M6 primitives compile ✓)"]
+    L2["1b. Forward-only sanity<br/>(M2: gpt2_validate against gpt2_124M_debug_state.bin)"]
+    L3["2. Numerical parity<br/>(M3: test_gpt2.cu — fwd + 10 AdamW steps vs PyTorch)"]
+    L4["3. Smoke training<br/>(tinyshakespeare, B=4 T=1024, 100 steps; loss decreases, no NaN)"]
+    L5["4. GPT-2 124M reproduction<br/>(M4: 8×H100 FineWeb-10B vs llm.c published numbers)"]
+    L6["5. Multi-node sanity<br/>(M5: 2-node fs.sbatch matches single-node 100-step loss curve)"]
+    L7["6. ncu profiling<br/>(M8: profile_gpt2cu — MMA tensor-core utilization > 70%)"]
+    L1 --> L2 --> L3 --> L4 --> L5 --> L6 --> L7
+```
+
+## Step 1a — per-kernel smoke
+
+Live today:
+
+- [`dev/cuda/test_matmul.cu`](../dev/cuda/test_matmul.cu) → `make test_matmul`.
+  It covers TK forward GEMM dispatch, the opt-in forward bias+GELU epilogue,
+  plus both dWeight `A^T*B` paths: overwrite and accumulated `+=` via the
+  scratch-backed TK path.
+- [`dev/cuda/test_attention.cu`](../dev/cuda/test_attention.cu) →
+  `make test_attention`. It covers GPT-style packed Q/K/V unpacking, causal MHA
+  forward, and packed Q/K/V gradients against an independent CPU reference. The
+  `T=192` case covers direct TK forward plus CUDA fallback backward; the `T=256`
+  case covers padded TK forward plus supported-shape TK backward. Runtime
+  execution still needs a compatible H100 driver/runtime.
+- [`dev/cuda/test_layernorm.cu`](../dev/cuda/test_layernorm.cu) →
+  `make test_layernorm`. It covers GPT-style LayerNorm forward, fused
+  residual+LayerNorm forward, saved `mean`/`rstd`, and backward `+=`
+  accumulation into `dinp`, `dweight`, and `dbias` against independent CPU
+  references. Runtime execution still needs a compatible H100 driver/runtime.
+- [`dev/cuda/test_attention_gqa.cu`](../dev/cuda/test_attention_gqa.cu) →
+  `make test_attention_gqa`. It covers Llama packed Q/K/V unpacking, RoPE,
+  GQA causal forward, and packed backward gradients against an independent CPU
+  reference. The `T=128` case covers TK forward plus CUDA fallback backward; the
+  `T=256` case covers supported-shape TK backward and the tile-load RoPE path.
+  Runtime execution still needs a compatible H100 driver/runtime.
+- [`dev/cuda/test_rope.cu`](../dev/cuda/test_rope.cu) → `make test_rope`.
+  It covers HS=64 and HS=128 RoPE forward plus inverse-rotation backward
+  against an independent CPU reference.
+- [`dev/cuda/test_rmsnorm.cu`](../dev/cuda/test_rmsnorm.cu) →
+  `make test_rmsnorm`. It covers RMSNorm forward, fused-residual forward,
+  saved `rstd`, `dinp`, and `dweight` against independent CPU references.
+- [`dev/cuda/test_swiglu.cu`](../dev/cuda/test_swiglu.cu) →
+  `make test_swiglu`. It covers SwiGLU forward, `dgate`, and `dup` against an
+  independent CPU reference.
+
+`make all` also compile-checks `train_gpt2cu` and `test_gpt2cu`.
+
+`test_matmul` exercises three default forward shapes, the opt-in forward
+bias+GELU epilogue, plus the two dWeight cases:
+
+| Shape | Why |
+|---|---|
+| `1024×1024×1024` square | exercises the default `matmul_template<2,4,8>` |
+| `4096×3072×768` | GPT-2 124M MLP up-projection (default kernel) |
+| `4096×50304×768` | GPT-2 124M LM head (`small_n` fallback, `OC % 256 != 0`) |
+| `1024×4096×1024` bias+GELU | opt-in TK finish-path epilogue, including pre-GELU auxiliary output |
+| `1024×1024×1024` dWeight overwrite | TK `A^T*B` into an empty gradient buffer |
+| `1024×1024×1024` dWeight accumulate | TK `A^T*B` into scratch, then `dweight += scratch` |
+
+Tolerance: `0.5` max abs diff against a naive bf16 reference with FP32
+accumulation. Justification: bf16 has ~3e-3 relative precision; for K=768
+with values in `[-1, 1]` the accumulation error is `~sqrt(K)*eps ~ 0.08`. The
+0.5 bound has slack.
+
+All smoke targets listed above have direct Makefile entries; H100 runtime
+execution is still blocked in this local environment by the CUDA driver/runtime
+mismatch.
+
+Pattern (follow `test_matmul.cu`):
+
+1. Allocate device buffers. Fill A/B with bf16 randoms.
+2. Call the wrapper.
+3. Run a naive reference kernel (bf16 inputs, fp32 accumulation).
+4. Copy back, compute max abs diff, compare to a hand-derived tolerance.
+
+## Step 1b — forward-only sanity (M2 gate)
+
+`make gpt2_validate && ./gpt2_validate` should produce a sane forward loss on
+`gpt2_124M_debug_state.bin`. This is purely a forward-path check: the binary
+loads the debug-state batch, calls `gpt2_validate()`, compares the mean loss to
+the PyTorch-saved reference loss, and exits before backward or AdamW. The target
+compiles locally, but runtime is still pending on H100 because this workspace's
+CUDA driver is older than the CUDA runtime.
+
+## Step 2 — numerical parity (M3 gate)
+
+`test_gpt2.cu` (ported from `llm.c/test_gpt2.cu`):
+
+1. Load `gpt2_124M_debug_state.bin` (fetched by `dev/download_starter_pack.sh`).
+2. Run a forward + backward pass.
+3. Run 10 AdamW steps.
+4. Compare every captured tensor (logits, dlogits, dW per layer, optimizer
+   state) against the PyTorch reference.
+
+### Loosened tolerances
+
+llm.c tunes per-tensor tolerances against cuDNN flash-attn. TK MHA uses a
+different reduction order, so attention-bwd tensors may need looser bounds
+after the first H100 parity run. `test_gpt2.cu` now carries an explicit
+`kGradientTolerances` table with tensor names, inherited llm.c BF16 thresholds,
+current TK thresholds, and notes for likely MHA-bwd-sensitive tensors.
+
+If parity is off by more than the table allows, the bug is structural — chase it
+before relaxing further. If a real H100 run shows expected TK reduction-order
+drift, update only the affected table row and keep the inherited llm.c threshold
+visible for comparison.
+
+## Step 3 — smoke training
+
+```bash
+./train_gpt2cu \
+    -i dev/data/tinyshakespeare/tiny_shakespeare_train.bin \
+    -j dev/data/tinyshakespeare/tiny_shakespeare_val.bin \
+    -e gpt2_124M_bf16.bin \
+    -b 4 -t 1024 -x 100 -v 20 -s 0
+```
+
+Pass criteria: loss strictly decreases over the 100 steps; no NaN/Inf in
+weights, gradients, optimizer state, or loss; sample text at step 100 is
+recognisably English. `scripts/validate_goal_h100.sh gpt2-smoke` checks
+`log_goal_gpt2_smoke/main.log` after the run, requiring final validation and
+train metrics plus train-loss decrease. `GPT2_SMOKE_MAX_VAL_LOSS` can add a
+hard final validation-loss ceiling for a target H100 environment.
+`zero3-smoke` uses the same rank-0 log verifier for the ZeRO-3 GPT-2 runtime
+smoke and `goal-complete` requires `ZERO3_SMOKE_MAX_VAL_LOSS` for its final
+validation-loss ceiling.
+
+## Step 4 — GPT-2 124M reproduction (M4 gate)
+
+8×H100, full `scripts/run_gpt2_124M.sh`. ZeRO-1, B=64, T=1024, 18,865 steps,
+FineWeb-10B.
+
+Pass criteria: final HellaSwag accuracy and val loss within 0.5% of llm.c's
+published numbers. `scripts/validate_goal_h100.sh gpt2-full` checks the
+rank-0 `main.log` final `tel` and `eval` entries, `run.log` launch metadata,
+and final checkpoint marker/artifacts at step 18,865. For
+`goal-complete`, set `GPT2_FULL_EXPECTED_VAL_LOSS` and
+`GPT2_FULL_EXPECTED_HELLASWAG`; `GPT2_FULL_METRIC_REL_TOL` defaults to 0.5%.
+
+## Step 5 — multi-node sanity (M5 gate)
+
+2-node `scripts/multi_node/run_gpt2_124M_fs.sbatch`: same loss curve as the
+single-node 8×H100 run within the first 100 steps. Larger drift implies a
+desync in the gradient all-reduce or master-weight broadcast — usually a bad
+NCCL env var (see [multi-gpu.md](multi-gpu.md)).
+
+## Step 6 — Llama-3 1B (M6 gate)
+
+8×H100, 1000 steps of the Llama-3 1B target on FineWeb-edu-100B.
+Forward/backward stable; GQA numerics match the reference harness and a
+PyTorch comparison on the `B=1 T=128` and `B=1 T=256` smoke shapes.
+`dev/validate_attention_gqa_reference.py` covers the CPU-only PyTorch
+equivalence for those shapes; `scripts/validate_goal_h100.sh gqa-runtime` is the
+dedicated CUDA/TK smoke gate, and the training path still needs H100.
+Use `scripts/validate_goal_h100.sh llama1b-stability` for the bounded 1000-step
+FineWeb-edu run; it defaults to `dev/data/edu_fineweb100B/edu_fineweb_*.bin`
+and requires `hellaswag_val_llama3.bin` unless `LLAMA1B_STABILITY_HELLASWAG=0`.
+The phase verifies `log_goal_llama1b_stability/main.log` with
+`dev/validate_training_log.py`, requiring final validation and train metrics,
+train-loss decrease, and final HellaSwag/eval metrics when HellaSwag is
+enabled. Optional thresholds are `LLAMA1B_STABILITY_MAX_VAL_LOSS` and
+`LLAMA1B_STABILITY_MIN_HELLASWAG`; a configured HellaSwag threshold requires
+final-step eval evidence, and `goal-complete` forces HellaSwag on. The full-run phase uses
+`LLAMA1B_FULL_MAX_VAL_LOSS` and `LLAMA1B_FULL_MIN_HELLASWAG`.
+Also cover a short checkpoint/restart run with `-n` and `-y 1` so the
+optimizer, RNG, and dataloader state path is validated outside compile-only
+checks. `scripts/validate_goal_h100.sh llama-resume` verifies
+`DONE_00000001`, `model_00000001.bin`, `state_00000001_00000.bin`, the
+matching final-step checkpoint files, and `log_goal_llama_resume/main.log`
+after the resumed run. `dev/validate_llama_checkpoint_artifacts.py` parses the
+model/state headers and checks magic, version, step, rank, and process count;
+`scripts/validate_goal_h100.sh llama-checkpoint-smoke` also runs its synthetic
+`--self-test` pass/fail path without requiring a trainer run.
+`LLAMA_RESUME_MAX_VAL_LOSS` can add a target-host validation-loss ceiling.
+
+## Step 7 — profiling (M8 polish)
+
+```bash
+make profile_gpt2cu
+python profile_gpt2cu.py --min-tensor-util 70
+python profile_gpt2cu.py --min-tensor-util 70 --gelu-fusion 1 --output profile_ge1
+```
+
+`profile_gpt2cu.py` runs `ncu --set full --import-source yes -o profile -f
+./profile_gpt2cu --gelu-fusion N`, exports the raw metrics, and fails if average MMA
+tensor-core utilization is below the requested threshold. To summarize an
+existing report without rerunning Nsight Compute:
+
+```bash
+python profile_gpt2cu.py --skip-build --skip-run --report profile.ncu-rep
+python profile_gpt2cu.py --csv-input profile.raw.csv --min-tensor-util 70
+```
+
+Expect MMA tensor-core utilization > 70% on H100 for the GEMM-heavy ops. Lower
+than that on attention is acceptable (TK MHA is bound by softmax /
+softmax-bwd, not MMA).
+
+`profile_gpt2.cu` and `profile_gpt2cu.py` are both in the tree. The remaining
+M8 gate is the real H100 `ncu` run and post-processing output. The CSV parser
+and utilization threshold path are covered by `dev/validate_profile_parser.py`.
+The GPT-2 MLP
+up-projection bias+GELU epilogue is compile-wired behind `-ge 1`; the H100
+`profile` phase now runs both `PROFILE_GELU_FUSIONS="0 1"` unless overridden.
+`goal-complete` always forces/requires both `profile_ge0` and `profile_ge1`
+evidence.
+================================================================================
+## 10. docs/porting-notes.md
+================================================================================
+
+# Porting notes (llm.c → llm.kittens)
+
+The day-to-day notes you need when carrying a kernel or a code path across.
+Use this as a checklist before opening a wrapper PR.
+
+The macro plan is in [`../goal.md`](../goal.md). Per-kernel mapping is in
+[kernel-reference.md](kernel-reference.md). This page is the operational
+companion to those.
+
+## Rules of the road
+
+1. **`train_*.cu` `#include`s only `llmc/*.cuh`.** Never reach into
+   `llmc/tk/*.cuh` from training source.
+2. **Only `llmc/tk/*` brings `kittens::` into scope.** Everything else uses
+   raw `floatX*` and `cudaStream_t`.
+3. **`floatX = __nv_bfloat16` is locked.** Do not write paths that branch on
+   precision; if you find yourself wanting to, the `static_assert` in
+   `tk_common.cuh` will tell you no.
+4. **TMA-aligned allocations.** Every parameter / activation buffer that
+   passes through a TK kernel must be 128-byte aligned. Use
+   `llmk::TK_ALIGN` and `llmk::tk_align()` from
+   [`llmc/tk/tk_common.cuh`](../llmc/tk/tk_common.cuh).
+5. **One-time `cudaFuncSetAttribute` per TK kernel symbol.** Use the
+   `static bool smem_attr_set = false;` latch pattern from
+   [`llmc/tk/gemm_h100.cuh`](../llmc/tk/gemm_h100.cuh) (the bottom `launch<>`
+   helper). Without it, TK kernels fail to launch on H100.
+6. **Element-wise / 1D-reduction / gather-scatter kernels stay verbatim** from
+   llm.c. Don't rewrite them on TK; the cost/benefit is wrong.
+7. **The bias-grad reduce kernels in `llmc/matmul.cuh` are verbatim from
+   llm.c.** Keep them that way; they are the column-reduction kernels for
+   `matmul_backward`.
+
+## Diff vs llm.c, point by point
+
+| Area | llm.c | llm.kittens |
+|---|---|---|
+| Build | nvcc + cuBLAS + cuBLASLt + (optional) cuDNN | nvcc + TK headers, single binary |
+| Toolchain | `c++17`, `sm_80` and up | `c++20`, `sm_90a` only (WGMMA + TMA require it) |
+| Precision | BF16 / FP16 / FP32 | BF16 only |
+| Matmul | cuBLASLt with bias + GELU epilogue fusion | TK GEMM; default bias / GELU are separate passes; GPT-2 MLP up-projection has an opt-in finish-path bias+GELU epilogue behind `-ge 1`; forward uses `A*B^T` to match `(OC, C)` weight files |
+| Attention fwd | cuDNN flash-attn (default) or fallback CUDA | TK MHA fwd (head_dim ∈ {64, 128}) |
+| Attention bwd | cuDNN flash-attn-bwd | TK MHA bwd |
+| LayerNorm fwd | hand-written CUDA | TK layernorm (forked, dropout removed, `D` re-templated, stream param added) |
+| LayerNorm bwd | hand-written CUDA | hand-written CUDA accumulator with TK warp reductions |
+| Allocator alignment | 16 bytes | 128 bytes (TMA descriptors) |
+| Shared-memory opt-in | one cuBLASLt call | `cudaFuncSetAttribute(MaxDynamicSharedMemorySize, ...)` per TK kernel symbol |
+| Encoder, GELU, SwiGLU, fused_classifier, AdamW, global_norm | plain CUDA | plain CUDA, **kept verbatim** |
+| ZeRO / multi-node init | plain CUDA + NCCL | ZeRO-0/1/2/3 and NCCL init wired; ZeRO-3 parameter shards all-gather into the current full compute layout; H100/NCCL validation pending |
+| `cublas_common.h` | full header | empty stub |
+| Multi-GPU init | `zero.cuh` (NCCL + MPI/TCP/FS) | `zero.cuh` with llm.c rendezvous paths |
+
+## Wrapper-PR checklist
+
+When porting a kernel, before opening the PR:
+
+- [ ] New file in `llmc/tk/<name>_h100.cuh` that uses `kittens::`.
+- [ ] New (or extended) `llmc/<name>.cuh` exposing only C-style functions
+      (`floatX*`, `cudaStream_t`).
+- [ ] No `<kittens.cuh>` or `kittens::` outside `llmc/tk/`.
+- [ ] Source-line comment naming the upstream file (TK kernel, llm.c kernel,
+      or both) at the top of every new header.
+- [ ] Shape constraints documented and `assert`ed at the wrapper boundary.
+- [ ] Smoke test in `dev/cuda/test_<name>.cu` and a Makefile target.
+- [ ] [`docs/kernel-reference.md`](kernel-reference.md) row updated (status
+      column flipped to ✅ or 🟡).
+- [ ] [`../goal.md`](../goal.md) checkbox flipped.
+- [ ] [`../CHANGELOG.md`](../CHANGELOG.md) entry appended.
+- [ ] Allocator and shared-memory caveats from "Rules of the road" satisfied.
+
+## Common gotchas
+
+### Forgetting the SMEM opt-in
+
+Symptom: TK kernel launch returns `cudaErrorInvalidValue` or hits an SMEM
+overflow. Fix: copy the `smem_attr_set` latch from `gemm_h100.cuh::launch<>`.
+
+### Allocator misalignment
+
+Symptom: TMA load reads zeros or garbage; the kernel produces clean numbers
+on small shapes and explodes on large ones. Fix: every parameter and
+activation buffer needs 128-byte alignment, not 16.
+
+### Mistaking GPT-2 vs Llama-3 shards
+
+Symptom: a shard pattern mixes GPT-2 and Llama-3 files, or the trainer rejects
+the data header. Fix: GPT-2 shards are uint16 / vocab 50257 / magic
+`20240520` v1; Llama-3 shards are uint32 / vocab 128256 / magic `20240801`
+v7. `dataloader.h` dispatches on the header magic and rejects mixed shard
+formats. Pass `--model_desc llama-3` to the prep script for Llama-3 runs.
+
+### Head-dim outside {64, 128}
+
+Symptom: TK MHA template fails to instantiate. Fix: HS=64 (GPT-2) and
+HS=128 (Llama-3) are the only supported sizes in v1. Anything else needs
+a new TK specialization.
+
+### Mixing BF16 and FP16/FP32 paths
+
+Symptom: `static_assert` in `tk_common.cuh` fails, or the `#error` in
+`cuda_common.h` fires. Fix: don't. v1 is BF16 only — re-introducing other
+precisions is v2 work. See [precision.md](precision.md).
+
+### cuBLASLt epilogue habits
+
+Symptom: looking for the bias / GELU fusion that used to live in
+`matmul_forward_cublaslt`. The default v1 path still keeps this explicit: apply
+bias via `add_bias_kernel` in [`llmc/matmul.cuh`](../llmc/matmul.cuh), then apply
+GELU via [`llmc/gelu.cuh`](../llmc/gelu.cuh). The only compile-wired fused path
+today is `matmul_forward_gelu`, used by GPT-2's MLP up-projection when `-ge 1`
+is set. Keep it opt-in until H100 numerical validation and `ncu` profiling pass.
+
+## Source pointers (most-cited llm.c lines)
+
+These are the exact upstream sites the wrappers must keep signature-compatible
+with or port from verbatim:
+
+- `llm.c/train_gpt2.cu:85-115` — `ParameterTensors`
+- `llm.c/train_gpt2.cu:435-517` — `.bin` I/O
+- `llm.c/train_gpt2.cu:519-580` — descriptor parser (GPT-2 / GPT-3)
+- `llm.c/train_gpt2.cu:646-755` — forward orchestration
+- `llm.c/train_gpt2.cu:788-1000` — backward orchestration
+- `llm.c/train_gpt2.cu:1365-1415` — CLI flags
+- `llm.c/train_gpt2.cu:1712-1900` — training loop
+- `llm.c/llmc/matmul.cuh:17,83,231,244` — bias-grad reduce + matmul fwd/bwd signatures
+- `llm.c/llmc/attention.cuh:14-83,195,239` — permute/unpermute glue + attention signatures
+- `llm.c/llmc/layernorm.cuh:67,233,433,492,467` — LN forward (kernel6, reference), backward (kernel10, port to TK), three signatures
+- `llm.c/llmc/fused_classifier.cuh:19,140` — cross-entropy kernel (kept verbatim)
+- `llm.c/llmc/zero.cuh` — source for NCCL + ZeRO-0/1 + multi-node init
+- `llm.c/train_llama3.py:130-235,245-293,850-920` — Llama-3 architecture spec + checkpoint converter
+- `llm.c/dev/data/data_common.py:26-37` — header magics the dataloader matches
+- `llm.c/scripts/run_gpt2_124M.sh`, `run_gpt3_125M.sh` — single-node script templates
+
+## ThunderKittens source pointers
+
+- `ThunderKittens/include/kittens.cuh` — TK API entry point
+- `ThunderKittens/kernels/gemm/bf16_h100/bf16_h100_gemm.cu` — the GEMM template
+  ported into [`llmc/tk/gemm_h100.cuh`](../llmc/tk/gemm_h100.cuh)
+- `ThunderKittens/kernels/attention/mha_h100/mha_h100.cu` — `fwd_attend_ker`,
+  `bwd_attend_prep_ker`, `bwd_attend_ker` (M2/M3)
+- `ThunderKittens/kernels/layernorm/layernorm.cu` — fwd-only LN we fork
+  (M2)
+- `ThunderKittens/kernels/rotary/rotary.cu` — rotary kernel we wrap for
+  Llama-3 (M6)
+================================================================================
+## 11. docs/agents.md
+================================================================================
+
+# Agent skills
+
+Repo-local skills live under [`../.claude/skills/`](../.claude/skills/) and
+encode the workflow rules a future LLM agent should follow when working in
+this tree.
+
+The principle: skills route agents into the canonical docs and the goal list,
+they do not duplicate them.
+
+## Skills index
+
+| Skill | Path | Triggers on | Routes to |
+|---|---|---|---|
+| `llm-kittens-port` | [`.claude/skills/llm-kittens-port/SKILL.md`](../.claude/skills/llm-kittens-port/SKILL.md) | "implement the next milestone", "add a TK kernel wrapper", "port X from llm.c", anything that mutates `llmc/` or `train_*.cu` | [`../goal.md`](../goal.md), [architecture.md](architecture.md), [kernel-reference.md](kernel-reference.md), [porting-notes.md](porting-notes.md) |
+
+## When to use which doc
+
+If you are an LLM agent landing in this repo:
+
+1. **Always read [`../goal.md`](../goal.md) first.** It tells you what milestone
+   you are in and what is done vs pending.
+2. **For architectural questions**, read [architecture.md](architecture.md).
+   The layering rule is non-negotiable — train source must not pull `kittens::`
+   into scope.
+3. **For "how do I implement <kernel>?"**, read [kernel-reference.md](kernel-reference.md)
+   for the per-kernel mapping and [porting-notes.md](porting-notes.md) for the
+   wrapper-PR checklist and common gotchas.
+4. **For multi-GPU / multi-node**, read [multi-gpu.md](multi-gpu.md).
+   ZeRO-0/1/2/3 and the NCCL init paths are wired; ZeRO-3 uses local
+   parameter shards plus all-gather into the current full compute layout.
+5. **For Llama-3**, read [llama3.md](llama3.md). GQA/RoPE remains the
+   highest-risk component and has its own validation plan.
+6. **For testing**, read [testing.md](testing.md). The tolerance table is the
+   bit you'll re-derive most often.
+
+## What skills should *not* do
+
+- Skills should not contain code listings. Code lives in source files. The
+  skill points at the file.
+- Skills should not contain a milestone TODO. The TODO is in
+  [`../goal.md`](../goal.md). The skill points at it.
+- Skills should not be longer than a couple of pages. A long skill is a doc
+  in disguise.
+================================================================================
+## 12. doc/README.md
+================================================================================
+
+# llm.kittens tutorial notes
+
+This directory is the narrative porting archive. It explains how the major
+`llm.c` surfaces were mapped onto ThunderKittens, which constraints shaped each
+wrapper, and which pieces are still deliberately baseline CUDA while the target
+TK kernels are pending.
+
+The operational source of truth is still [`../goal.md`](../goal.md). If this
+directory and `goal.md` disagree, update the docs after checking the code.
+
+## Pages
+
+- [`gemm/gemm.md`](gemm/gemm.md) - TK H100 GEMM wrapper, shape constraints,
+  bias handling, and the TK-backed backward path.
+- [`attention/attention.md`](attention/attention.md) - GPT-style MHA forward
+  and backward, padded forward dispatch, fallback status, and the Llama-3
+  GQA/RoPE validation gap.
+- [`norms/norms.md`](norms/norms.md) - LayerNorm and RMSNorm forward wrappers,
+  fused residual paths, supported widths, and backward baselines.
+- [`llama3/llama3.md`](llama3/llama3.md) - Llama-3 trainer loop, descriptors,
+  checkpoint header, primitive kernels, scripts, and remaining validation work.
+
+## How to read these notes
+
+The pages follow the same split used in the codebase:
+
+1. `train_*.cu` owns model flow and command-line contracts.
+2. `llmc/*.cuh` exposes C-style CUDA-callable wrappers.
+3. `llmc/tk/*.cuh` owns template-heavy ThunderKittens code.
+
+That split is intentional. It keeps the trainers close to `llm.c`, keeps the
+wrappers testable, and prevents `kittens::` details from leaking into every file.
+
+## Current status
+
+The tutorial archive itself is present, but the project is still mid-port.
+The largest remaining technical items are:
+
+- H100 validation of TK GQA and the `train_llama3.cu` forward/backward/update loop.
+- GPT-2 parity/runtime validation, including the opt-in TK GEMM bias+GELU
+  epilogue behind `-ge 1`.
+- H100 runtime validation and `ncu` profiling.
+================================================================================
+## 13. doc/gemm/gemm.md
+================================================================================
+
+# Porting GEMM
+
+GEMM is the heaviest operator in GPT-2/GPT-3 and the first place where
+ThunderKittens must earn its keep. The wrapper keeps the `llm.c` trainer surface
+simple while replacing cuBLASLt with a TK H100 bf16 kernel.
+
+## Source map
+
+- TK source shape: `ThunderKittens/kernels/gemm/bf16_h100/bf16_h100_gemm.cu`
+- TK wrapper: [`../../llmc/tk/gemm_h100.cuh`](../../llmc/tk/gemm_h100.cuh)
+- Public wrapper: [`../../llmc/matmul.cuh`](../../llmc/matmul.cuh)
+- Trainer caller: [`../../train_gpt2.cu`](../../train_gpt2.cu)
+
+`llmc/tk/gemm_h100.cuh` exposes H100 specializations in header form:
+
+- `matmul_default<2,4,8>` for normal `A*B` projections where `N % 256 == 0`.
+- `matmul_small_n<2,2,8>` for smaller-N `A*B` cases where `N % 128 == 0`.
+- `_nt` variants of both aliases for `A*B^T`, used by `matmul_forward` because
+  llm.c stores dense model weights as `(OC, C)`.
+- `_tn` variants of both aliases for `A^T*B`, used by dWeight backward.
+- `_nt_bias_gelu` variants for the opt-in GPT-2 MLP up-projection path. They
+  add bias, store the pre-GELU auxiliary buffer, and write GELU output from the
+  TK finish path.
+
+Both paths use the same Hopper pattern from the TK reference: persistent grid,
+TMA producer, WGMMA consumer, and bf16 inputs with fp32 accumulation inside the
+tile pipeline.
+
+## Public API
+
+The trainer calls a C-style wrapper:
+
+```cpp
+matmul_forward(out, inp, weight, bias, B, T, C, OC, stream);
+```
+
+The logical matrix multiply is:
+
+- `M = B * T`
+- `K = C`
+- `N = OC`
+- `out[M, N] = inp[M, K] * weight[N, K]^T`
+
+Current constraints are asserted in [`../../llmc/matmul.cuh`](../../llmc/matmul.cuh):
+
+- `M % 128 == 0`
+- `K % 64 == 0`
+- `N % 128 == 0`
+
+These match the current TK H100 tile assumptions and the model families in
+scope for v1.
+
+## Bias and GELU
+
+`llm.c` used cuBLASLt epilogues for bias and sometimes fused GELU. The default
+v1 TK wrapper intentionally splits that work:
+
+1. Run TK GEMM.
+2. Apply bias with `add_bias_kernel` when `bias != nullptr`.
+3. Run GELU as the existing plain CUDA `gelu_forward` when the model needs it.
+
+GPT-2's MLP up-projection can opt into `matmul_forward_gelu`, which uses a TK
+finish-path epilogue to add bias, write the pre-GELU buffer needed by backward,
+and write the GELU activation. `train_gpt2cu -ge 1` selects this path when the
+shape is supported; default remains `-ge 0` until H100 numerical validation and
+`ncu` profiling are done.
+
+## Backward status
+
+The current `matmul_backward` in [`../../llmc/matmul.cuh`](../../llmc/matmul.cuh)
+is mixed:
+
+- `dinp = dout * weight` uses the TK `A*B` path because `weight` is already
+  row-major `(OC, C)`.
+- `dweight = dout^T * inp` uses TK `A^T*B` when the destination is known to be
+  zero.
+- Accumulated `dweight += dout^T * inp` uses TK `A^T*B` into the trainer's
+  aligned `matmul_scratch` buffer, then adds that temporary into the gradient
+  tensor.
+- `dbias = column_sum(dout)` uses the verbatim llm.c reduction kernels when
+  the auxiliary buffer is available.
+
+The slow dWeight CUDA baseline remains only as a fallback for unsupported shapes
+or missing scratch capacity.
+
+## Validation
+
+[`../../dev/cuda/test_matmul.cu`](../../dev/cuda/test_matmul.cu) is the current
+GEMM smoke test. It compares TK output against naive bf16 references with fp32
+accumulation for:
+
+- 1024 x 1024 x 1024 square GEMM.
+- GPT-2 124M MLP up-projection.
+- GPT-2 124M LM head.
+- Opt-in forward bias+GELU epilogue for a supported default-kernel shape.
+- Non-accumulating dWeight `A^T*B`.
+- Accumulated dWeight `A^T*B` plus add.
+
+The smoke test requires an H100 to be meaningful at runtime. Compile coverage is
+included in the default `make all` path.
+================================================================================
+## 14. doc/attention/attention.md
+================================================================================
+
+# Porting attention
+
+Attention has two separate tracks in this repo:
+
+- GPT-2/GPT-3 multi-head attention (MHA), where ThunderKittens has H100
+  reference kernels for the forward and backward paths.
+- Llama-3 grouped-query attention (GQA), where no full matching TK reference
+  exists and the repo carries TK supported-shape paths plus slow CUDA fallback.
+
+## GPT MHA source map
+
+- TK source shape: `ThunderKittens/kernels/attention/mha_h100/mha_h100.cu`
+- TK wrapper: [`../../llmc/tk/attention_h100.cuh`](../../llmc/tk/attention_h100.cuh)
+- Public wrapper: [`../../llmc/attention.cuh`](../../llmc/attention.cuh)
+- Trainer caller: [`../../train_gpt2.cu`](../../train_gpt2.cu)
+
+The public wrapper preserves the `llm.c` attention API so the GPT trainer can
+stay structurally close to upstream.
+
+[`../../dev/cuda/test_attention.cu`](../../dev/cuda/test_attention.cu) is the
+small GPT MHA harness for this path. It compares packed Q/K/V forward and
+backward results against an independent CPU causal-attention reference.
+
+## Layout bridge
+
+`llm.c` stores packed QKV as `(B, T, 3, NH, HS)`. The TK MHA kernel wants
+separate contiguous tensors in `(B, NH, T, HS)` order. The wrapper therefore
+keeps the upstream-style layout glue:
+
+1. Permute packed QKV into separate Q, K, and V buffers.
+2. Call the TK attention forward kernel.
+3. Unpermute the output back into `(B, T, C)`.
+
+The wrapper uses the `qkvr` storage supplied by the trainer for these layout
+buffers. The `att` storage is reused for log-sum-exp scratch.
+
+## Sequence length handling
+
+The TK H100 MHA forward kernel works naturally on sequence lengths aligned to
+its tile shape. GPT-2 commonly uses `T = 1024`, which is not divisible by the
+fast-path tile multiple used by the imported kernel.
+
+The wrapper handles this by:
+
+- running the direct TK path when the length is already supported;
+- padding Q/K/V to a supported `Tpad` otherwise;
+- running TK at `Tpad`;
+- copying the unpadded result back to the normal output.
+
+This keeps the trainer API unchanged and avoids pushing model-specific padding
+logic into `train_gpt2.cu`.
+
+## Backward status
+
+The M3 wrapper ports the TK H100 backward pieces from the same MHA source:
+
+- `bwd_attend_prep_ker`
+- `bwd_attend_ker`
+
+The fast path supports `head_dim ∈ {64, 128}` and sequence lengths divisible by
+`256` (`T=1024` for GPT-2 is covered). It reads the forward-saved LSE from
+`att`, uses the saved forward output as the TK `o` input, writes float Q/K/V
+gradients through TK, converts them back to bf16, then reuses the upstream-style
+QKV gradient unpermute.
+
+Unsupported backward shapes still fall back to the slow CUDA recompute
+baseline. The expected remaining risk is numerical tolerance, not API shape.
+The reduction order will differ from cuDNN and from the fallback CUDA
+implementation, so [`../../docs/testing.md`](../../docs/testing.md) tracks the
+parity/tolerance plan.
+
+The smoke harness currently covers a direct-forward/fallback-backward shape
+(`T=192`) and a padded-forward/TK-backward shape (`T=256`). Runtime validation
+still needs a compatible H100 driver/runtime.
+
+## Llama-3 GQA status
+
+GQA lives in [`../../llmc/attention_gqa.cuh`](../../llmc/attention_gqa.cuh) with
+the partial TK forward and supported-shape backward implementation in
+[`../../llmc/tk/attention_gqa_h100.cuh`](../../llmc/tk/attention_gqa_h100.cuh).
+
+The wrapper already does the important semantic work:
+
+- unpack packed Llama Q/K/V from `(B, T, (NH + 2 * NKVH) * HS)`;
+- apply forward RoPE to Q and K during materialization;
+- map each query head to `kvh = qh / (NH / NKVH)`;
+- run TK causal forward where the H100 BF16 shape is supported;
+- run TK causal backward where the H100 BF16 shape is supported;
+- accumulate `dK` and `dV` across repeated query heads in backward;
+- rotate Q/K gradients back through inverse RoPE during packed-gradient unpermute.
+
+The target TK kernel still needs H100 numerical validation. It should keep the
+adapted MHA mapping for `n_q_heads`, `n_kv_heads`, and `n_rep`, keep RoPE inside
+the supported-shape tile-load path, then validate against a small PyTorch
+reference before the full Llama trainer depends on it.
+================================================================================
+## 15. doc/norms/norms.md
+================================================================================
+
+# Porting normalization kernels
+
+Normalization is split between GPT-style LayerNorm and Llama-style RMSNorm.
+Both expose plain C-style wrappers under `llmc/` and keep ThunderKittens details
+under `llmc/tk/`.
+
+## LayerNorm
+
+Source map:
+
+- TK wrapper: [`../../llmc/tk/layernorm_tk.cuh`](../../llmc/tk/layernorm_tk.cuh)
+- Public wrapper: [`../../llmc/layernorm.cuh`](../../llmc/layernorm.cuh)
+- Smoke harness: [`../../dev/cuda/test_layernorm.cu`](../../dev/cuda/test_layernorm.cu)
+- GPT caller: [`../../train_gpt2.cu`](../../train_gpt2.cu)
+
+The TK fork is based on the ThunderKittens layernorm example, but adjusted for
+this trainer:
+
+- dropout removed;
+- hidden width re-templated over the model widths used here;
+- internal device synchronization removed;
+- `cudaStream_t` launchers added;
+- `mean` and `rstd` saved because GPT backward needs them.
+
+Supported widths are:
+
+```text
+768, 1024, 1280, 1600, 2048, 4096
+```
+
+The public functions are:
+
+```cpp
+layernorm_forward(out, mean, rstd, inp, weight, bias, B, T, C, stream);
+fused_residual_forward5(residual, normed, mean, rstd,
+                        inp1, inp2, weight, bias, N, C, stream);
+```
+
+For supported widths, these dispatch to TK. For unsupported widths, the wrapper
+falls back to the CUDA baseline in the same header.
+
+## LayerNorm backward status
+
+Backward keeps the llm.c accumulator structure because it is already a
+hand-written kernel that preserves gradient-accumulation semantics. The M3 port
+replaces the row-wise warp reductions with a TK `kittens::warp::sum` helper
+while preserving the rest of the partial-sum path:
+
+- compute row-wise sums for `dinp`;
+- accumulate `dweight` and `dbias`;
+- keep the existing cross-block accumulation pattern.
+
+[`../../dev/cuda/test_layernorm.cu`](../../dev/cuda/test_layernorm.cu) adds
+CPU-reference coverage for forward, fused residual+LayerNorm forward,
+`mean`/`rstd`, and backward accumulation into `dinp`, `dweight`, and `dbias`.
+This path is compile-wired; H100 runtime parity is still pending.
+
+## RMSNorm
+
+Source map:
+
+- TK wrapper: [`../../llmc/tk/rmsnorm_tk.cuh`](../../llmc/tk/rmsnorm_tk.cuh)
+- Public wrapper: [`../../llmc/rmsnorm.cuh`](../../llmc/rmsnorm.cuh)
+- Llama surface: [`../../train_llama3.cu`](../../train_llama3.cu)
+
+RMSNorm mirrors the LayerNorm structure but removes mean subtraction and bias.
+The forward equation is:
+
+```text
+out = inp * rsqrt(mean(inp^2) + eps) * weight
+```
+
+The fused residual path first writes:
+
+```text
+residual = inp1 + inp2
+```
+
+then normalizes `residual` with the RMSNorm equation.
+
+Supported widths match LayerNorm:
+
+```text
+768, 1024, 1280, 1600, 2048, 4096
+```
+
+## RMSNorm backward status
+
+[`../../llmc/rmsnorm.cuh`](../../llmc/rmsnorm.cuh) includes a plain CUDA
+backward baseline for `dinp` and `dweight`. That is enough for compile coverage
+and future Llama trainer integration. The
+[`../../dev/cuda/test_rmsnorm.cu`](../../dev/cuda/test_rmsnorm.cu) smoke target
+adds CPU-reference coverage for forward, fused-residual forward, `rstd`,
+`dinp`, and `dweight`, but it has not been runtime-validated on the full model
+path.
+
+Unlike LayerNorm, RMSNorm is part of M6 Llama work, so its final performance
+priority depends on runtime validation of TK GQA and the full
+`train_llama3.cu` loop.
+================================================================================
+## 16. doc/llama3/llama3.md
+================================================================================
+
+# Porting Llama-3
+
+Llama-3 support is split across model metadata, checkpoint conversion, new
+primitive kernels, data preprocessing, and launch scripts. The C++ training
+loop is now compile-wired with TK GQA forward plus supported-shape backward and
+CUDA fallback elsewhere. Supported TK GQA shapes rotate Q/K inside the tile-load
+path, while fallback shapes use fused materialization/unpermute. H100 validation
+remains pending.
+
+## Current code map
+
+- C++ trainer loop: [`../../train_llama3.cu`](../../train_llama3.cu)
+- Python HF converter: [`../../train_llama3.py`](../../train_llama3.py)
+- Download wrapper: [`../../dev/download_llama3.py`](../../dev/download_llama3.py)
+- Operational status page: [`../../docs/llama3.md`](../../docs/llama3.md)
+- Single-node script: [`../../scripts/run_llama3_1B.sh`](../../scripts/run_llama3_1B.sh)
+- Multi-node 8B script:
+  [`../../scripts/multi_node/run_llama3_8B_fs.sbatch`](../../scripts/multi_node/run_llama3_8B_fs.sbatch)
+
+## Descriptor surface
+
+`train_llama3.cu` parses these descriptors:
+
+```text
+llama3:1B
+llama3:8B
+llama3.1:8B
+```
+
+It also parses bf16 checkpoint headers with magic `20240803` and version `5`.
+The parser resolves the model dimensions, computes the parameter layout, and
+validates the payload byte count. With the default `-x 0`, the binary runs this
+dry path without touching CUDA; with `-x >0`, it enters the Llama
+forward/backward/update loop.
+
+The training loop now writes GPT-2-style checkpoints: rank 0 writes the model,
+all ranks write optimizer/dataloader state, and `DONE_%08d` gates resume
+discovery. `-y 1` resumes from the latest completed checkpoint in the output log
+directory. This is compile-checked; restart continuity still needs a real H100
+run.
+
+## Parameter layout
+
+The C++ layout is represented by `LlamaParameterTensors` with ten tensors:
+
+```text
+wte
+ln1w
+qkvw
+attprojw
+ln2w
+fcw_up
+fcw_gate
+fcprojw
+lnfw
+lm_head
+```
+
+The order is deliberate: the checkpoint writer emits Python `c_fc` / Meta `w3`
+first as the up projection, then Python `c_fc2` / Meta `w1` as the SwiGLU gate.
+The C++ entrypoint validates the checkpoint payload size against this parsed
+layout, so truncated or mismatched converter output fails before CUDA startup.
+
+The packed QKV tensor follows Llama GQA shape rather than GPT shape:
+
+```text
+(NH + 2 * NKVH) * HS
+```
+
+where `NH` is the number of query heads and `NKVH` is the number of KV heads.
+
+## Primitive kernels
+
+The M6 primitive surface currently consists of:
+
+- [`../../llmc/rmsnorm.cuh`](../../llmc/rmsnorm.cuh) and
+  [`../../llmc/tk/rmsnorm_tk.cuh`](../../llmc/tk/rmsnorm_tk.cuh) for RMSNorm
+  forward and fused residual forward, plus CUDA backward baseline. The
+  [`../../dev/cuda/test_rmsnorm.cu`](../../dev/cuda/test_rmsnorm.cu) smoke
+  harness covers this path against CPU references.
+- [`../../llmc/rope.cuh`](../../llmc/rope.cuh) and
+  [`../../llmc/tk/rope_tk.cuh`](../../llmc/tk/rope_tk.cuh) for RoPE forward and
+  inverse-rotation backward. The
+  [`../../dev/cuda/test_rope.cu`](../../dev/cuda/test_rope.cu) smoke harness
+  covers HS=64 and HS=128 against CPU references.
+- [`../../llmc/swiglu.cuh`](../../llmc/swiglu.cuh) for plain CUDA SwiGLU
+  forward/backward. The
+  [`../../dev/cuda/test_swiglu.cu`](../../dev/cuda/test_swiglu.cu) smoke
+  harness covers forward, `dgate`, and `dup` against CPU references.
+- [`../../llmc/attention_gqa.cuh`](../../llmc/attention_gqa.cuh) for GQA + RoPE
+  dispatch: tile-load RoPE plus TK forward/supported backward where available,
+  slow CUDA fallback with fused materialization/unpermute elsewhere.
+- [`../../llmc/tk/attention_gqa_h100.cuh`](../../llmc/tk/attention_gqa_h100.cuh)
+  for the partial TK GQA forward and supported-shape backward kernel paths.
+
+The highest-risk missing piece is H100 numerical validation. The TK path must
+keep summing `dK` and `dV` across repeated query heads while rotating Q/K inside
+the attention kernel.
+
+## Data and eval files
+
+The dataset scripts under [`../../dev/data/`](../../dev/data/) accept
+`--model_desc llama-3`. HellaSwag writes a separate Llama eval file:
+
+```text
+hellaswag_val_llama3.bin
+```
+
+That file uses uint32 tokens and header magic `20240802` version `7`, because
+Llama token IDs do not fit the GPT-2 uint16 eval format. The shared C++
+`EvalLoader` can now parse both GPT-2 and Llama-3 eval records by header magic.
+
+## Launch scripts
+
+[`../../scripts/run_llama3_1B.sh`](../../scripts/run_llama3_1B.sh) builds
+`train_llama3cu` and launches the intended 1B single-node recipe.
+
+[`../../scripts/multi_node/run_llama3_8B_fs.sbatch`](../../scripts/multi_node/run_llama3_8B_fs.sbatch)
+is the 2-node filesystem-rendezvous Slurm script for 8B targeting ZeRO-2. It
+is compile-wired through the ZeRO-2 sharded optimizer/reduce-scatter path, but
+still waits on real H100/NCCL validation.
+
+Both scripts syntax-check, but both still wait on HF checkpoint availability,
+H100 runtime validation, and TK GQA numerical validation.
+
+## Remaining integration path
+
+The expected order is:
+
+1. Run `dev/cuda/test_attention_gqa.cu` on H100 for `B=1, T=128` and `T=256`.
+2. Compare the TK GQA forward/backward paths against PyTorch on those smoke
+   shapes and establish tolerances.
+3. Re-validate the TK GQA tile-load RoPE path against the materialized fallback path.
+4. Runtime-validate the compile-wired `train_llama3.cu` forward/backward/update loop on H100.
+5. Runtime-validate checkpoint/resume continuity after the first real run.
+6. Run the 1B script on H100, then validate the 8B converter and multi-node
+   script.
+================================================================================
+## 17. .claude/skills/llm-kittens-port/SKILL.md
+================================================================================
+
+---
+name: llm-kittens-port
+description: Carry the in-flight port of llm.c onto ThunderKittens forward. Use whenever the user asks to implement the next milestone, port a kernel, add a TK wrapper, or modify llmc/* or train_*.cu in this repo.
+---
+
+# llm-kittens-port
+
+Use this skill when working inside `llm.kittens/` and the request is to
+**advance the port** — implement a milestone, port a kernel from llm.c or
+ThunderKittens, add a wrapper, or extend the trainer source. Do not use it
+for unrelated repository work.
+
+## Step 0 — read the plan, in this order
+
+1. [`goal.md`](../../../goal.md) — the canonical TODO. Find the milestone
+   the user is asking about. Note which boxes are checked vs unchecked.
+2. [`docs/architecture.md`](../../../docs/architecture.md) — confirm the
+   layering rule before touching any file.
+3. [`docs/kernel-reference.md`](../../../docs/kernel-reference.md) — find
+   the row for the kernel in question; note shape constraints, head-dim
+   limits, and which llm.c / TK source the wrapper is meant to mirror.
+4. [`docs/porting-notes.md`](../../../docs/porting-notes.md) — the
+   wrapper-PR checklist and common-gotchas list.
+
+## Hard rules (non-negotiable)
+
+- `train_*.cu` `#include`s only `llmc/*.cuh`. Never `llmc/tk/*.cuh`.
+- Only files under `llmc/tk/` may bring `kittens::` into scope or
+  `#include <kittens.cuh>` / `<prototype.cuh>`.
+- `llmc/*.cuh` wrappers expose C-style signatures (`floatX*`, `cudaStream_t`).
+- `floatX = __nv_bfloat16` is locked. Don't write paths that branch on
+  precision — the `static_assert` in `llmc/tk/tk_common.cuh` will fail.
+- All TK-bound buffers must be 128-byte aligned. Use `llmk::TK_ALIGN` and
+  `llmk::tk_align()`.
+- TK kernel launches must opt into the full H100 dynamic SMEM budget. Copy
+  the `static bool smem_attr_set = false;` latch from
+  `llmc/tk/gemm_h100.cuh::launch<>`.
+- Element-wise / 1D-reduction / gather-scatter kernels stay verbatim from
+  llm.c. Don't TK-ify them.
+
+## How to add a TK-backed kernel wrapper
+
+1. Make a file in `llmc/tk/<name>_h100.cuh`. It uses templates and
+   `kittens::`. Comment header names the upstream TK source (and llm.c
+   source, if applicable). Pattern: see [`llmc/tk/gemm_h100.cuh`](../../../llmc/tk/gemm_h100.cuh).
+2. Make a file in `llmc/<name>.cuh`. It exposes plain C-style functions
+   over `floatX*` and `cudaStream_t`. It `#include`s `tk/<name>_h100.cuh`
+   but **no** `<kittens.cuh>` directly. Shape constraints are `assert`ed
+   at the wrapper boundary. Pattern: see [`llmc/matmul.cuh`](../../../llmc/matmul.cuh).
+3. Add a smoke test at `dev/cuda/test_<name>.cu` that compares against a
+   naive bf16 reference with FP32 accumulation. Pattern: see
+   [`dev/cuda/test_matmul.cu`](../../../dev/cuda/test_matmul.cu).
+4. Wire the test target into the [Makefile](../../../Makefile) (look at the
+   `test_matmul` rule).
+5. Update the row in [`docs/kernel-reference.md`](../../../docs/kernel-reference.md)
+   (status flag).
+6. Update the checkbox in [`goal.md`](../../../goal.md).
+7. Append a [`CHANGELOG.md`](../../../CHANGELOG.md) entry (what + why,
+   verification performed).
+
+## How to add a "verbatim from llm.c" port
+
+1. Copy the file from `../llm.c/llmc/<name>.{cuh,h}` byte-for-byte.
+2. Adjust `#include` paths if needed; keep behaviour identical.
+3. Comment at the top: "ported verbatim from llm.c/llmc/<name>.{cuh,h} as of
+   <commit>". Source-line references in existing comments stay.
+4. No tests required — verbatim ports inherit upstream's testing.
+5. Update [`docs/kernel-reference.md`](../../../docs/kernel-reference.md) and
+   [`goal.md`](../../../goal.md). Append a [`CHANGELOG.md`](../../../CHANGELOG.md)
+   entry.
+
+## When *not* to use this skill
+
+- Pure documentation refactors. Use the `deep-documentation` skill instead.
+- Debugging a numerical-parity failure. Read [`docs/testing.md`](../../../docs/testing.md)
+  first — the tolerance table and the test pyramid will narrow the bug
+  faster than re-reading source.
+- Anything that would relax `floatX = __nv_bfloat16` or `sm_90a` constraints.
+  Those are v2 work, not v1.
+
+## Verification before reporting "done"
+
+- The Makefile target compiles cleanly (`make test_matmul` or the new
+  per-kernel test).
+- The smoke test passes on H100 (note explicitly if you couldn't run it —
+  e.g. no H100 available locally).
+- All three: [`goal.md`](../../../goal.md),
+  [`docs/kernel-reference.md`](../../../docs/kernel-reference.md), and
+  [`CHANGELOG.md`](../../../CHANGELOG.md) reflect the change.
+
+## Pointers to upstream sources
+
+The full list lives in [`docs/porting-notes.md`](../../../docs/porting-notes.md#source-pointers-most-cited-llmc-lines).
+The most commonly referenced ones:
+
+- `../llm.c/train_gpt2.cu:85-115,519-580,646-755,788-1000,1365-1415,1712-1900`
+- `../llm.c/llmc/{matmul,attention,layernorm,fused_classifier,zero}.cuh`
+- `../llm.c/train_llama3.py:130-235,245-293,850-920`
+- `../ThunderKittens/include/kittens.cuh`
+- `../ThunderKittens/kernels/gemm/bf16_h100/bf16_h100_gemm.cu`
+- `../ThunderKittens/kernels/attention/mha_h100/mha_h100.cu`
+- `../ThunderKittens/kernels/layernorm/layernorm.cu`
+- `../ThunderKittens/kernels/rotary/rotary.cu`

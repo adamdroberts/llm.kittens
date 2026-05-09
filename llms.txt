@@ -1,0 +1,279 @@
+# llm.kittens
+
+> Single-binary C++/CUDA trainer for GPT-2 / GPT-3 / Llama-3, mirroring
+> [karpathy/llm.c](https://github.com/karpathy/llm.c) feature-for-feature
+> but replacing tile-MMA kernels (GEMM, MHA, LayerNorm/RMSNorm where useful)
+> with [ThunderKittens](https://github.com/HazyResearch/ThunderKittens).
+> H100 (sm_90a) only, BF16 only, in v1.
+>
+> **In-flight port.** [`goal.md`](goal.md) is the authoritative TODO. Read it
+> first before answering any "what is done / what is left" question.
+
+## Status
+
+- M1 (skeleton, verbatim ports, BF16 lock, dataset prep): ✅ done
+- M2 (single-GPU GPT-2 forward): 🟡 partial — GPT-2 forward wrappers and
+  `gpt2_validate` are compile-wired; H100 forward-loss validation still pending
+- M3 (single-GPU GPT-2 backward + parity): 🟡 partial — GPT-2 backward
+  kernels, AdamW, global norm, and the parity harness compile; H100 parity
+  pending
+- M4 (multi-GPU GPT-2 124M): 🟡 scripts + log verifier landed; H100 run pending
+- M5 (GPT-3 + multi-node + ZeRO 2/3): 🟡 descriptor + scripts + GPT dry-runs
+  landed; ZeRO-2 compile-wired; ZeRO-3 parameter-shard runtime path
+  compile-wired; H100/NCCL validation pending
+- M6 (Llama-3 1B): 🟡 converter + kernels + trainer loop + dataloaders/checkpoint-resume/logging
+  compile; TK GQA forward + supported-shape bwd compile; TK tile-load RoPE
+  compile-wired for supported shapes; H100 validation pending
+- M7 (Llama-3 8B multi-node): 🟡 Slurm script + converter validation hooks
+  landed; gated HF conversion/runtime validation pending
+- M8 (polish + profiling): 🟡 docs + profile/log verifier wired; profile helper enforces the 70% tensor-util gate; parser threshold logic has a synthetic CSV check; GEMM epilogue compile/profile-wired; `ncu`/H100 validation pending
+
+## Operational docs
+
+- [README.md](README.md): project overview, current state snapshot, build
+  instructions for what runs today
+- [goal.md](goal.md): per-milestone, per-task TODO with checkboxes and links
+  to upstream reference files
+- [docs/README.md](docs/README.md): documentation index, routes by reader need
+- [docs/architecture.md](docs/architecture.md): three-layer rule
+  (`train_*.cu` → `llmc/*.cuh` → `llmc/tk/*.cuh`), file-by-file map,
+  TMA-alignment constraint, dependency Mermaid
+- [docs/build-and-run.md](docs/build-and-run.md): toolchain, `TK_ROOT`,
+  `make` targets, env-var switches, smoke-test output
+- [docs/kernel-reference.md](docs/kernel-reference.md): per-kernel
+  mapping table, shape constraints, current vs target state
+- [docs/precision.md](docs/precision.md): BF16-only invariant and v2 plan
+- [docs/multi-gpu.md](docs/multi-gpu.md): ZeRO-0/1/2/3, ZeRO-3 parameter shards, NCCL init paths,
+  H100-pod env vars, per-script status
+- [docs/llama3.md](docs/llama3.md): Llama-3 model spec, converter, kernels,
+  launch scripts, and validation plan
+- [docs/testing.md](docs/testing.md): test pyramid and tolerance plan
+- [scripts/validate_goal_h100.sh](scripts/validate_goal_h100.sh): executable
+  H100 validation checklist for the remaining `goal.md` runtime gates
+- [docs/porting-notes.md](docs/porting-notes.md): wrapper-PR checklist and
+  common gotchas
+- [doc/README.md](doc/README.md): narrative kernel porting tutorial archive
+- [docs/agents.md](docs/agents.md): repo-local agent skills index
+
+## Code Highlights
+
+- [Makefile](Makefile): sm_90a, C++20, BF16 (`-DENABLE_BF16`), no cuBLAS or
+  cuDNN. `TK_ROOT` defaults to `../ThunderKittens`; NCCL can be discovered
+  from system installs, selected with `NCCL_DIR`, or selected with an explicit
+  `NCCL_INCLUDE_PATH` / `NCCL_LIB_PATH` pair.
+- [train_gpt2.cu](train_gpt2.cu): GPT-2/GPT-3 entrypoint, compile-ready;
+  runtime parity pending.
+- [dev/cuda/gpt2_validate.cu](dev/cuda/gpt2_validate.cu): forward-only GPT-2
+  loss gate against `gpt2_124M_debug_state.bin`; compiles via
+  `make gpt2_validate`, runtime H100 validation pending.
+- [train_llama3.cu](train_llama3.cu): Llama trainer loop, compile-ready with
+  TK GQA forward plus supported-shape backward; CUDA fallback; model +
+  per-rank optimizer/dataloader checkpoints with `-y 1` resume; rank-0
+  `main.log` metric logging; H100 validation pending. Host-only dry-runs use
+  `set_zero_configs` and report the validated local ZeRO shard parameter count.
+- [dev/download_llama3.py](dev/download_llama3.py): gated HF converter wrapper
+  for `llama3.1:8B`; validates generated checkpoint headers/payload sizes and
+  can run `train_llama3cu -e CHECKPOINT -x 0` with `--cpp-validate`; it can
+  also write a tiny deterministic BF16 checkpoint with
+  `--write-synthetic-checkpoint`, and the H100 harness exposes that path as
+  `llama-checkpoint-smoke`.
+- [dev/validate_llama3_converter.py](dev/validate_llama3_converter.py):
+  host-only Llama converter writer smoke; fills a tiny model with deterministic
+  BF16 values, verifies `write_model` header/payload order, and dry-parses it
+  with `train_llama3cu -x 0 -z 2`.
+- [dev/validate_llama_checkpoint_artifacts.py](dev/validate_llama_checkpoint_artifacts.py):
+  host-only Llama checkpoint/resume artifact checker; validates `DONE_*`, model
+  checkpoint headers, and rank state headers for expected magic/version, step,
+  rank, and process count; `--self-test` covers synthetic pass/fail artifact
+  headers.
+- [llmc/matmul.cuh](llmc/matmul.cuh): TK-backed forward for llm.c `(OC, C)`
+  weights plus TK dInp/dWeight backward. Default bias/GELU stay separate;
+  GPT-2 MLP up-projection can opt into the compile-wired TK bias+GELU epilogue
+  with `-ge 1`. Accumulated dWeight uses aligned scratch for TK `A^T*B`, then
+  adds into the gradient tensor; `test_matmul` covers epilogue, overwrite, and
+  accumulated dWeight paths.
+- [llmc/attention.cuh](llmc/attention.cuh): TK MHA forward + padded dispatch,
+  TK MHA backward for supported GPT shapes, and slow CUDA backward fallback.
+- [dev/cuda/test_attention.cu](dev/cuda/test_attention.cu): GPT MHA
+  forward/backward smoke harness against an independent CPU reference; includes
+  direct TK forward at T=192 and padded TK forward plus TK backward at T=256;
+  compiles via `make test_attention`, runtime H100 validation pending.
+- [llmc/layernorm.cuh](llmc/layernorm.cuh): TK LayerNorm forward and
+  fused-residual forward for supported widths; backward keeps the llm.c
+  accumulator pattern but uses TK warp-sum reductions.
+- [dev/cuda/test_layernorm.cu](dev/cuda/test_layernorm.cu): GPT LayerNorm
+  forward/fused/backward smoke harness against independent CPU references;
+  compiles via `make test_layernorm`, runtime H100 validation pending.
+- [llmc/rmsnorm.cuh](llmc/rmsnorm.cuh): Llama RMSNorm forward/fused-residual
+  via TK where supported; CUDA backward baseline; `make test_rmsnorm` compiles
+  a CPU-reference smoke harness.
+- [llmc/rope.cuh](llmc/rope.cuh): TK RoPE forward/backward wrapper;
+  `make test_rope` compiles a CPU-reference smoke harness.
+- [llmc/attention_gqa.cuh](llmc/attention_gqa.cuh): GQA/RoPE dispatch with TK
+  forward and supported-shape backward for H100 BF16 shapes, with slow CUDA
+  fallback; TK-supported shapes rotate Q/K inside the tile-load path, while
+  fallback shapes use fused materialization/unpermute, and the wrapper
+  inverse-rotates packed `dQ`/`dK` gradients before writing `dinp`.
+- [dev/cuda/test_attention_gqa.cu](dev/cuda/test_attention_gqa.cu): M6 GQA +
+  RoPE forward/backward smoke harness against an independent CPU reference;
+  includes explicit T=128 fallback-backward and T=256 TK-backward success
+  markers, compiles via `make test_attention_gqa`, runtime H100 validation
+  pending. The dedicated harness phase is `scripts/validate_goal_h100.sh
+  gqa-runtime`.
+- [llmc/swiglu.cuh](llmc/swiglu.cuh): plain CUDA SwiGLU forward/backward;
+  `make test_swiglu` compiles a CPU-reference smoke harness.
+- [scripts/](scripts/): GPT-2/GPT-3/Llama launch scripts, syntax-checked;
+  runtime H100/NCCL validation pending.
+- [scripts/run_llama3_1B.sh](scripts/run_llama3_1B.sh): Llama-3 1B full-run
+  target; defaults to Llama-tokenized FineWeb-edu 100B train/val paths and
+  writes `run.log` launch metadata for the completion harness.
+- [scripts/validate_goal_h100.sh](scripts/validate_goal_h100.sh): target-host
+  validation harness for preflight, compile, launch/Python syntax, CUDA runtime
+  probe, source-level CUDA/NCCL/ZeRO/GELU-epilogue/runtime-marker contract guards, synthetic and prepared-data artifact checks,
+  CPU-only GQA/RoPE reference checks,
+  dedicated GQA/RoPE CUDA runtime comparison,
+  synthetic profile parser/threshold checks, synthetic training-log verifier
+  checks, synthetic Llama converter writer smoke, synthetic Llama checkpoint parser smoke, starter-pack
+  metadata/debug-state checks, smoke, GPT-2 parity, Llama resume, GPT/Llama
+  host-only ZeRO layout dry-runs, optional GPT/Llama checkpoint dry-runs, bounded
+  Llama-3 1B FineWeb-edu stability, Llama checkpoint artifact header checks,
+  GPT-2 smoke/Llama resume/long-run rank-0 training-log verification, ZeRO
+  guards, profiling, and full-run phases.
+  Runtime phases assert explicit final markers such as `<binary> smoke OK`,
+  `CUDA runtime check passed.`, `gpt2_validate OK`, and `test_gpt2cu OK`.
+  `preflight` and `cuda-runtime` reject non-H100/sm90-class devices unless
+  `ALLOW_NON_H100=1` is set for dry compile/debug work; that override is not
+  valid completion evidence for unchecked H100 gates, and `goal-complete`
+  refuses to run while it is set.
+  `scripts/validate_goal_h100.sh host-core` runs the non-CUDA-runtime host-side
+  subset against existing built binaries/artifacts.
+  `ALLOW_FULL_GOAL_RUN=1 scripts/validate_goal_h100.sh goal-complete` runs
+  `goal-core` plus ZeRO-3 smoke and the long H100/NCCL/profile/conversion/full-run phases in one pass;
+  it requires `GPT2_FULL_EXPECTED_VAL_LOSS` and `GPT2_FULL_EXPECTED_HELLASWAG`
+  plus explicit two-node, smoke, ZeRO-3 smoke, and Llama thresholds, including
+  `ZERO3_SMOKE_MAX_VAL_LOSS`, and fail-fast checks `ncu`,
+  `gpt2_124M_bf16.bin`, `sbatch` when needed, and validate-only
+  reference/candidate evidence files before `goal-core`; `goal-complete-prereqs`
+  runs those checks without launching jobs. Thresholds are validated up front:
+  losses and tolerances must be positive finite numbers, and HellaSwag
+  thresholds must be finite values in `[0,1]`.
+  Validate-only `zero3-smoke` also requires `ZERO3_SMOKE_RUN_LOG` with the
+  ZeRO-3 stage banner, so a plain rank-0 metric log cannot stand in for a
+  ZeRO-3 runtime smoke.
+  Full-run validate-only gates require `run.log` launch metadata and final
+  checkpoint markers/artifacts in addition to rank-0 `main.log` metrics.
+  `scripts/validate_goal_h100.sh gpt2-two-node` runs the filesystem Slurm
+  script for 100 steps by default, then compares single-node vs two-node
+  train-loss curves with `dev/compare_training_logs.py`, requiring both curves
+  to decrease over the compared window.
+  `GPT2_FULL_VALIDATE_ONLY=1` and `LLAMA1B_FULL_VALIDATE_ONLY=1` validate
+  existing single-node full-run evidence instead of relaunching those phases.
+  Short H100 gates can replay captured evidence with `PREFLIGHT_VALIDATE_ONLY`,
+  `CUDA_RUNTIME_VALIDATE_ONLY`, `SMOKE_VALIDATE_ONLY`, `GPT2_RUNTIME_VALIDATE_ONLY`,
+  `GQA_RUNTIME_VALIDATE_ONLY`,
+  `GPT2_SMOKE_VALIDATE_ONLY`, `LLAMA_RESUME_VALIDATE_ONLY`, and
+  `LLAMA1B_STABILITY_VALIDATE_ONLY`.
+  `scripts/validate_goal_h100.sh goal-replay-smoke` exercises those replay paths
+  with synthetic temporary evidence and checks that weak prereq evidence is
+  rejected.
+  `goal-complete` forces Llama-3 1B stability HellaSwag on, and any
+  `LLAMA1B_STABILITY_MIN_HELLASWAG` threshold requires final-step eval evidence.
+  `LLAMA8B_CONVERT_VALIDATE_ONLY=1` requires an existing `LLAMA8B_CHECKPOINT`
+  instead of attempting the gated HF conversion.
+  `PROFILE_VALIDATE_ONLY=1 PROFILE_CSV_DIR=...` validates existing raw
+  `profile_ge*.csv` exports without requiring Nsight Compute locally; use
+  `PROFILE_REPORT_DIR=...` for `profile_ge*.ncu-rep` reports on a host with
+  `ncu`. `goal-complete` forces/requires both `profile_ge0` and `profile_ge1`
+  evidence, even if a standalone profile replay narrows `PROFILE_GELU_FUSIONS`.
+  `scripts/validate_goal_h100.sh llama8b-convert` validates or converts the real
+  gated HF Llama-3.1 8B checkpoint and dry-parses it through the C++ ZeRO layout.
+  `scripts/validate_goal_h100.sh llama8b-full` uses `sbatch --wait`, then checks
+  the captured Slurm launch metadata plus
+  the final 8B checkpoint headers and rank-0 training log.
+- [dev/validate_gpt2_starter_pack.py](dev/validate_gpt2_starter_pack.py):
+  host-only GPT-2 artifact checker for tokenizer, fp32/BF16 checkpoint sizes,
+  and `gpt2_124M_debug_state.bin` shape/token/loss/sample validation;
+  `--self-test` covers tiny synthetic starter-pack artifacts and expected failures.
+- [dev/compare_training_logs.py](dev/compare_training_logs.py):
+  host-only rank-0 `main.log` curve comparator for the M5 two-node sanity gate.
+- [dev/validate_log_tools.py](dev/validate_log_tools.py):
+  synthetic host-only pass/fail smoke for training-log expected metrics,
+  final-step checks, and loss-curve validators.
+- [dev/validate_launch_scripts.py](dev/validate_launch_scripts.py):
+  source guard for single-node, multi-node, and PyTorch-reference launch-script
+  `MAX_STEPS`, trainer step-count, and `DONE_*` alignment.
+- [dev/validate_build_contracts.py](dev/validate_build_contracts.py):
+  source guard for Makefile BF16/H100/TK invariants, BF16 `floatX`, TK bridge
+  static guards, 128-byte alignment, dynamic smem opt-in, and empty cuBLAS shim.
+- [dev/validate_epilogue_source.py](dev/validate_epilogue_source.py):
+  source guard for the opt-in GPT-2 bias+GELU epilogue across the TK GEMM
+  template, matmul wrapper, `-ge` routing/fallback, profile mode, launch
+  scripts, and smoke.
+- [dev/validate_gqa_source.py](dev/validate_gqa_source.py):
+  source guard for GQA/RoPE tile-load routing, query-to-KV head mapping,
+  supported-shape gates, TK backward RoPE gradient unpermute ordering, and
+  T=128/T=256 smoke plus CPU reference coverage.
+- [dev/validate_runtime_markers.py](dev/validate_runtime_markers.py):
+  source guard for CUDA runtime, kernel-smoke, GPT-2 validation, and GQA runtime
+  success markers asserted by the H100 harness.
+- [dev/validate_training_source.py](dev/validate_training_source.py):
+  source guard for rank-0 `main.log` evidence contracts across `logger.h`, both
+  trainers, the log parser, and harness log-validation arguments.
+- [dev/validate_profile_source.py](dev/validate_profile_source.py):
+  source guard for `profile_gpt2cu.py`, the profiling binary, ncu raw metrics,
+  tensor-utilization threshold, default/fused GELU modes, and harness `profile`
+  phase wiring.
+- [dev/validate_llama_conversion_source.py](dev/validate_llama_conversion_source.py):
+  source guard for the gated Llama-3.1 8B HF alias, BF16 checkpoint validation,
+  synthetic checkpoint path, C++ dry-parse options, and `llama8b-convert`.
+- [dev/validate_goal_harness_coverage.py](dev/validate_goal_harness_coverage.py):
+  source guard for compile targets, unchecked runtime evidence mapping,
+  `goal-complete` phase coverage, completion prerequisites, replay negative
+  evidence checks, and required explicit metric threshold environment variables.
+- [dev/validate_data_artifacts.py](dev/validate_data_artifacts.py):
+  host-only GPT-2/Llama train/eval `.bin` checker for magic/version, exact file
+  sizes, token widths, sampled train-token ranges, and HellaSwag example streams;
+  `--self-test` covers synthetic pass/fail train/eval artifacts.
+- [dev/test_dataloader.cpp](dev/test_dataloader.cpp): host-only C++ smoke for
+  GPT-2/Llama `DataLoader` and `EvalLoader` dispatch, rank offsets, shifted
+  targets, eval labels, and masks; built with `make test_dataloader`.
+- [dev/validate_attention_gqa_reference.py](dev/validate_attention_gqa_reference.py):
+  CPU-only PyTorch reference equivalence for Llama GQA/RoPE at `B=1 T=128` and
+  `B=1 T=256`, including packed Q/K/V backward gradients.
+- [dev/validate_profile_parser.py](dev/validate_profile_parser.py): host-only
+  synthetic Nsight Compute CSV parser and tensor-utilization threshold smoke.
+- [dev/validate_training_log.py](dev/validate_training_log.py): host-only
+  rank-0 `main.log` checker for GPT-2 smoke, Llama resume, and long training
+  phases; validates final train/validation/eval steps, finite metrics, optional
+  thresholds, and train-loss decrease where required.
+- [dev/validate_nccl_source.py](dev/validate_nccl_source.py): host-only source
+  guard that catches scalar NCCL all-reduce count regressions such as
+  `sizeof(float)` used where NCCL expects an element count, and checks that
+  optimizer shard all-gathers wait on compute-stream AdamW updates first. It
+  also checks the ZeRO-3 parameter-shard buffer, shard-local AdamW update, and
+  all-gather back into the full compute layout, including post-all-gather
+  update synchronization before later full-layout reads.
+- [dev/validate_zero_layout.py](dev/validate_zero_layout.py): host-only ZeRO
+  shard offset checker for GPT-2, every built-in GPT-3 descriptor, and Llama-3
+  1B/8B at 1/2/4/8/16 processes; `source-guards` runs it.
+- [dev/data/](dev/data/): GPT-2 and Llama-3 dataset prep; Llama HellaSwag
+  writes `hellaswag_val_llama3.bin`.
+- [llmc/dataloader.h](llmc/dataloader.h): GPT-2 uint16 and Llama-3 uint32
+  training/eval files dispatch by header magic.
+
+## Verification Snapshot
+
+- `make all NO_MULTI_GPU=1 NO_USE_MPI=1 FORCE_NVCC_O=0` passes.
+- `make test_attention NO_MULTI_GPU=1 NO_USE_MPI=1 FORCE_NVCC_O=0` passes.
+- `make test_layernorm NO_MULTI_GPU=1 NO_USE_MPI=1 FORCE_NVCC_O=0` passes.
+- `make train_llama3cu NO_MULTI_GPU=1 NO_USE_MPI=1 FORCE_NVCC_O=0` passes.
+- Launch scripts pass `bash -n`.
+- Python helpers/data files pass `python3 -m py_compile`.
+- Runtime validation is blocked in this environment by unavailable GPU access
+  and missing reference checkpoint/debug-state binaries.
+
+## Optional
+
+- [CHANGELOG.md](CHANGELOG.md): append-only history
+- [llms-full.txt](llms-full.txt): full documentation bundle
+- [.claude/skills/](.claude/skills/): repo-local agent skills
