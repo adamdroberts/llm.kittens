@@ -4,8 +4,9 @@
 > [karpathy/llm.c](https://github.com/karpathy/llm.c) feature-for-feature
 > but replacing tile-MMA kernels (GEMM, MHA, LayerNorm/RMSNorm where useful)
 > with [ThunderKittens](https://github.com/HazyResearch/ThunderKittens).
-> H100 (sm_90a) for TK/model runtime evidence, BF16 only, in v1. RTX 5090
-> (sm_120) is supported only for the generic `rtx5090-device` probe path.
+> H100 (sm_90a) for optimized TK/model runtime evidence, BF16 only, in v1.
+> Blackwell (`sm_100a`, `sm_103a`, `sm_120a`) is build-supported with CUDA
+> correctness fallbacks for Hopper-only kernels.
 >
 > **In-flight port.** [`goal.md`](goal.md) is the authoritative TODO. Read it
 > first before answering any "what is done / what is left" question.
@@ -41,6 +42,11 @@
   TMA-alignment constraint, dependency Mermaid
 - [docs/build-and-run.md](docs/build-and-run.md): toolchain, `TK_ROOT`,
   `make` targets, env-var switches, smoke-test output
+- [docs/cli-reference.md](docs/cli-reference.md): full flag tables for
+  `train_gpt2cu`, `train_llama3cu`, and the dev/ helper Python scripts
+- [docs/validation-harness.md](docs/validation-harness.md): phase catalogue,
+  success markers, validate-only modes, and required `goal-complete`
+  thresholds for `scripts/validate_goal_h100.sh`
 - [docs/kernel-reference.md](docs/kernel-reference.md): per-kernel
   mapping table, shape constraints, current vs target state
 - [docs/precision.md](docs/precision.md): BF16-only invariant and v2 plan
@@ -143,11 +149,11 @@
   Runtime phases assert explicit final markers such as `<binary> smoke OK`,
   `CUDA runtime check passed.`, `gpt2_validate OK`, and `test_gpt2cu OK`.
   `preflight` and `cuda-runtime` target H100/sm90-class devices by default.
-  `scripts/validate_goal_h100.sh rtx5090-device` forces
-  `DEVICE_TEST_TARGET=rtx5090` and `DEVICE_ARCH=SM120` for the RTX 5090 CUDA
-  runtime probe plus plain CUDA SwiGLU smoke; that path is not valid completion
-  evidence for unchecked H100 gates. `ALLOW_NON_H100=1` remains a dry-debug
-  override, and `goal-complete` refuses to run while it is set.
+  `scripts/validate_goal_h100.sh blackwell-compile` builds model and smoke
+  targets for Blackwell arch values, while `blackwell-device` and
+  `rtx5090-device` run target-specific CUDA probes. These paths are not valid
+  completion evidence for unchecked H100 gates. `ALLOW_NON_H100=1` remains a
+  dry-debug override, and `goal-complete` refuses to run while it is set.
   `scripts/validate_goal_h100.sh host-core` runs the non-CUDA-runtime host-side
   subset against existing built binaries/artifacts.
   `ALLOW_FULL_GOAL_RUN=1 scripts/validate_goal_h100.sh goal-complete` runs
@@ -206,8 +212,9 @@
   source guard for single-node, multi-node, and PyTorch-reference launch-script
   `MAX_STEPS`, trainer step-count, and `DONE_*` alignment.
 - [dev/validate_build_contracts.py](dev/validate_build_contracts.py):
-  source guard for Makefile BF16/H100/TK invariants, BF16 `floatX`, TK bridge
-  static guards, 128-byte alignment, dynamic smem opt-in, and empty cuBLAS shim.
+  source guard for Makefile BF16/Hopper+Blackwell/TK invariants, BF16 `floatX`,
+  TK bridge static guards, 128-byte alignment, dynamic smem opt-in, and empty
+  cuBLAS shim.
 - [dev/validate_epilogue_source.py](dev/validate_epilogue_source.py):
   source guard for the opt-in GPT-2 bias+GELU epilogue across the TK GEMM
   template, matmul wrapper, `-ge` routing/fallback, profile mode, launch

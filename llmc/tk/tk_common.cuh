@@ -31,9 +31,11 @@ static_assert(std::is_same_v<floatX, __nv_bfloat16>,
               "llm.kittens v1 requires PRECISION=BF16. ThunderKittens H100 "
               "GEMM/MHA kernels are bf16; FP16/FP32 paths are not implemented.");
 
-// Hard guard: H100 only in v1.
-#ifndef KITTENS_SM90
-#error "llm.kittens v1 targets H100 (sm_90a). Build with -DKITTENS_SM90."
+// Hard guard: Hopper remains the validated target. ThunderKittens 2.0 also
+// exposes Blackwell macros; this repo compiles those targets, with Hopper-only
+// model kernels falling back to plain CUDA until B200/GB200 kernels are ported.
+#if !defined(KITTENS_SM90) && !defined(KITTENS_SM100) && !defined(KITTENS_SM103) && !defined(KITTENS_SM120)
+#error "llm.kittens needs KITTENS_SM90, KITTENS_SM100, KITTENS_SM103, or KITTENS_SM120."
 #endif
 
 namespace llmk {

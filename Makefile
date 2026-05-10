@@ -1,7 +1,7 @@
 # llm.kittens — H100 GPT-2/GPT-3/Llama-3 trainer on top of ThunderKittens.
 # Adapted from llm.c's Makefile. Differences:
 #   * sm_90a by default (TK H100 kernels need WGMMA + TMA — sm_90 alone is not enough)
-#     plus an opt-in SM120 build mode for generic RTX 5090 device probes
+#     plus opt-in SM100/SM103/SM120 Blackwell build modes
 #   * c++20 instead of c++17 (TK requires it)
 #   * BF16 only — FP16/FP32 paths removed; TK H100 GEMM/MHA are bf16
 #   * cuBLAS, cuBLASLt, cuDNN all removed (every matmul/attn goes through TK)
@@ -29,13 +29,23 @@ ifeq ($(DEVICE_ARCH),SM90)
   CUDA_GENCODE := -gencode arch=compute_90a,code=sm_90a
   DEVICE_ARCH_LABEL := sm_90a
   DEVICE_ARCH_CC := 90
+else ifeq ($(DEVICE_ARCH),SM100)
+  KITTENS_ARCH_DEFINE := -DKITTENS_SM100
+  CUDA_GENCODE := -gencode arch=compute_100a,code=sm_100a
+  DEVICE_ARCH_LABEL := sm_100a
+  DEVICE_ARCH_CC := 100
+else ifeq ($(DEVICE_ARCH),SM103)
+  KITTENS_ARCH_DEFINE := -DKITTENS_SM103
+  CUDA_GENCODE := -gencode arch=compute_103a,code=sm_103a
+  DEVICE_ARCH_LABEL := sm_103a
+  DEVICE_ARCH_CC := 103
 else ifeq ($(DEVICE_ARCH),SM120)
   KITTENS_ARCH_DEFINE := -DKITTENS_SM120
   CUDA_GENCODE := -gencode arch=compute_120a,code=sm_120a
   DEVICE_ARCH_LABEL := sm_120a
   DEVICE_ARCH_CC := 120
 else
-  $(error Unsupported DEVICE_ARCH=$(DEVICE_ARCH). Use SM90 or SM120.)
+  $(error Unsupported DEVICE_ARCH=$(DEVICE_ARCH). Use SM90, SM100, SM103, or SM120.)
 endif
 
 # ThunderKittens

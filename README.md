@@ -23,12 +23,14 @@ TK-backed ones.
 | Master TODO and milestone status | [`goal.md`](goal.md) |
 | Project shape, layering rules, file map | [`docs/architecture.md`](docs/architecture.md) |
 | How to build / run today | [`docs/build-and-run.md`](docs/build-and-run.md) |
+| Trainer / helper CLI flag reference | [`docs/cli-reference.md`](docs/cli-reference.md) |
+| H100 goal validation harness reference | [`docs/validation-harness.md`](docs/validation-harness.md) |
 | Per-kernel mapping (TK vs verbatim from llm.c) | [`docs/kernel-reference.md`](docs/kernel-reference.md) |
 | BF16-only invariant and rationale | [`docs/precision.md`](docs/precision.md) |
 | ZeRO + multi-node | [`docs/multi-gpu.md`](docs/multi-gpu.md) |
 | Llama-3 (M6/M7) plan and new kernels | [`docs/llama3.md`](docs/llama3.md) |
 | Test pyramid + tolerances | [`docs/testing.md`](docs/testing.md) |
-| H100 goal validation harness | [`scripts/validate_goal_h100.sh`](scripts/validate_goal_h100.sh) |
+| H100 validation harness (executable) | [`scripts/validate_goal_h100.sh`](scripts/validate_goal_h100.sh) |
 | Wrapper-PR checklist and common gotchas | [`docs/porting-notes.md`](docs/porting-notes.md) |
 | Narrative kernel porting tutorials | [`doc/README.md`](doc/README.md) |
 | Repo-local agent skills | [`docs/agents.md`](docs/agents.md), [`.claude/skills/`](.claude/skills/) |
@@ -63,18 +65,20 @@ for both projects.
 
 ## Hardware
 
-- **H100 (sm_90a)** — primary target. WGMMA + TMA + 228 KB shared mem.
-- **RTX 5090 (sm_120)** — supported only for the generic device-test path
-  (`rtx5090-device`: CUDA runtime probe plus the plain CUDA SwiGLU smoke).
-  The TK model kernels remain H100-only.
-- **A100, RTX 4090, B200** — not supported in v1. ThunderKittens has
-  experimental sm_100/103/120 support; revisit full Blackwell kernels after v1 lands.
+- **H100 (sm_90a)** — primary optimized target. WGMMA + TMA + 228 KB shared mem.
+- **Blackwell datacenter (sm_100a / sm_103a)** — build-supported through
+  ThunderKittens 2.0 macros. Hopper-only GEMM/MHA/GQA/RoPE paths fall back to
+  correctness CUDA kernels until B200/GB200-optimized kernels are ported.
+- **RTX 5090 (sm_120a)** — build-supported with the same fallback policy, plus
+  the `rtx5090-device` runtime probe path.
+- **A100, RTX 4090** — not supported in v1.
 
 The goal harness enforces this at runtime: `scripts/validate_goal_h100.sh
 preflight` and `cuda-runtime` target H100/sm90-class devices by default. Set
-`DEVICE_TEST_TARGET=rtx5090` for the RTX 5090 device-test probe path, or run
-`scripts/validate_goal_h100.sh rtx5090-device`, which forces `DEVICE_ARCH=SM120`.
-That path is not valid completion evidence for the unchecked H100 gates in
+`DEVICE_TEST_TARGET=blackwell` and `DEVICE_ARCH=SM100|SM103` for Blackwell
+datacenter probes, or `DEVICE_TEST_TARGET=rtx5090` and `DEVICE_ARCH=SM120` for
+RTX 5090 probes. These paths are not valid completion evidence for the unchecked
+H100 performance/parity gates in
 [`goal.md`](goal.md).
 
 ## Precision
@@ -170,11 +174,12 @@ including `<binary> smoke OK`, `CUDA runtime check passed.`, `gpt2_validate OK`,
 and `test_gpt2cu OK`, rather than relying only on process exit status.
 Use `scripts/validate_goal_h100.sh host-core` on local machines that can compile
 and run host-only checks but do not have a working CUDA runtime.
-Use `scripts/validate_goal_h100.sh rtx5090-device` on an RTX 5090 host to build
-the generic CUDA probes with `DEVICE_ARCH=SM120` and run the CUDA runtime plus
-plain CUDA SwiGLU smoke. `ALLOW_NON_H100=1` may still be used with the
-`preflight` and `cuda-runtime` probes only for dry debugging on unsupported GPUs;
-real runtime gates still require H100/sm90-class hardware.
+Use `scripts/validate_goal_h100.sh blackwell-compile` for the Blackwell model
+compile matrix. On target hardware, use `blackwell-device` for B200/GB200-class
+probes or `rtx5090-device` for RTX 5090 probes. `ALLOW_NON_H100=1` may still be
+used with the `preflight` and `cuda-runtime` probes only for dry debugging on
+unsupported GPUs; real H100 performance/parity gates still require
+H100/sm90-class hardware.
 `goal-complete` refuses to run with that override set.
 On a target machine where every remaining `goal.md` gate should run in one
 intentional pass, use
@@ -312,7 +317,7 @@ llm.kittens/
 │   ├── validate_log_tools.py  host-only training-log expected-metric pass/fail smoke
 │   ├── validate_llama3_converter.py  host-only Llama write_model header/payload smoke
 │   ├── validate_nccl_source.py  host-only NCCL/ZeRO runtime-contract source guard
-│   ├── validate_build_contracts.py  host-only BF16/H100/TK build-contract source guard
+│   ├── validate_build_contracts.py  host-only BF16/Hopper+Blackwell/TK build-contract source guard
 │   ├── validate_epilogue_source.py  host-only GPT-2 bias+GELU epilogue/profile source guard
 │   ├── validate_gqa_source.py  host-only GQA/RoPE routing source guard
 │   ├── validate_runtime_markers.py  host-only runtime success-marker source guard

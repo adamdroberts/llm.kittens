@@ -6,6 +6,53 @@ milestone. Adds within a milestone are listed in chronological order.
 The canonical "what is done / what is left" is [`goal.md`](goal.md). The
 changelog is the diary; `goal.md` is the plan.
 
+## 2026-05-09 — Blackwell build support
+
+- Added Makefile `DEVICE_ARCH=SM100` and `DEVICE_ARCH=SM103` targets alongside
+  the existing `SM90` and `SM120` paths, using ThunderKittens 2.0's
+  `KITTENS_SM100` / `KITTENS_SM103` / `KITTENS_SM120` architecture macros.
+- Generalized the TK bridge guard to allow Hopper and Blackwell macros, while
+  keeping BF16 locked.
+- Kept Hopper on the optimized TK H100 GEMM/MHA/GQA/RoPE wrappers and added
+  Blackwell CUDA correctness fallbacks for Hopper-only GEMM, GPT MHA, Llama
+  GQA, and RoPE paths so GPT/Llama trainers and smoke targets compile for
+  Blackwell before dedicated B200/GB200 kernels land.
+- Extended the validation harness and CUDA runtime probe with a datacenter
+  Blackwell target (`DEVICE_TEST_TARGET=blackwell`, `blackwell-device`) plus a
+  full `blackwell-compile` phase for model and smoke binaries.
+
+## 2026-05-09 — deep documentation refresh
+
+- Added [`docs/cli-reference.md`](docs/cli-reference.md): consolidated flag
+  tables for `train_gpt2cu`, `train_llama3cu`, the dataset prep helpers,
+  `download_llama3.py`, `profile_gpt2cu.py`, the `validate_*` family, and the
+  source-contract guards. Previously the only canonical CLI text was in each
+  trainer's `error_usage()` block.
+- Added [`docs/validation-harness.md`](docs/validation-harness.md): full phase
+  catalogue, success-marker list, validate-only mode table, required
+  `goal-complete` thresholds, and runnable recipes for
+  [`scripts/validate_goal_h100.sh`](scripts/validate_goal_h100.sh). Includes a
+  Mermaid map of `goal-core` / `goal-complete` composition. Replaces the
+  previous coverage that was scattered across `build-and-run.md` and
+  `testing.md`.
+- Added a checkpoint/resume sequence Mermaid diagram to
+  [`docs/llama3.md`](docs/llama3.md), covering `state_*_*.bin`, `model_*.bin`,
+  the `DONE_*` visibility marker, `find_max_step()`, and the
+  `validate_llama_checkpoint_artifacts.py` parser.
+- Added a second repo-local agent skill:
+  [`.claude/skills/validate-h100/SKILL.md`](.claude/skills/validate-h100/SKILL.md).
+  It routes future LLMs through the harness reference, the threshold table,
+  and validate-only replay paths. [`docs/agents.md`](docs/agents.md) now
+  indexes both skills.
+- Refreshed the top-level [`README.md`](README.md) and
+  [`docs/README.md`](docs/README.md) routing tables to point at the new pages.
+- Cross-linked [`docs/build-and-run.md`](docs/build-and-run.md) and
+  [`docs/testing.md`](docs/testing.md) to the new harness reference instead of
+  duplicating its content.
+- Regenerated [`llms-full.txt`](llms-full.txt) and updated
+  [`llms.txt`](llms.txt) to include the two new pages and the new skill, in a
+  consistent ingestion order.
+
 ## 2026-05 — M8 profiling gate hardening
 
 - Added an RTX 5090 generic device-test target without weakening the H100 goal

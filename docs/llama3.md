@@ -94,6 +94,26 @@ barrier. The state file stores AdamW moments, optional FP32 master weights, RNG
 state, and dataloader cursor/shuffle state. `-y 1` resumes from the highest
 completed `DONE_*` step in `-o OUTPUT_DIR`; this path is compile-checked, but a
 real restart still needs H100 runtime validation.
+
+```mermaid
+sequenceDiagram
+    participant T as Trainer (every rank)
+    participant R0 as Rank 0
+    participant FS as -o OUTPUT_DIR
+    Note over T: -n N triggers checkpoint at step S
+    T->>FS: state_<S>_<rank>.bin (AdamW + RNG + loader cursor)
+    R0->>FS: model_<S>.bin (BF16 params, header v5)
+    T--)R0: NCCL barrier
+    R0->>FS: DONE_<S> (atomic visibility marker)
+    Note over T,FS: Restart with -y 1
+    T->>FS: find_max_step() → highest completed DONE_*
+    FS-->>T: model_<S>.bin + state_<S>_<rank>.bin
+    Note over T: dev/validate_llama_checkpoint_artifacts.py<br/>parses model + state headers<br/>(magic / version / step / rank / nproc)
+```
+
+The H100 harness phase `llama-resume` exercises this path end-to-end and
+validates both the initial and final checkpoint artifacts plus the resumed
+`main.log`.
 The Llama trainer also writes the same rank-0 `OUTPUT_DIR/main.log` format as
 the GPT-2 trainer: `tel` validation loss, `eval` HellaSwag/eval accuracy, and
 `trl` train loss with learning rate and gradient norm. The H100 harness uses

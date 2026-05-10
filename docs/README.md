@@ -12,6 +12,8 @@ The single source of truth for **what is done and what is left** is
 |---|---|
 | Skimming the project | [../README.md](../README.md), then [architecture.md](architecture.md) |
 | Building / running today | [build-and-run.md](build-and-run.md) |
+| Looking up a trainer flag | [cli-reference.md](cli-reference.md) |
+| Driving the H100 validation harness | [validation-harness.md](validation-harness.md) |
 | Adding a kernel or wrapper | [architecture.md](architecture.md), [kernel-reference.md](kernel-reference.md), [porting-notes.md](porting-notes.md) |
 | Picking up the next milestone | [../goal.md](../goal.md), then the milestone page below |
 | Wondering why BF16 only | [precision.md](precision.md) |
@@ -25,6 +27,8 @@ The single source of truth for **what is done and what is left** is
 
 - [architecture.md](architecture.md) — Layered build (`train_*.cu` → `llmc/*.cuh` → `llmc/tk/*.cuh`), allocator alignment, file-by-file responsibilities, dependency Mermaid diagram, and the strict "TK-namespace stays inside `llmc/tk/`" rule.
 - [build-and-run.md](build-and-run.md) — Toolchain, `TK_ROOT`, `make` targets, optional flags (`NO_OMP`, `NO_MULTI_GPU`, `NO_USE_MPI`), starter-pack download, data artifact validation, and smoke training command.
+- [cli-reference.md](cli-reference.md) — Full flag tables for `train_gpt2cu`, `train_llama3cu`, and the supporting Python helpers (`download_llama3.py`, `validate_*` family, `profile_gpt2cu.py`).
+- [validation-harness.md](validation-harness.md) — Phase catalogue, success markers, validate-only modes, required `goal-complete` thresholds, and recipes for [`scripts/validate_goal_h100.sh`](../scripts/validate_goal_h100.sh).
 - [kernel-reference.md](kernel-reference.md) — Per-kernel mapping table (which kernel is TK-backed vs verbatim from llm.c), shape constraints, head-dim restrictions, current-state vs target-state per kernel.
 - [precision.md](precision.md) — Why BF16 is locked in v1, what the FP32 master-weights / accumulators look like, what the v2 story (fp8 / int8 / mxfp8) probably is.
 - [multi-gpu.md](multi-gpu.md) — `zero.cuh` covers ZeRO-0/1/2/3 plus NCCL init paths (single-process, MPI, FS, TCP); ZeRO-3 owns local parameter shards and all-gathers into the current full compute layout; H100-pod env vars (`NCCL_NVLS_ENABLE`, `NCCL_IB_HCA`, `NCCL_NET_GDR_LEVEL`).

@@ -29,7 +29,9 @@ Phases:
                       Validate train_llama3.py write_model with a tiny checkpoint.
   cuda-runtime        Run a tiny CUDA driver/runtime/device allocation probe.
   device-compile      Build generic CUDA device probes for DEVICE_ARCH.
+  blackwell-compile   Build model and smoke targets for DEVICE_ARCH=SM100/SM103/SM120.
   device-tests        Run target preflight, generic CUDA device compile, cuda-runtime, and plain CUDA SwiGLU smoke.
+  blackwell-device    Run device-tests with DEVICE_TEST_TARGET=blackwell and forced DEVICE_ARCH=SM100.
   rtx5090-device      Run device-tests with DEVICE_TEST_TARGET=rtx5090 and forced DEVICE_ARCH=SM120.
   starter-pack        Check GPT-2 starter-pack files, checkpoint metadata, and debug-state payload.
   smoke               Run kernel smoke tests.
@@ -66,8 +68,8 @@ Environment:
   NCCL_DIR=/path/to/nccl      custom NCCL prefix for Makefile/preflight.
   NCCL_INCLUDE_PATH=...       custom NCCL include directory.
   NCCL_LIB_PATH=...           custom NCCL library directory.
-  DEVICE_TEST_TARGET=h100     target for preflight/cuda-runtime/device-tests: h100 or rtx5090.
-  DEVICE_ARCH=SM90            Makefile target arch: SM90 or SM120; rtx5090-device forces SM120.
+  DEVICE_TEST_TARGET=h100     target for preflight/cuda-runtime/device-tests: h100, blackwell, or rtx5090.
+  DEVICE_ARCH=SM90            Makefile target arch: SM90, SM100, SM103, or SM120.
   ALLOW_NON_H100=0            allow non-H100 GPUs only for dry compile/debug phases.
   PREFLIGHT_VALIDATE_ONLY=0   Validate captured preflight stdout from PREFLIGHT_LOG instead of probing host.
   PREFLIGHT_LOG=...           Captured stdout/stderr from validate_goal_h100.sh preflight.
@@ -504,14 +506,16 @@ device_test_target() {
     target="${target,,}"
     case "$target" in
         h100|hopper) printf 'h100\n' ;;
-        rtx5090|rtx-5090|5090|sm120|sm_120|blackwell) printf 'rtx5090\n' ;;
-        *) die "unsupported DEVICE_TEST_TARGET=$target; use h100 or rtx5090" ;;
+        blackwell|b200|gb200|sm100|sm_100|sm103|sm_103) printf 'blackwell\n' ;;
+        rtx5090|rtx-5090|5090|sm120|sm_120) printf 'rtx5090\n' ;;
+        *) die "unsupported DEVICE_TEST_TARGET=$target; use h100, blackwell, or rtx5090" ;;
     esac
 }
 
 device_preflight_marker() {
     case "$1" in
         h100) printf 'H100 preflight OK\n' ;;
+        blackwell) printf 'Blackwell device preflight OK\n' ;;
         rtx5090) printf 'RTX 5090 device preflight OK\n' ;;
         *) die "unsupported device target marker: $1" ;;
     esac
@@ -520,6 +524,7 @@ device_preflight_marker() {
 device_default_arch() {
     case "$1" in
         h100) printf 'SM90\n' ;;
+        blackwell) printf 'SM100\n' ;;
         rtx5090) printf 'SM120\n' ;;
         *) die "unsupported device arch target: $1" ;;
     esac
@@ -568,6 +573,17 @@ phase_preflight() {
                     END { exit bad ? 1 : 0 }
                 ' || die "goal.md runtime gates require H100/sm_90-class GPUs; set ALLOW_NON_H100=1 only for dry compile/debug runs"
                 ;;
+            blackwell)
+                printf '%s\n' "$gpu_csv" | awk -F, '
+                    {
+                        name=$1; cap=$2;
+                        gsub(/^[ \t]+|[ \t]+$/, "", name);
+                        gsub(/^[ \t]+|[ \t]+$/, "", cap);
+                        if (name !~ /(B200|GB200|Blackwell)/ && (cap + 0 < 10.0 || cap + 0 >= 10.4)) bad=1;
+                    }
+                    END { exit bad ? 1 : 0 }
+                ' || die "device tests target Blackwell B200/GB200 sm_100/sm_103-class GPUs; set ALLOW_NON_H100=1 only for dry debugging"
+                ;;
             rtx5090)
                 printf '%s\n' "$gpu_csv" | awk -F, '
                     {
@@ -583,7 +599,7 @@ phase_preflight() {
     fi
 
     local require_nccl require_mpi
-    if [ "$target" = "rtx5090" ]; then
+    if [ "$target" = "rtx5090" ] || [ "$target" = "blackwell" ]; then
         require_nccl="${REQUIRE_NCCL:-0}"
         require_mpi="${REQUIRE_MPI:-0}"
     else
@@ -781,9 +797,11 @@ phase_cuda_runtime() {
     log "CUDA runtime"
     if [ "${CUDA_RUNTIME_VALIDATE_ONLY:-0}" = "1" ]; then
         local log_path="${CUDA_RUNTIME_LOG:-cuda_runtime_check.log}"
-        if [ "$(device_test_target)" = "rtx5090" ]; then
-            require_file_contains "CUDA device target: rtx5090" "$log_path"
-        fi
+        local target
+        target="$(device_test_target)"
+        case "$target" in
+            blackwell|rtx5090) require_file_contains "CUDA device target: $target" "$log_path" ;;
+        esac
         require_file_contains "CUDA runtime check passed." "$log_path"
     else
         require_file ./cuda_runtime_check
@@ -801,6 +819,22 @@ phase_device_compile() {
     run make -B cuda_runtime_check test_swiglu "${args[@]}"
 }
 
+phase_blackwell_compile() {
+    log "Blackwell model compile"
+    local arch args
+    arch="${DEVICE_ARCH:-SM100}"
+    case "$arch" in
+        SM100|SM103|SM120) ;;
+        *) die "blackwell-compile requires DEVICE_ARCH=SM100, SM103, or SM120; got $arch" ;;
+    esac
+    mapfile -t args < <(make_args)
+    args+=("DEVICE_ARCH=$arch" "NO_MULTI_GPU=1" "NO_USE_MPI=1")
+    run make -B \
+        test_matmul test_attention test_layernorm test_rope test_rmsnorm test_swiglu test_attention_gqa \
+        train_gpt2cu test_gpt2cu gpt2_validate profile_gpt2cu train_llama3cu \
+        "${args[@]}"
+}
+
 phase_device_tests() {
     log "generic CUDA device tests"
     phase_preflight
@@ -808,6 +842,16 @@ phase_device_tests() {
     phase_cuda_runtime
     require_file ./test_swiglu
     run_contains "test_swiglu smoke OK" ./test_swiglu
+}
+
+phase_blackwell_device() {
+    (
+        export DEVICE_TEST_TARGET=blackwell
+        export DEVICE_ARCH="${DEVICE_ARCH:-SM100}"
+        export REQUIRE_NCCL="${REQUIRE_NCCL:-0}"
+        export REQUIRE_MPI="${REQUIRE_MPI:-0}"
+        phase_device_tests
+    )
 }
 
 phase_rtx5090_device() {
@@ -1680,7 +1724,9 @@ for phase in "$@"; do
         llama-converter-smoke) phase_llama_converter_smoke ;;
         cuda-runtime) phase_cuda_runtime ;;
         device-compile) phase_device_compile ;;
+        blackwell-compile) phase_blackwell_compile ;;
         device-tests) phase_device_tests ;;
+        blackwell-device) phase_blackwell_device ;;
         rtx5090-device) phase_rtx5090_device ;;
         starter-pack) phase_starter_pack ;;
         smoke) phase_smoke ;;

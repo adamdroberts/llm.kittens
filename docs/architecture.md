@@ -34,7 +34,8 @@ shape: take raw `floatX*` buffers (where `floatX = __nv_bfloat16` is locked) and
 a `cudaStream_t`. No TK templates leak through this boundary.
 
 The bridge file [`llmc/tk/tk_common.cuh`](../llmc/tk/tk_common.cuh) hard-asserts
-the BF16 constraint, requires `KITTENS_SM90`, and provides:
+the BF16 constraint, requires one supported TK architecture macro
+(`KITTENS_SM90`, `KITTENS_SM100`, `KITTENS_SM103`, or `KITTENS_SM120`), and provides:
 
 - `llmk::bf16` aliasing `kittens::bf16` (which itself aliases `__nv_bfloat16`).
 - `llmk::to_bf16(...)` reinterpret-cast helpers.
@@ -45,7 +46,7 @@ the BF16 constraint, requires `KITTENS_SM90`, and provides:
 
 ```
 llm.kittens/
-├── Makefile                  Build (sm_90a, c++20, BF16, TK include paths). docs/build-and-run.md.
+├── Makefile                  Build (sm_90a/sm_100a/sm_103a/sm_120a, c++20, BF16, TK include paths). docs/build-and-run.md.
 ├── README.md                 Project story.
 ├── goal.md                   Master TODO. Single source of truth.
 ├── CHANGELOG.md              Append-only history.
@@ -64,7 +65,7 @@ llm.kittens/
 ├── dev/validate_log_tools.py Host-only training-log validator expected-metric and pass/fail smoke.
 ├── dev/validate_llama3_converter.py Host-only Llama write_model header/payload validator.
 ├── dev/validate_nccl_source.py Host-only source guard for brittle NCCL count, stream-order, and ZeRO runtime contracts.
-├── dev/validate_build_contracts.py Host-only source guard for BF16/H100/TK build contracts.
+├── dev/validate_build_contracts.py Host-only source guard for BF16/Hopper+Blackwell/TK build contracts.
 ├── dev/validate_epilogue_source.py Host-only source guard for the opt-in GPT-2 bias+GELU epilogue and profile mode.
 ├── dev/validate_gqa_source.py Host-only source guard for GQA/RoPE routing and coverage contracts.
 ├── dev/validate_runtime_markers.py Host-only source guard for runtime success-marker contracts.

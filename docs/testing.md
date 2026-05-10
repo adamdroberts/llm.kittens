@@ -5,10 +5,14 @@ llm.kittens borrows llm.c's test pyramid. Today step 1a is live, and the
 checks still need H100 access and the starter-pack `.bin` files.
 
 The executable checklist for a target H100 box is
-[`../scripts/validate_goal_h100.sh`](../scripts/validate_goal_h100.sh). With no
-arguments it runs the `goal-core` H100 gates: preflight, full compile,
+[`../scripts/validate_goal_h100.sh`](../scripts/validate_goal_h100.sh). The full
+phase catalogue, env-var list, threshold table, and validate-only recipes live
+in [`validation-harness.md`](validation-harness.md); this section gives the
+testing-pyramid summary.
+
+With no arguments the harness runs the `goal-core` H100 gates: preflight, full compile,
 launch-script and Python helper syntax checks, source-level CUDA/NCCL/ZeRO,
-GQA/RoPE, BF16/H100/TK build, GELU-epilogue source, profile-gate source, Llama conversion source, rank-0 training-log evidence, launch-script, and runtime-marker contract guards, CUDA runtime/device-allocation probe, synthetic and prepared
+GQA/RoPE, BF16/Hopper+Blackwell/TK build, GELU-epilogue source, profile-gate source, Llama conversion source, rank-0 training-log evidence, launch-script, and runtime-marker contract guards, CUDA runtime/device-allocation probe, synthetic and prepared
 GPT-2/Llama data artifact metadata checks, host-only C++
 DataLoader/EvalLoader smoke, CPU-only GQA/RoPE PyTorch reference checks,
 synthetic profile parser/threshold checks, synthetic training-log verifier
@@ -24,12 +28,15 @@ For local machines without a usable CUDA runtime, `scripts/validate_goal_h100.sh
 host-core` runs the non-CUDA-runtime subset using existing built binaries and
 artifacts.
 The target preflight and CUDA runtime probe default to H100/sm90-class GPUs.
-RTX 5090 hosts have a separate device-only path:
-`scripts/validate_goal_h100.sh rtx5090-device`. It forces
-`DEVICE_TEST_TARGET=rtx5090` and `DEVICE_ARCH=SM120`, skips NCCL/MPI by
-default, and runs only the generic CUDA runtime probe plus the plain CUDA
-SwiGLU smoke. It does not count as runtime evidence for unchecked H100
-`goal.md` items; `goal-complete` still requires H100 evidence.
+Blackwell hosts have separate paths:
+`scripts/validate_goal_h100.sh blackwell-compile` builds model and smoke targets
+for `DEVICE_ARCH=SM100|SM103|SM120`, while
+`scripts/validate_goal_h100.sh blackwell-device` probes a datacenter Blackwell
+runtime with `DEVICE_TEST_TARGET=blackwell` and `DEVICE_ARCH=SM100`. RTX 5090
+hosts can run `scripts/validate_goal_h100.sh rtx5090-device`, which forces
+`DEVICE_TEST_TARGET=rtx5090` and `DEVICE_ARCH=SM120`. These paths do not count
+as runtime evidence for unchecked H100 `goal.md` performance/parity items;
+`goal-complete` still requires H100 evidence.
 Longer phases are explicit:
 
 ```bash
@@ -45,6 +52,8 @@ scripts/validate_goal_h100.sh gqa-runtime
 scripts/validate_goal_h100.sh profile-parser
 scripts/validate_goal_h100.sh llama-converter-smoke
 scripts/validate_goal_h100.sh cuda-runtime
+scripts/validate_goal_h100.sh blackwell-compile
+scripts/validate_goal_h100.sh blackwell-device
 scripts/validate_goal_h100.sh rtx5090-device
 scripts/validate_goal_h100.sh starter-pack
 scripts/validate_goal_h100.sh gpt-dry
@@ -140,9 +149,10 @@ that GPT-2, every built-in GPT-3 descriptor, and Llama-3 1B/8B local ZeRO shard
 intervals are divisible, non-overlapping, contiguous, and cover exactly
 `total_params / nproc` for 1/2/4/8/16 processes.
 `python dev/validate_build_contracts.py` is also part of `source-guards`; it
-keeps the BF16/H100/TK build contract source-checked by asserting the Makefile
-still builds with `sm_90a`, C++20, TK include paths, `KITTENS_SM90`, and
-`ENABLE_BF16`, while rejecting FP16/FP32 and cuBLAS/cuBLASLt/cuDNN link flags.
+keeps the BF16/Hopper+Blackwell/TK build contract source-checked by asserting
+the Makefile still builds with `sm_90a`, `sm_100a`, `sm_103a`, and `sm_120a`,
+C++20, TK include paths, the matching `KITTENS_SM*` macro, and `ENABLE_BF16`,
+while rejecting FP16/FP32 and cuBLAS/cuBLASLt/cuDNN link flags.
 It also checks the BF16 `floatX` lock, the TK bridge static guards, 128-byte
 alignment, dynamic shared-memory opt-in, and the intentionally empty
 `cublas_common.h` shim.
@@ -207,9 +217,10 @@ partial output.
 `scripts/validate_goal_h100.sh cuda-runtime` asserts the `CUDA runtime check
 passed.` marker after the driver/runtime/device-allocation probe completes.
 The probe independently enforces the same target contract as `preflight`:
-H100 by default, or RTX 5090 when `DEVICE_TEST_TARGET=rtx5090` is set.
-In RTX 5090 validate-only mode the harness also requires the
-`CUDA device target: rtx5090` log marker.
+H100 by default, datacenter Blackwell when `DEVICE_TEST_TARGET=blackwell` is
+set, or RTX 5090 when `DEVICE_TEST_TARGET=rtx5090` is set. In Blackwell and
+RTX 5090 validate-only modes the harness also requires the matching
+`CUDA device target: ...` log marker.
 `scripts/validate_goal_h100.sh smoke` asserts `<binary> smoke OK` from each
 kernel smoke binary: `test_matmul`, `test_attention`, `test_layernorm`,
 `test_rope`, `test_rmsnorm`, `test_swiglu`, and `test_attention_gqa`.

@@ -8,15 +8,20 @@ TK-supported GQA shapes rotate Q/K inside the tile-load path, while fallback
 shapes use fused materialization/unpermute. Runtime H100 parity is still pending — see
 [`../goal.md`](../goal.md).
 
+`DEVICE_ARCH=SM100`, `SM103`, and `SM120` are build-supported for Blackwell
+with ThunderKittens 2.0. Hopper-only TK model kernels currently fall back to
+plain CUDA correctness kernels on those targets; optimized B200/GB200 kernels
+remain separate porting work.
+
 ## Toolchain
 
 | Requirement | Why |
 |---|---|
-| CUDA Toolkit ≥ 12.4 | nvcc with `-std=c++20` and `sm_90a`; RTX 5090 device probes use `sm_120a` |
+| CUDA Toolkit ≥ 12.4 | nvcc with `-std=c++20`; `sm_90a`, `sm_100a`, `sm_103a`, and `sm_120a` build targets |
 | GCC ≥ 11 (or Clang ≥ 14) | host compiler for c++20 |
 | ThunderKittens checkout | header-only; expected at `../ThunderKittens` by default |
-| H100 (sm_90a) | primary runtime target for goal evidence |
-| RTX 5090 (sm_120) | generic device-test target only: CUDA runtime probe plus plain CUDA SwiGLU smoke |
+| H100 (sm_90a) | primary optimized runtime target for goal evidence |
+| Blackwell (sm_100a / sm_103a / sm_120a) | compile-supported; Hopper-only model kernels use CUDA correctness fallbacks pending optimized Blackwell kernels |
 | NCCL ≥ 2.x + libnccl-dev | optional, multi-GPU |
 | OpenMPI | optional, multi-node MPI init |
 | Python ≥ 3.10 | only for `dev/data/*.py` preprocessing scripts |
@@ -81,7 +86,7 @@ The Makefile picks these defaults; override on the command line if needed.
 |---|---|---|
 | `TK_ROOT=` | `$(abspath ../ThunderKittens)` | ThunderKittens checkout |
 | `FORCE_NVCC_O=` | `3` | nvcc optimisation level |
-| `DEVICE_ARCH=SM90` | `SM90` | CUDA/TK architecture; `SM120` is available for generic RTX 5090 device probes |
+| `DEVICE_ARCH=SM90` | `SM90` | CUDA/TK architecture; supported values are `SM90`, `SM100`, `SM103`, and `SM120` |
 | `NO_OMP=1` | unset | Disable OpenMP host parallelism |
 | `NO_MULTI_GPU=1` | unset | Disable NCCL even if installed |
 | `NCCL_DIR=` | unset | Enable NCCL from a custom prefix containing `include/nccl.h` and `lib*/libnccl.so` |
@@ -95,6 +100,8 @@ The Makefile hard-codes:
 - `--use_fast_math -std=c++20`
 - `--expt-extended-lambda --expt-relaxed-constexpr`
 - default `DEVICE_ARCH=SM90`: `-DKITTENS_SM90 -gencode arch=compute_90a,code=sm_90a`
+- opt-in `DEVICE_ARCH=SM100`: `-DKITTENS_SM100 -gencode arch=compute_100a,code=sm_100a`
+- opt-in `DEVICE_ARCH=SM103`: `-DKITTENS_SM103 -gencode arch=compute_103a,code=sm_103a`
 - opt-in `DEVICE_ARCH=SM120`: `-DKITTENS_SM120 -gencode arch=compute_120a,code=sm_120a`
 - `-DENABLE_BF16`
 - `-I$(TK_ROOT)/include -I$(TK_ROOT)/prototype`
@@ -117,16 +124,26 @@ a Hopper deployment. Set `CI=true` to suppress the sniff.
 
 This build-time warning is intentionally weaker than the goal harness. The
 target-host `scripts/validate_goal_h100.sh preflight` and `cuda-runtime` probes
-target H100 / sm90-class GPUs by default. For RTX 5090 device-only checks, run:
+target H100 / sm90-class GPUs by default. For Blackwell compile checks, run:
+
+```bash
+scripts/validate_goal_h100.sh blackwell-compile
+```
+
+For datacenter Blackwell runtime probes, run:
+
+```bash
+scripts/validate_goal_h100.sh blackwell-device
+```
+
+For RTX 5090 device checks, run:
 
 ```bash
 scripts/validate_goal_h100.sh rtx5090-device
 ```
 
-That phase forces `DEVICE_TEST_TARGET=rtx5090`, `DEVICE_ARCH=SM120`, and skips
-NCCL/MPI by default. It covers only the generic CUDA runtime/device-allocation
-probe and the plain CUDA SwiGLU smoke; TK model-kernel and `goal.md` completion
-evidence remains H100-only.
+The Blackwell/RTX probe phases skip NCCL/MPI by default. They do not replace
+the unchecked H100 performance/parity evidence in `goal.md`.
 
 ## Smoke test
 
@@ -163,11 +180,9 @@ Device: NVIDIA H100 80GB HBM3 (sm_90)
 ──── 6/6 passed ────
 ```
 
-Run on a non-H100 GPU prints a warning and continues (TK kernels will fail at
-runtime — the TK smoke tests are only meaningful on an H100). On RTX 5090,
-use `scripts/validate_goal_h100.sh rtx5090-device` for the supported generic
-device checks; treat TK target compiles as the only useful signal until the
-Blackwell TK kernels are ported.
+Run on a non-H100 GPU prints a warning and continues. Blackwell builds use CUDA
+fallbacks for the Hopper-only model kernels, so they are functional correctness
+checks rather than performance evidence for the optimized TK path.
 
 `test_attention` checks GPT-style packed Q/K/V attention against an independent
 CPU reference. It covers direct TK forward with fallback backward (`T=192`) and
@@ -221,7 +236,10 @@ The full status table is in [multi-gpu.md](multi-gpu.md#per-script-status).
 ## H100 goal validation
 
 On the target H100 machine, run the bounded validation harness before checking
-off any remaining runtime gate in [`../goal.md`](../goal.md):
+off any remaining runtime gate in [`../goal.md`](../goal.md). The full phase
+catalogue, env-var list, and validate-only recipes live in
+[`validation-harness.md`](validation-harness.md); the summary below is the
+quick-start.
 
 ```bash
 scripts/validate_goal_h100.sh
@@ -230,7 +248,7 @@ scripts/validate_goal_h100.sh
 The default `goal-core` phases check H100/CUDA/NCCL/MPI prerequisites, build
 the compile targets, syntax-check launch/data shell scripts and Python
 data/converter/profile helpers, run source-level CUDA/NCCL/ZeRO,
-GQA/RoPE, BF16/H100/TK build, GELU-epilogue source, profile-gate source, Llama conversion source, rank-0 training-log evidence, launch-script, and runtime-marker contract guards, run
+GQA/RoPE, BF16/Hopper+Blackwell/TK build, GELU-epilogue source, profile-gate source, Llama conversion source, rank-0 training-log evidence, launch-script, and runtime-marker contract guards, run
 a tiny CUDA runtime/device-allocation probe, validate any prepared GPT-2/Llama training and HellaSwag `.bin`
 artifacts found in the known data directories, run the host-only C++
 DataLoader/EvalLoader smoke, run the CPU-only GQA/RoPE reference check, validate
@@ -264,7 +282,7 @@ ZeRO layout.
 Use `scripts/validate_goal_h100.sh source-guards` to check brittle source-level
 NCCL contracts such as scalar all-reduce element counts, plus the ZeRO-3
 parameter-shard runtime contract, launch-script step contracts, runtime success-marker
-contracts, GQA/RoPE source-routing invariants, BF16/H100/TK build-contract
+contracts, GQA/RoPE source-routing invariants, BF16/Hopper+Blackwell/TK build-contract
 invariants, GELU-epilogue source contracts, profile-gate source contracts,
 Llama conversion source contracts, rank-0 training-log evidence contracts,
 compile-target coverage, and
@@ -275,9 +293,11 @@ Set `NCCL_DIR`, `NCCL_INCLUDE_PATH`, or `NCCL_LIB_PATH` before running the
 harness when the target cluster provides NCCL through a module or custom
 prefix. The preflight phase first requires an H100/sm90-class GPU by default,
 then checks the same NCCL paths the Makefile uses. With
-`DEVICE_TEST_TARGET=rtx5090`, preflight instead accepts RTX 5090/sm_120-class
-devices and skips NCCL/MPI by default. The `cuda-runtime` phase independently
-checks the same target contract inside the compiled runtime probe.
+`DEVICE_TEST_TARGET=blackwell`, preflight instead accepts B200/GB200 or
+sm_100/sm_103-class datacenter Blackwell devices and skips NCCL/MPI by default.
+With `DEVICE_TEST_TARGET=rtx5090`, it accepts RTX 5090/sm_120-class devices and
+also skips NCCL/MPI by default. The `cuda-runtime` phase independently checks
+the same target contract inside the compiled runtime probe.
 `ALLOW_NON_H100=1` bypasses only the GPU class gate for dry compile/debug runs;
 it is not valid goal-completion evidence, and `goal-complete` refuses to run
 while it is set.

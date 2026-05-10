@@ -31,7 +31,12 @@ M=4096 N=V_padded=50304 K=768 the small-N fallback is selected automatically.
 #include <type_traits>
 #include "cuda_common.h"
 #include "cuda_utils.cuh"
+#if defined(KITTENS_SM90)
+#define LLMK_USE_TK_GEMM 1
 #include "tk/gemm_h100.cuh"
+#else
+#define LLMK_USE_TK_GEMM 0
+#endif
 
 // ----------------------------------------------------------------------------
 // Bias-grad reduction kernels — ported verbatim from llm.c/llmc/matmul.cuh
@@ -124,12 +129,81 @@ __global__ void add_bias_kernel(floatX* out, const floatX* bias, int N, int OC) 
     out[idx] = (floatX)((float)out[idx] + (float)bias[oc]);
 }
 
+__global__ void matmul_forward_cuda_kernel(floatX* out, const floatX* inp,
+                                           const floatX* weight, const floatX* bias,
+                                           int row_offset, int rows, int C, int OC) {
+    int oc = blockIdx.x * blockDim.x + threadIdx.x;
+    int local_m = blockIdx.y * blockDim.y + threadIdx.y;
+    if (local_m >= rows || oc >= OC) return;
+    int m = row_offset + local_m;
+    float acc = 0.0f;
+    for (int c = 0; c < C; ++c) {
+        acc += (float)inp[m * C + c] * (float)weight[oc * C + c];
+    }
+    if (bias != nullptr) {
+        acc += (float)bias[oc];
+    }
+    out[(size_t)m * OC + oc] = (floatX)acc;
+}
+
+__global__ void matmul_forward_gelu_cuda_kernel(floatX* out, floatX* pre_gelu,
+                                                const floatX* inp, const floatX* weight,
+                                                const floatX* bias,
+                                                int row_offset, int rows, int C, int OC) {
+    int oc = blockIdx.x * blockDim.x + threadIdx.x;
+    int local_m = blockIdx.y * blockDim.y + threadIdx.y;
+    if (local_m >= rows || oc >= OC) return;
+    int m = row_offset + local_m;
+    float acc = 0.0f;
+    for (int c = 0; c < C; ++c) {
+        acc += (float)inp[m * C + c] * (float)weight[oc * C + c];
+    }
+    acc += (float)bias[oc];
+    const size_t idx = (size_t)m * OC + oc;
+    pre_gelu[idx] = (floatX)acc;
+    float cube = 0.044715f * acc * acc * acc;
+    out[idx] = (floatX)(0.5f * acc * (1.0f + tanhf(sqrtf(2.0f / M_PI) * (acc + cube))));
+}
+
 inline void add_bias(floatX* out, const floatX* bias, int N, int OC, cudaStream_t stream) {
     if (bias == nullptr) return;
     const int block = 256;
     const int grid  = CEIL_DIV(N * OC, block);
     add_bias_kernel<<<grid, block, 0, stream>>>(out, bias, N, OC);
     cudaCheck(cudaGetLastError());
+}
+
+inline void matmul_forward_cuda_launch(floatX* out, const floatX* inp,
+                                       const floatX* weight, const floatX* bias,
+                                       int M, int K, int N, cudaStream_t stream) {
+    const dim3 block(16, 16);
+    // Oversized GPT-2 LM-head projections exceed 2^31 output elements at
+    // B=64,T=1024. Keep those fallback launches small enough for desktop
+    // Blackwell while leaving ordinary hidden-size projections as one launch.
+    const size_t total = (size_t)M * N;
+    const int rows_per_launch = total > 2147483647ULL ? 128 : M;
+    for (int row = 0; row < M; row += rows_per_launch) {
+        const int rows = (row + rows_per_launch <= M) ? rows_per_launch : (M - row);
+        const dim3 grid(CEIL_DIV(N, (int)block.x), CEIL_DIV(rows, (int)block.y));
+        matmul_forward_cuda_kernel<<<grid, block, 0, stream>>>(out, inp, weight, bias, row, rows, K, N);
+        cudaCheck(cudaGetLastError());
+    }
+}
+
+inline void matmul_forward_gelu_cuda_launch(floatX* out, floatX* pre_gelu,
+                                            const floatX* inp, const floatX* weight,
+                                            const floatX* bias,
+                                            int M, int K, int N, cudaStream_t stream) {
+    const dim3 block(16, 16);
+    const size_t total = (size_t)M * N;
+    const int rows_per_launch = total > 2147483647ULL ? 128 : M;
+    for (int row = 0; row < M; row += rows_per_launch) {
+        const int rows = (row + rows_per_launch <= M) ? rows_per_launch : (M - row);
+        const dim3 grid(CEIL_DIV(N, (int)block.x), CEIL_DIV(rows, (int)block.y));
+        matmul_forward_gelu_cuda_kernel<<<grid, block, 0, stream>>>(
+            out, pre_gelu, inp, weight, bias, row, rows, K, N);
+        cudaCheck(cudaGetLastError());
+    }
 }
 
 // ----------------------------------------------------------------------------
@@ -149,6 +223,7 @@ inline void matmul_forward(floatX* out, const floatX* inp, const floatX* weight,
     const int N = OC;
     const int K = C;
 
+#if LLMK_USE_TK_GEMM
     // Dispatch on shape constraints. Default kernel needs N % 256 == 0;
     // small-N fallback only needs N % 128 == 0.
     assert(M % 128 == 0 && "matmul_forward: B*T must be a multiple of 128");
@@ -167,6 +242,9 @@ inline void matmul_forward(floatX* out, const floatX* inp, const floatX* weight,
     cudaCheck(cudaGetLastError());
 
     add_bias(out, bias, M, OC, stream);
+#else
+    matmul_forward_cuda_launch(out, inp, weight, bias, M, K, N, stream);
+#endif
 }
 
 // ----------------------------------------------------------------------------
@@ -219,7 +297,14 @@ __global__ void matmul_add_inplace_kernel(floatX* dst, const floatX* src, size_t
 }
 
 inline bool matmul_tk_shape_ok(int M, int N, int K) {
+#if LLMK_USE_TK_GEMM
     return M % 128 == 0 && K % 64 == 0 && N % 128 == 0;
+#else
+    (void)M;
+    (void)N;
+    (void)K;
+    return false;
+#endif
 }
 
 inline bool matmul_forward_gelu_supported(int B, int T, int C, int OC) {
@@ -228,6 +313,7 @@ inline bool matmul_forward_gelu_supported(int B, int T, int C, int OC) {
 
 inline void matmul_dispatch_tk_ab(floatX* out, const floatX* a, const floatX* b,
                                   int M, int N, int K, cudaStream_t stream) {
+#if LLMK_USE_TK_GEMM
     auto* A = llmk::to_bf16(const_cast<floatX*>(a));
     auto* B = llmk::to_bf16(const_cast<floatX*>(b));
     auto* C = llmk::to_bf16(out);
@@ -237,10 +323,21 @@ inline void matmul_dispatch_tk_ab(floatX* out, const floatX* a, const floatX* b,
         llmk::gemm::launch<llmk::gemm::matmul_small_n>(A, B, C, M, N, K, stream);
     }
     cudaCheck(cudaGetLastError());
+#else
+    (void)out;
+    (void)a;
+    (void)b;
+    (void)M;
+    (void)N;
+    (void)K;
+    (void)stream;
+    assert(false && "matmul_dispatch_tk_ab called without TK GEMM support");
+#endif
 }
 
 inline void matmul_dispatch_tk_atb(floatX* out, const floatX* a, const floatX* b,
                                    int M, int N, int K, cudaStream_t stream) {
+#if LLMK_USE_TK_GEMM
     auto* A = llmk::to_bf16(const_cast<floatX*>(a));
     auto* B = llmk::to_bf16(const_cast<floatX*>(b));
     auto* C = llmk::to_bf16(out);
@@ -250,6 +347,16 @@ inline void matmul_dispatch_tk_atb(floatX* out, const floatX* a, const floatX* b
         llmk::gemm::launch<llmk::gemm::matmul_small_n_tn>(A, B, C, M, N, K, stream);
     }
     cudaCheck(cudaGetLastError());
+#else
+    (void)out;
+    (void)a;
+    (void)b;
+    (void)M;
+    (void)N;
+    (void)K;
+    (void)stream;
+    assert(false && "matmul_dispatch_tk_atb called without TK GEMM support");
+#endif
 }
 
 inline void matmul_forward_gelu(floatX* out, floatX* pre_gelu,
@@ -263,8 +370,9 @@ inline void matmul_forward_gelu(floatX* out, floatX* pre_gelu,
     const int M = B * T;
     const int N = OC;
     const int K = C;
-    assert(matmul_forward_gelu_supported(B, T, C, OC));
 
+#if LLMK_USE_TK_GEMM
+    assert(matmul_forward_gelu_supported(B, T, C, OC));
     auto* A = llmk::to_bf16(const_cast<floatX*>(inp));
     auto* B_= llmk::to_bf16(const_cast<floatX*>(weight));
     auto* C_= llmk::to_bf16(out);
@@ -279,6 +387,9 @@ inline void matmul_forward_gelu(floatX* out, floatX* pre_gelu,
             A, B_, C_, M, N, K, stream, P_, bias_);
     }
     cudaCheck(cudaGetLastError());
+#else
+    matmul_forward_gelu_cuda_launch(out, pre_gelu, inp, weight, bias, M, K, N, stream);
+#endif
 }
 
 inline void matmul_backward_bias(floatX* dbias, const floatX* dout, float* dbias_buffer,

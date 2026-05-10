@@ -12,6 +12,7 @@ they do not duplicate them.
 | Skill | Path | Triggers on | Routes to |
 |---|---|---|---|
 | `llm-kittens-port` | [`.claude/skills/llm-kittens-port/SKILL.md`](../.claude/skills/llm-kittens-port/SKILL.md) | "implement the next milestone", "add a TK kernel wrapper", "port X from llm.c", anything that mutates `llmc/` or `train_*.cu` | [`../goal.md`](../goal.md), [architecture.md](architecture.md), [kernel-reference.md](kernel-reference.md), [porting-notes.md](porting-notes.md) |
+| `validate-h100` | [`.claude/skills/validate-h100/SKILL.md`](../.claude/skills/validate-h100/SKILL.md) | "run the goal harness", "validate this milestone", "replay captured evidence", anything that drives `scripts/validate_goal_h100.sh` | [`../goal.md`](../goal.md), [validation-harness.md](validation-harness.md), [testing.md](testing.md), [cli-reference.md](cli-reference.md) |
 
 ## When to use which doc
 

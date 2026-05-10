@@ -11,7 +11,16 @@ ported verbatim from llm.c/llmc/attention.cuh (lines 14-83).
 #include <float.h>
 #include "cuda_common.h"
 #include "cuda_utils.cuh"
+#if defined(KITTENS_SM90)
+#define LLMK_USE_TK_MHA 1
 #include "tk/attention_h100.cuh"
+#else
+#define LLMK_USE_TK_MHA 0
+namespace llmk::attention {
+inline int fwd_sequence_granularity() { return 1; }
+inline int bwd_sequence_granularity() { return 1 << 30; }
+} // namespace llmk::attention
+#endif
 
 // ----------------------------------------------------------------------------
 // QKV layout glue — ported verbatim from llm.c/llmc/attention.cuh.
@@ -147,6 +156,52 @@ __global__ void attention_float_grads_to_bf16_kernel(floatX* dq, floatX* dk, flo
     dv[idx] = (floatX)vg[idx];
 }
 
+__global__ void attention_forward_cuda_kernel(floatX* out, float* lse,
+                                              const floatX* q, const floatX* k, const floatX* v,
+                                              int B, int T, int NH, int HS) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int total = B * NH * T * HS;
+    if (idx >= total) return;
+
+    int hs = idx % HS;
+    int t = (idx / HS) % T;
+    int nh = (idx / (HS * T)) % NH;
+    int b = idx / (NH * T * HS);
+    int bnh = b * NH + nh;
+    const float scale = rsqrtf((float)HS);
+    const floatX* q_row = q + (bnh * T + t) * HS;
+
+    float maxval = -FLT_MAX;
+    for (int s = 0; s <= t; ++s) {
+        const floatX* k_row = k + (bnh * T + s) * HS;
+        float score = 0.0f;
+        for (int d = 0; d < HS; ++d) {
+            score += (float)q_row[d] * (float)k_row[d];
+        }
+        maxval = fmaxf(maxval, score * scale);
+    }
+
+    float denom = 0.0f;
+    float acc = 0.0f;
+    for (int s = 0; s <= t; ++s) {
+        const floatX* k_row = k + (bnh * T + s) * HS;
+        const floatX* v_row = v + (bnh * T + s) * HS;
+        float score = 0.0f;
+        for (int d = 0; d < HS; ++d) {
+            score += (float)q_row[d] * (float)k_row[d];
+        }
+        float p_unnorm = expf(score * scale - maxval);
+        denom += p_unnorm;
+        acc += p_unnorm * (float)v_row[hs];
+    }
+
+    int out_idx = (b * T + t) * NH * HS + nh * HS + hs;
+    out[out_idx] = (floatX)(acc / denom);
+    if (lse != nullptr && hs == 0) {
+        lse[(b * NH + nh) * T + t] = maxval + logf(denom);
+    }
+}
+
 inline void attention_forward(floatX* out, floatX* qkvr, floatX* att,
                               floatX* inp,
                               int B, int T, int C, int NH, cudaStream_t stream) {
@@ -166,6 +221,7 @@ inline void attention_forward(floatX* out, floatX* qkvr, floatX* att,
     permute_kernel<<<num_blocks, block_size, 0, stream>>>(q, k, v, inp, B, T, NH, HS);
     cudaCheck(cudaGetLastError());
 
+#if LLMK_USE_TK_MHA
     const int granularity = llmk::attention::fwd_sequence_granularity();
     const int Tpad = CEIL_DIV(T, granularity) * granularity;
 
@@ -209,6 +265,10 @@ inline void attention_forward(floatX* out, floatX* qkvr, floatX* att,
         unpermute_padded_kernel<<<num_blocks, block_size, 0, stream>>>(
             o_pad, out, B, T, Tpad, NH, HS);
     }
+#else
+    attention_forward_cuda_kernel<<<num_blocks, block_size, 0, stream>>>(
+        out, reinterpret_cast<float*>(att), q, k, v, B, T, NH, HS);
+#endif
     cudaCheck(cudaGetLastError());
 }
 
@@ -350,6 +410,7 @@ inline void attention_backward(floatX* dinp, floatX* dqkvr, floatX* datt, floatX
     int total = B * T * C;
     int num_blocks = CEIL_DIV(total, block_size);
 
+#if LLMK_USE_TK_MHA
     if (datt != nullptr && att != nullptr &&
         (HS == 64 || HS == 128) &&
         T % llmk::attention::bwd_sequence_granularity() == 0) {
@@ -388,6 +449,7 @@ inline void attention_backward(floatX* dinp, floatX* dqkvr, floatX* datt, floatX
         cudaCheck(cudaGetLastError());
         return;
     }
+#endif
 
     unpermute_kernel_backward<<<num_blocks, block_size, 0, stream>>>(scratch, dout, B, T, NH, HS);
     cudaCheck(cudaGetLastError());

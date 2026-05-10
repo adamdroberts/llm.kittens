@@ -13,14 +13,34 @@ use the fused materialized-RoPE path and the plain-CUDA correctness baseline.
 
 #include "cuda_common.h"
 #include "cuda_utils.cuh"
+#if defined(KITTENS_SM90)
+#define LLMK_USE_TK_GQA 1
 #include "tk/attention_gqa_h100.cuh"
+#else
+#define LLMK_USE_TK_GQA 0
+namespace llmk::attention_gqa {
+inline bool has_tk_forward(int, int, int, int) { return false; }
+inline bool has_tk_backward(int, int, int, int) { return false; }
+} // namespace llmk::attention_gqa
+#endif
 
 inline bool attention_gqa_uses_tk_tile_rope(const floatX* cos, const floatX* sin,
                                             const floatX* tk_workspace,
                                             int T, int C, int NH, int NKVH) {
+#if LLMK_USE_TK_GQA
     if (cos == nullptr || sin == nullptr || tk_workspace == nullptr) { return false; }
     if (NH <= 0 || C % NH != 0) { return false; }
     return llmk::attention_gqa::has_tk_backward(T, C / NH, NH, NKVH);
+#else
+    (void)cos;
+    (void)sin;
+    (void)tk_workspace;
+    (void)T;
+    (void)C;
+    (void)NH;
+    (void)NKVH;
+    return false;
+#endif
 }
 
 __global__ void gqa_permute_q_kernel(floatX* q, const floatX* inp,
@@ -431,6 +451,7 @@ inline void attention_gqa_forward(floatX* out, floatX* qkvr, float* lse,
         cudaCheck(cudaGetLastError());
     }
 
+#if LLMK_USE_TK_GQA
     if (tk_workspace != nullptr &&
         llmk::attention_gqa::has_tk_forward(T, HS, NH, NKVH)) {
         if (tk_tile_rope) {
@@ -452,6 +473,7 @@ inline void attention_gqa_forward(floatX* out, floatX* qkvr, float* lse,
         cudaCheck(cudaGetLastError());
         return;
     }
+#endif
 
     gqa_attention_forward_kernel<<<q_blocks, block_size, 0, stream>>>(
         out, lse, q, k, v, B, T, NH, NKVH, HS);
@@ -484,6 +506,7 @@ inline void attention_gqa_backward(floatX* dinp, floatX* dqkvr, float* datt, flo
     int q_blocks = CEIL_DIV(q_elems, block_size);
     int kv_blocks = CEIL_DIV(kv_elems, block_size);
 
+#if LLMK_USE_TK_GQA
     if (out != nullptr && datt != nullptr && lse != nullptr &&
         llmk::attention_gqa::has_tk_backward(T, HS, NH, NKVH)) {
         floatX* o_perm = scratch;
@@ -521,6 +544,7 @@ inline void attention_gqa_backward(floatX* dinp, floatX* dqkvr, float* datt, flo
             dq, dk, dv, qg, kg, vg, q_elems, kv_elems);
         cudaCheck(cudaGetLastError());
     } else {
+#endif
         gqa_unpermute_dout_kernel<<<q_blocks, block_size, 0, stream>>>(
             scratch, dout, B, T, NH, HS);
         cudaCheck(cudaGetLastError());
@@ -531,7 +555,9 @@ inline void attention_gqa_backward(floatX* dinp, floatX* dqkvr, float* datt, flo
         gqa_attention_backward_dk_dv_kernel<<<kv_blocks, block_size, 0, stream>>>(
             dk, dv, scratch, q, k, v, B, T, NH, NKVH, HS);
         cudaCheck(cudaGetLastError());
+#if LLMK_USE_TK_GQA
     }
+#endif
 
     int total = (int)(q_elems > kv_elems ? q_elems : kv_elems);
     int blocks = CEIL_DIV(total, block_size);

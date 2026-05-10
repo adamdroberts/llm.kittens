@@ -193,8 +193,9 @@ typedef struct {
     float* ln1_mean; // (L, B, T)
     float* ln1_rstd; // (L, B, T)
     floatX* atty; // (L, B, T, C)
-    // cuDNN saves only some statistics information
-    floatX* att; // (L, B, NH, T, T); TK forward stores LSE scratch here
+    // Legacy attention slot. Current wrappers store float log-sum-exp rows here,
+    // not a full (B,NH,T,T) probability matrix.
+    floatX* att; // (L, B, NH, T) float LSE scratch in a floatX-typed slot
 
     floatX* residual2; // (L, B, T, C)
     floatX* ln2; // (L, B, T, C)
@@ -213,8 +214,8 @@ typedef struct {
     // in training mode, this buffer will contain the *gradients* of the logits.
     // during the processing of transformer blocks, we will also use this as a
     // general scratchpad buffer. Allocation is made large enough to hold (B, T, 3C),
-    // (B, NH, T, T), the padded TK attention forward scratch, the TK attention
-    // backward workspace, and (B, T, V).
+    // padded TK attention forward scratch, TK attention backward workspace, and
+    // (B, T, V).
     floatX* output;
 
     // some additional scratch buffers
@@ -244,7 +245,10 @@ void fill_in_activation_sizes(const ActivationTensors* data, TensorSpec (&tensor
     tensors[2] = TENSOR_SPEC(data->ln1_mean, L * B * T);
     tensors[3] = TENSOR_SPEC(data->ln1_rstd, L * B * T);
     tensors[4] = TENSOR_SPEC(data->atty, L * B * T * C);
-    tensors[5] = TENSOR_SPEC(data->att, L * B * NH * T * T);
+    // `att` is a floatX-typed slot, but attention_forward writes float LSE
+    // values through reinterpret_cast<float*>. Allocate two bf16 elements per
+    // float LSE value.
+    tensors[5] = TENSOR_SPEC(data->att, 2 * L * B * NH * T);
     tensors[6] = TENSOR_SPEC(data->residual2, L * B * T * C);
     // if recompute >= 1 then we will recompute the layernorm forward activation during backward pass
     tensors[7] = TENSOR_SPEC(data->ln2, (recompute < 2) ? L * B * T * C : 0);
@@ -749,8 +753,7 @@ void gpt_build_from_descriptor(GPT2 *model, const char* descriptor) {
 // right now, this function is fully synchronous with the host
 void gpt2_forward(GPT2 *model, const int* inputs, size_t B, size_t T) {
     NVTX_RANGE_FN();
-    // we must be careful and use size_t instead of int, otherwise
-    // we could overflow int. E.g. l * B * NH * T * T overflows int at B 16.
+    // we must be careful and use size_t instead of int for per-layer offsets.
 
     // ensure the model was initialized or error out
     if (model->params_memory == NULL) {
@@ -819,9 +822,9 @@ void gpt2_forward(GPT2 *model, const int* inputs, size_t B, size_t T) {
         floatX* scratch = (floatX*)acts.output; // used for non-cudnn attention, fcproj, attproj, etc.
 
         // now do the forward pass
-        floatX* l_att = acts.att + l * B * NH * T * T;
+        floatX* l_att = acts.att + 2 * l * B * NH * T;
         if (T != model->seq_len) { // unused parts of attention buffer must be zeroed (T-dependent)
-            cudaCheck(cudaMemset(l_att, 0, B * NH * T * T * sizeof(floatX)));
+            cudaCheck(cudaMemset(l_att, 0, 2 * B * NH * T * sizeof(floatX)));
         }
         // these are only needed as scratchpads for the forward pass, but
         // need not be stored for backward
@@ -1014,7 +1017,7 @@ void gpt2_backward_and_reduce(GPT2 *model, int* inputs, const int* targets, int 
         layernorm_backward(dresidual, dl_ln2w, dl_ln2b, scratchF, dl_btc, l_residual2, l_ln2w, l_ln2_mean, l_ln2_rstd, B, T, C, main_stream);
         matmul_backward(dl_btc, dl_attprojw, dl_attprojb, dresidual, l_atty, l_attprojw, scratchF, B, T, C, C, main_stream, dweight_accumulate, matmul_scratch, matmul_scratch_elements);
 
-        floatX* l_att = acts.att + l * B * NH * T * T;
+        floatX* l_att = acts.att + 2 * l * B * NH * T;
         // we need B x T x (4)C buffers. l_atty and l_fch aren't needed anymore at this point, so reuse their memory
         floatX* buffer_a = l_atty;
         floatX* buffer_b = l_fch_pre_gelu;        // this is B x T x 4C, so even larger than what we need

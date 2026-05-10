@@ -243,6 +243,19 @@ def main() -> None:
                 ),
             },
         )
+        run_harness(
+            "preflight",
+            {
+                "DEVICE_TEST_TARGET": "blackwell",
+                "PREFLIGHT_VALIDATE_ONLY": "1",
+                "PREFLIGHT_LOG": str(
+                    write(
+                        root / "blackwell_preflight.log",
+                        "NVIDIA B200, 10.0\nBlackwell device preflight OK\n",
+                    )
+                ),
+            },
+        )
         expect_harness_fail(
             "preflight",
             {
@@ -251,6 +264,15 @@ def main() -> None:
                 "PREFLIGHT_LOG": str(root / "preflight.log"),
             },
             "RTX 5090 device preflight OK",
+        )
+        expect_harness_fail(
+            "preflight",
+            {
+                "DEVICE_TEST_TARGET": "blackwell",
+                "PREFLIGHT_VALIDATE_ONLY": "1",
+                "PREFLIGHT_LOG": str(root / "preflight.log"),
+            },
+            "Blackwell device preflight OK",
         )
         run_harness(
             "cuda-runtime",
@@ -272,6 +294,19 @@ def main() -> None:
                 ),
             },
         )
+        run_harness(
+            "cuda-runtime",
+            {
+                "DEVICE_TEST_TARGET": "blackwell",
+                "CUDA_RUNTIME_VALIDATE_ONLY": "1",
+                "CUDA_RUNTIME_LOG": str(
+                    write(
+                        root / "blackwell_cuda_runtime_check.log",
+                        "CUDA device target: blackwell\nCUDA runtime check passed.\n",
+                    )
+                ),
+            },
+        )
         expect_harness_fail(
             "cuda-runtime",
             {
@@ -280,6 +315,15 @@ def main() -> None:
                 "CUDA_RUNTIME_LOG": str(root / "cuda_runtime_check.log"),
             },
             "CUDA device target: rtx5090",
+        )
+        expect_harness_fail(
+            "cuda-runtime",
+            {
+                "DEVICE_TEST_TARGET": "blackwell",
+                "CUDA_RUNTIME_VALIDATE_ONLY": "1",
+                "CUDA_RUNTIME_LOG": str(root / "cuda_runtime_check.log"),
+            },
+            "CUDA device target: blackwell",
         )
 
         smoke_dir = root / "smoke"

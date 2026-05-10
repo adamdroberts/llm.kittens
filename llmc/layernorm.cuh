@@ -19,7 +19,16 @@ E.g., the layernorms are connected to the residuals so we += in layernorm backwa
 // llmc internal imports
 #include "cuda_common.h"
 #include "cuda_utils.cuh"
+#include "tk/tk_common.cuh"
+#if defined(KITTENS_SM90)
+#define LLMK_USE_TK_LAYERNORM 1
 #include "tk/layernorm_tk.cuh"
+#else
+#define LLMK_USE_TK_LAYERNORM 0
+namespace llmk::layernorm {
+inline bool supports_width(int) { return false; }
+} // namespace llmk::layernorm
+#endif
 
 // ----------------------------------------------------------------------------
 // CUDA kernels
@@ -238,6 +247,7 @@ __global__ void residual_forward_kernel(floatX* out, const floatX* inp1, const f
 }
 
 __device__ inline float layernorm_tk_warp_sum(float value, float* scratch) {
+#if LLMK_USE_TK_LAYERNORM
     using reduce_vec = kittens::sv_fl<WARP_SIZE>;
     reduce_vec& values = *reinterpret_cast<reduce_vec*>(scratch);
     values[kittens::laneid()] = value;
@@ -246,6 +256,10 @@ __device__ inline float layernorm_tk_warp_sum(float value, float* scratch) {
     float sum = 0.0f;
     kittens::warp::sum(sum, values);
     return sum;
+#else
+    (void)scratch;
+    return warpReduceSum(value);
+#endif
 }
 
 __global__ void __launch_bounds__(512, 2) // todo - any warnings on Turing with only 1024 threads?
@@ -513,6 +527,7 @@ void layernorm_forward(floatX* out, float* mean, float* rstd,
                        floatX* inp, const floatX* weight, const floatX* bias,
                        int B, int T, int C, cudaStream_t stream) {
     NVTX_RANGE_FN();
+#if LLMK_USE_TK_LAYERNORM
     if (llmk::layernorm::supports_width(C)) {
         llmk::layernorm::launch_forward(
             llmk::to_bf16(out), mean, rstd,
@@ -521,6 +536,7 @@ void layernorm_forward(floatX* out, float* mean, float* rstd,
         cudaCheck(cudaGetLastError());
         return;
     }
+#endif
     layernorm_forward_cuda(out, mean, rstd, inp, weight, bias, B, T, C, stream);
 }
 
@@ -529,6 +545,7 @@ void fused_residual_forward5(floatX* residual, floatX* normed, float* mean, floa
                              const floatX* weight, const floatX* bias,
                              int N, int C, cudaStream_t stream) {
     NVTX_RANGE_FN();
+#if LLMK_USE_TK_LAYERNORM
     if (llmk::layernorm::supports_width(C)) {
         llmk::layernorm::launch_fused_residual_forward(
             llmk::to_bf16(residual), llmk::to_bf16(normed), mean, rstd,
@@ -538,6 +555,7 @@ void fused_residual_forward5(floatX* residual, floatX* normed, float* mean, floa
         cudaCheck(cudaGetLastError());
         return;
     }
+#endif
     fused_residual_forward5_cuda(residual, normed, mean, rstd,
                                  inp1, inp2, weight, bias, N, C, stream);
 }

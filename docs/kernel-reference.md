@@ -8,6 +8,11 @@ The principle: **TK earns its keep on tile-MMA ops** (GEMM, MHA, LayerNorm).
 Element-wise / gather-scatter / 1D-reduction kernels are kept verbatim from
 `llm.c` — TK adds nothing there.
 
+Hopper (`SM90`) uses the optimized TK H100 wrappers listed below. Blackwell
+(`SM100`, `SM103`, `SM120`) is build-supported through ThunderKittens 2.0; the
+Hopper-only GEMM/MHA/GQA/RoPE wrappers use plain CUDA correctness fallbacks
+until dedicated B200/GB200 kernels are ported.
+
 ## Mapping table
 
 | Op | Wrapper | TK template | llm.c source kept identical | Status |
@@ -63,6 +68,9 @@ loads B as row-major `(N, K)`, matching llm.c's dense weight layout `(OC, C)`.
 bias+GELU aliases add bias and GELU in the finish path after WGMMA and can TMA
 store a pre-GELU auxiliary buffer for backward.
 
+On Blackwell builds this Hopper WGMMA wrapper is not instantiated; the C-style
+wrapper dispatches to a plain CUDA BF16 correctness kernel instead.
+
 ### Shape constraints
 
 | Symbol | Constraint | Why |
@@ -117,6 +125,10 @@ or missing scratch capacity.
 
 Wrap `fwd_attend_ker`, `bwd_attend_prep_ker`, and `bwd_attend_ker` from
 `ThunderKittens/kernels/attention/mha_h100/mha_h100.cu`.
+
+On Blackwell builds these Hopper attention kernels are not instantiated; the
+wrapper uses the existing recompute CUDA correctness baseline for forward and
+backward.
 
 ### Constraints
 
@@ -240,6 +252,9 @@ Runtime numerical validation waits for a compatible H100 driver/runtime.
 
 Wrap `ThunderKittens/kernels/rotary/rotary.cu`. Backward is the same forward
 op with `(sin, -cos)` swapped — no separate kernel needed.
+
+On Blackwell builds the wrapper uses a plain CUDA RoPE fallback because the
+current TK LCSF RoPE fork is Hopper-shaped.
 
 `dev/cuda/test_rope.cu` adds a CPU-reference smoke harness for HS=64 and
 HS=128 forward plus inverse-rotation backward. Runtime execution waits for a

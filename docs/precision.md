@@ -32,8 +32,8 @@ kernels for those) than re-introduce FP16/FP32.
                 "llm.kittens v1 requires PRECISION=BF16. ThunderKittens H100 "
                 "GEMM/MHA kernels are bf16; FP16/FP32 paths are not implemented.");
   ```
-  Hard `static_assert` at the bridge layer, so the GEMM template fails to
-  instantiate on a non-BF16 `floatX`.
+  Hard `static_assert` at the bridge layer, so TK-backed and Blackwell fallback
+  paths both share the same BF16 activation/parameter contract.
 
 - The Makefile sets `-DENABLE_BF16` and never sets `-DENABLE_FP16` /
   `-DENABLE_FP32`. The `PrecisionMode` enum exists in `cuda_common.h` for
