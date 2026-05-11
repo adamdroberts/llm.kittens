@@ -143,8 +143,20 @@ inline void launch_impl(bf16* out, bf16* out_residual, float* mean, float* rstd,
     globals g{x_arg, residual_arg, out_arg, out_residual_arg, weight_arg, bias_arg,
               mean, rstd, rows};
 
-    constexpr int vecs_per_block = 2 * NUM_WORKERS + 2;
-    const unsigned long mem_size = sizeof(vec_smem_1xD) * vecs_per_block;
+    // SM90/SM100/SM120: TK's shared_allocator aligns every allocation to 1024
+    // bytes (see ThunderKittens/include/common/util.cuh:206 — the SM90+
+    // template default). The kernel does 4 distinct .allocate<>() calls
+    // (x_s[NUM_WORKERS], residual_s[NUM_WORKERS], norm_weight_s, norm_bias_s),
+    // so the live smem footprint can be up to 4 * 1023 bytes larger than the
+    // raw sum of vec sizes. Without slack the bias allocation overflows the
+    // dynamic smem budget and the kernel raises an illegal memory access on
+    // the first store there. Round each allocation up to the alignment.
+    constexpr unsigned long alloc_align = 1024;
+    constexpr unsigned long aligned_vec = ((sizeof(vec_smem_1xD) + alloc_align - 1)
+                                           / alloc_align) * alloc_align;
+    constexpr unsigned long aligned_arr = ((sizeof(vec_smem_1xD) * NUM_WORKERS + alloc_align - 1)
+                                           / alloc_align) * alloc_align;
+    const unsigned long mem_size = 2 * aligned_arr + 2 * aligned_vec;
 
     static bool smem_attr_set = false;
     if (!smem_attr_set) {

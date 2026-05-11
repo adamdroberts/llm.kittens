@@ -65,8 +65,15 @@ __device__ SoftmaxParams prepare_softmax_blockwide3(int64_t idx, const floatX* i
 // will _update_ logits to logit gradients
 // uses template to decide whether to write logits and probs
 // split both loops in "multiple-of-x128-size" and "bounds-checked remainder" parts
+//
+// NOTE: __launch_bounds__(1024, MAX_1024_THREADS_BLOCKS) was removed for the
+// llm.kittens fork: with sm_90a + nvcc -O3 the launch_bounds hint causes the
+// kernel to hang (cudaDeviceSynchronize times out at 300s) even with
+// minBlocks=1. The kernel is correct without the hint and the actual
+// occupancy is fine for our use cases. Restore once we identify whether this
+// is an nvcc 12.8 bug specific to compute_90a.
 template <bool WriteDLogits = true, bool WriteProbs = false>
-__global__ void __launch_bounds__(1024, MAX_1024_THREADS_BLOCKS)
+__global__ void
     fused_classifier_kernel5(floatX* logits, float* losses, floatX* probs,
                                 const float dloss, const int* targets,
                                 int B, int T, int V, int P, std::bool_constant<WriteDLogits>) {
@@ -141,7 +148,12 @@ void fused_classifier(Type* logits, float* losses,
                       const float dloss, const int* targets,
                       int B, int T, int V, int P, std::bool_constant<WriteDLogits> write_dlogits, cudaStream_t stream) {
     NVTX_RANGE_FN();
-    const int block_size = 1024;
+    // Was 1024 in upstream llm.c; reduced to 256 for the H100 build because
+    // the 1024-thread variant hangs on cudaDeviceSynchronize under sm_90a
+    // (300s timeout) — see notes above the kernel definition. 256 threads /
+    // 8 warps still saturates an SM and avoids whatever the NVCC 12.8 issue
+    // is with the 32-warp blockReduce.
+    const int block_size = 256;
     const int N = B * T;
     const int grid_size = N;
     fused_classifier_kernel5<<<grid_size, block_size, 0, stream>>>(logits, losses, (floatX*)NULL, dloss, targets, B, T, V, P, write_dlogits);

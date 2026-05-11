@@ -5,3 +5,5 @@ tiktoken
 transformers
 datasets
 requests
+runpod-flash
+pytest

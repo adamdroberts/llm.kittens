@@ -29,12 +29,14 @@ extern cudaDeviceProp deviceProp;
 
 #define WARP_SIZE 32U
 
-// try to make sure that 2 blocks fit on H100 to maximise latency tolerance
-#if __CUDA_ARCH__ >= 900
-#define MAX_1024_THREADS_BLOCKS 2
-#else
+// __launch_bounds__(1024, 2) hangs the fused_classifier kernel on H100 in
+// our build (compute_90a + nvcc -O3): the per-thread register footprint
+// forces 0 occupancy at min-blocks=2, so the launch silently fails to
+// schedule and cudaDeviceSynchronize times out. Pin to 1 on Hopper too;
+// upstream llm.c uses 1 by default and only bumps to 2 on Ada with a
+// matching codegen target. Restore once we audit the actual occupancy
+// numbers for this exact code on H100.
 #define MAX_1024_THREADS_BLOCKS 1
-#endif
 
 #define CEIL_DIV(M, N) (((M) + (N)-1) / (N))
 

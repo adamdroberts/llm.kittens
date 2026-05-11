@@ -54,3 +54,27 @@ dev/data/tinystories/TinyStories_all_data/data47.json
 dev/data/tinystories/TinyStories_all_data/data48.json
 dev/data/tinystories/TinyStories_all_data/data49.json
 dev/__pycache__/validate_goal_harness_coverage.cpython-313.pyc
+
+# ---- caches and runner state ----
+.flash/
+.runpod/
+.pytest_cache/
+.codex/
+.agents/
+.claude/
+__pycache__/
+*.pyc
+
+# ---- build artefacts at repo root ----
+# probe_/test_ binaries are produced by `make parity-kernels`/`make
+# test-kernels`. .cu sources live in dev/cuda/ (and test_gpt2.cu at root).
+# The compiled binaries (no extension) and per-binary .log files are not
+# tracked. Existing tracked test_* binaries stay tracked until explicitly
+# removed (git rm --cached) — gitignore only blocks new additions.
+/probe_*
+!/probe_*.cu
+/probe_*.log
+/test_*
+!/test_*.cu
+!/test_*.py
+*.log

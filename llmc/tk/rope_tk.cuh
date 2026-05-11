@@ -113,12 +113,49 @@ struct rotary_template {
         __device__ static void setup(consumer_setup_args<layout> args) {
             warpgroup::consumer_registers<NUM_CONSUMER_WARPS / 4>();
             const int row_block = static_cast<int>(blockIdx.x);
-            kittens::coord idx = {row_block * NUM_CONSUMER_WARPS + warpid(), 0};
+            // Skip cos/sin load for inactive warps — the underlying global
+            // sin/cos table only has T rows, and warps beyond active_warps
+            // would index OOB. Compute active_warps directly from blockIdx
+            // (not state — consumer_state has no shared producer_state).
+            const int active_warps = min(
+                (int)NUM_CONSUMER_WARPS,
+                (int)(args.globals.x.rows() / 16 - row_block * NUM_CONSUMER_WARPS)
+            );
+            if (warpid() >= active_warps) {
+                return;
+            }
+            // BUG FIX (vs upstream rotary.cu): warp::load with a
+            // kittens::coord<> (default base) does NOT scale the row index by
+            // the tile's row count — unit_coord on the default base just
+            // returns the coord unchanged (see coord<>::unit_coord at
+            // include/types/global/util.cuh:152-154). So {warpid, 0} loaded
+            // sin/cos starting at element row=warpid (i.e. row 1 for warp 1),
+            // not at tile row warpid*16. Verified empirically: with T=128,
+            // warp 1 saw cos[0,0]=cos(1)=0.539 rather than cos(16)=-0.958.
+            // Multiply manually to get the intended tile-offset semantics.
+            const int row_in_elems =
+                (row_block * NUM_CONSUMER_WARPS + warpid()) *
+                static_cast<int>(layout::seq_tile::rows);
+            kittens::coord idx = {row_in_elems, 0};
             warp::load(args.state.sin, args.globals.sin, idx);
             warp::load(args.state.cos, args.globals.cos, idx);
         }
 
         __device__ static void compute(consumer_compute_args<layout> args) {
+            const int row_block = static_cast<int>(blockIdx.x);
+            const int active_warps = min(
+                (int)NUM_CONSUMER_WARPS,
+                (int)(args.globals.x.rows() / 16 - row_block * NUM_CONSUMER_WARPS)
+            );
+            // Inactive warps still must arrive at the input/output barriers so
+            // the producer's barrier counts (which assume NUM_CONSUMER_WARPS
+            // arrivals) resolve. They just skip the math + the smem store.
+            if (warpid() >= active_warps) {
+                if (laneid() == 0) { arrive(args.inputs_finished); }
+                __syncwarp();
+                if (laneid() == 0) { arrive(args.outputs_arrived); }
+                return;
+            }
             rt_fl<16, headdim> x;
             rt_fl<16, headdim / 2> x1, x2, x1_cos, x2_cos, x1_sin, x2_sin;
             warp::load(x, args.input.x[warpid()]);

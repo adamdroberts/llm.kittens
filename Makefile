@@ -54,6 +54,12 @@ ifeq ($(wildcard $(TK_ROOT)/include/kittens.cuh),)
   $(warning ThunderKittens not found at TK_ROOT=$(TK_ROOT) — set TK_ROOT to your ThunderKittens checkout)
 endif
 
+# llm.c reference checkout — used by parity tests in dev/cuda/probe_*_ref.cu.
+LLMC_REF_ROOT ?= $(abspath ../llm.c)
+ifeq ($(wildcard $(LLMC_REF_ROOT)/llmc/layernorm.cuh),)
+  $(warning llm.c not found at LLMC_REF_ROOT=$(LLMC_REF_ROOT) — parity reference probes will not build)
+endif
+
 # NVCC flags — modeled after ThunderKittens/kernels/common.mk
 NVCC_FLAGS = --threads=0 -t=0 --use_fast_math -std=c++20 -O$(FORCE_NVCC_O)
 NVCC_FLAGS += --expt-extended-lambda --expt-relaxed-constexpr
@@ -167,7 +173,7 @@ endif
 
 $(info ---------------------------------------------)
 
-.PHONY: all cuda_runtime_check test_dataloader test_matmul test_attention test_layernorm test_rope test_rmsnorm test_swiglu test_attention_gqa train_gpt2cu train_llama3cu gpt2_validate test_gpt2cu profile_gpt2cu clean
+.PHONY: all cuda_runtime_check test_dataloader test_matmul test_attention test_layernorm test_rope test_rmsnorm test_swiglu test_attention_gqa test_gelu test_fused_classifier test_encoder test_adamw test_global_norm test-kernels probe_layernorm_ref probe_layernorm_tk probe_gelu_ref probe_gelu_tk probe_encoder_ref probe_encoder_tk probe_global_norm_ref probe_global_norm_tk probe_swiglu probe_adamw_ref probe_adamw_tk probe_fused_classifier_ref probe_fused_classifier_tk probe_attention_ref probe_attention_tk probe_matmul_ref probe_matmul_tk probe_rmsnorm probe_rope probe_attention_gqa parity-kernels train_gpt2cu train_llama3cu gpt2_validate test_gpt2cu profile_gpt2cu clean
 
 ifeq ($(NVCC),)
   $(error nvcc not found — install CUDA Toolkit 12.4+)
@@ -207,6 +213,116 @@ test_rmsnorm: dev/cuda/test_rmsnorm.cu llmc/rmsnorm.cuh llmc/tk/rmsnorm_tk.cuh l
 test_swiglu: dev/cuda/test_swiglu.cu llmc/swiglu.cuh llmc/cuda_utils.cuh
 	$(NVCC) $(NVCC_FLAGS) -I. dev/cuda/test_swiglu.cu $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) -o $@
 
+test_gelu: dev/cuda/test_gelu.cu llmc/gelu.cuh llmc/cuda_utils.cuh llmc/cuda_common.h
+	$(NVCC) $(NVCC_FLAGS) -I. dev/cuda/test_gelu.cu $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) -o $@
+
+test_fused_classifier: dev/cuda/test_fused_classifier.cu llmc/fused_classifier.cuh llmc/cuda_utils.cuh llmc/cuda_common.h
+	$(NVCC) $(NVCC_FLAGS) -I. dev/cuda/test_fused_classifier.cu $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) -o $@
+
+test_encoder: dev/cuda/test_encoder.cu llmc/encoder.cuh llmc/cuda_utils.cuh llmc/cuda_common.h
+	$(NVCC) $(NVCC_FLAGS) -I. dev/cuda/test_encoder.cu $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) -o $@
+
+test_adamw: dev/cuda/test_adamw.cu llmc/adamw.cuh llmc/cuda_utils.cuh llmc/cuda_common.h
+	$(NVCC) $(NVCC_FLAGS) -I. dev/cuda/test_adamw.cu $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) -o $@
+
+test_global_norm: dev/cuda/test_global_norm.cu llmc/global_norm.cuh llmc/cuda_utils.cuh llmc/cuda_common.h
+	$(NVCC) $(NVCC_FLAGS) -I. dev/cuda/test_global_norm.cu $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) -o $@
+
+# Aggregate target — builds every per-kernel smoke binary. Use:
+#   make -j test-kernels [DEVICE_ARCH=SM120]
+# then drive them through the pytest harness under tests/.
+test-kernels: test_matmul test_attention test_attention_gqa test_layernorm \
+              test_rmsnorm test_rope test_swiglu test_gelu \
+              test_fused_classifier test_encoder test_adamw test_global_norm
+
+# ----------------------------------------------------------------------------
+# Per-kernel parity probes — compare TK kernel against an authoritative
+# baseline (llm.c for the GPT-2 stack; PyTorch for the Llama-only kernels).
+# Each probe binary reads bf16/fp32 inputs from .npy files and writes outputs
+# to .npy files; the pytest layer under tests/parity/ orchestrates inputs and
+# diffs the outputs. See docs/testing.md "Per-kernel parity".
+
+PARITY_NPY_INCLUDE = -I dev/third_party
+
+# Reference probes: include order puts $(LLMC_REF_ROOT) FIRST so `#include
+# "llmc/<name>.cuh"` resolves to the llm.c version. -I. is still added so the
+# probe TU itself can find dev/third_party/npy/npy.h via PARITY_NPY_INCLUDE.
+probe_layernorm_ref: dev/cuda/probe_layernorm_ref.cu $(LLMC_REF_ROOT)/llmc/layernorm.cuh
+	$(NVCC) $(NVCC_FLAGS) -I$(LLMC_REF_ROOT) $(PARITY_NPY_INCLUDE) $< $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) -o $@
+
+probe_gelu_ref: dev/cuda/probe_gelu_ref.cu $(LLMC_REF_ROOT)/llmc/gelu.cuh
+	$(NVCC) $(NVCC_FLAGS) -I$(LLMC_REF_ROOT) $(PARITY_NPY_INCLUDE) $< $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) -o $@
+
+probe_encoder_ref: dev/cuda/probe_encoder_ref.cu $(LLMC_REF_ROOT)/llmc/encoder.cuh
+	$(NVCC) $(NVCC_FLAGS) -I$(LLMC_REF_ROOT) $(PARITY_NPY_INCLUDE) $< $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) -o $@
+
+probe_global_norm_ref: dev/cuda/probe_global_norm_ref.cu $(LLMC_REF_ROOT)/llmc/global_norm.cuh
+	$(NVCC) $(NVCC_FLAGS) -I$(LLMC_REF_ROOT) $(PARITY_NPY_INCLUDE) $< $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) -o $@
+
+# TK probes: -I. first so `#include "llmc/<name>.cuh"` resolves to the
+# llm.kittens version (the TK-wrapped kernel).
+probe_layernorm_tk: dev/cuda/probe_layernorm_tk.cu llmc/layernorm.cuh llmc/tk/layernorm_tk.cuh
+	$(NVCC) $(NVCC_FLAGS) -I. $(PARITY_NPY_INCLUDE) $< $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) -o $@
+
+probe_gelu_tk: dev/cuda/probe_gelu_tk.cu llmc/gelu.cuh
+	$(NVCC) $(NVCC_FLAGS) -I. $(PARITY_NPY_INCLUDE) $< $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) -o $@
+
+probe_encoder_tk: dev/cuda/probe_encoder_tk.cu llmc/encoder.cuh
+	$(NVCC) $(NVCC_FLAGS) -I. $(PARITY_NPY_INCLUDE) $< $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) -o $@
+
+probe_global_norm_tk: dev/cuda/probe_global_norm_tk.cu llmc/global_norm.cuh
+	$(NVCC) $(NVCC_FLAGS) -I. $(PARITY_NPY_INCLUDE) $< $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) -o $@
+
+probe_adamw_ref: dev/cuda/probe_adamw_ref.cu $(LLMC_REF_ROOT)/llmc/adamw.cuh
+	$(NVCC) $(NVCC_FLAGS) -I$(LLMC_REF_ROOT) $(PARITY_NPY_INCLUDE) $< $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) -o $@
+
+probe_fused_classifier_ref: dev/cuda/probe_fused_classifier_ref.cu $(LLMC_REF_ROOT)/llmc/fused_classifier.cuh
+	$(NVCC) $(NVCC_FLAGS) -I$(LLMC_REF_ROOT) $(PARITY_NPY_INCLUDE) $< $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) -o $@
+
+probe_attention_ref: dev/cuda/probe_attention_ref.cu $(LLMC_REF_ROOT)/llmc/attention.cuh $(LLMC_REF_ROOT)/llmc/matmul.cuh
+	$(NVCC) $(NVCC_FLAGS) -I$(LLMC_REF_ROOT) $(PARITY_NPY_INCLUDE) $< $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) -lcublas -lcublasLt -o $@
+
+# matmul ref needs cuBLASLt — llm.c's matmul_forward_cublaslt requires the
+# globals defined in llm.c/llmc/cublas_common.h.
+probe_matmul_ref: dev/cuda/probe_matmul_ref.cu $(LLMC_REF_ROOT)/llmc/matmul.cuh
+	$(NVCC) $(NVCC_FLAGS) -I$(LLMC_REF_ROOT) $(PARITY_NPY_INCLUDE) $< $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) -lcublas -lcublasLt -o $@
+
+probe_adamw_tk: dev/cuda/probe_adamw_tk.cu llmc/adamw.cuh
+	$(NVCC) $(NVCC_FLAGS) -I. $(PARITY_NPY_INCLUDE) $< $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) -o $@
+
+probe_fused_classifier_tk: dev/cuda/probe_fused_classifier_tk.cu llmc/fused_classifier.cuh
+	$(NVCC) $(NVCC_FLAGS) -I. $(PARITY_NPY_INCLUDE) $< $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) -o $@
+
+probe_attention_tk: dev/cuda/probe_attention_tk.cu llmc/attention.cuh llmc/tk/attention_h100.cuh
+	$(NVCC) $(NVCC_FLAGS) -I. $(PARITY_NPY_INCLUDE) $< $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) -o $@
+
+probe_matmul_tk: dev/cuda/probe_matmul_tk.cu llmc/matmul.cuh llmc/tk/gemm_h100.cuh
+	$(NVCC) $(NVCC_FLAGS) -I. $(PARITY_NPY_INCLUDE) $< $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) -o $@
+
+# Family B: TK-only probes for kernels with no llm.c counterpart. Reference is
+# computed in PyTorch on the Python side.
+probe_swiglu: dev/cuda/probe_swiglu.cu llmc/swiglu.cuh
+	$(NVCC) $(NVCC_FLAGS) -I. $(PARITY_NPY_INCLUDE) $< $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) -o $@
+
+probe_rmsnorm: dev/cuda/probe_rmsnorm.cu llmc/rmsnorm.cuh llmc/tk/rmsnorm_tk.cuh
+	$(NVCC) $(NVCC_FLAGS) -I. $(PARITY_NPY_INCLUDE) $< $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) -o $@
+
+probe_rope: dev/cuda/probe_rope.cu llmc/rope.cuh
+	$(NVCC) $(NVCC_FLAGS) -I. $(PARITY_NPY_INCLUDE) $< $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) -o $@
+
+probe_attention_gqa: dev/cuda/probe_attention_gqa.cu llmc/attention_gqa.cuh
+	$(NVCC) $(NVCC_FLAGS) -I. $(PARITY_NPY_INCLUDE) $< $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) -o $@
+
+parity-kernels: probe_layernorm_ref probe_layernorm_tk \
+                probe_gelu_ref probe_gelu_tk \
+                probe_encoder_ref probe_encoder_tk \
+                probe_global_norm_ref probe_global_norm_tk \
+                probe_adamw_ref probe_adamw_tk \
+                probe_fused_classifier_ref probe_fused_classifier_tk \
+                probe_attention_ref probe_attention_tk \
+                probe_matmul_ref probe_matmul_tk \
+                probe_swiglu probe_rmsnorm probe_rope probe_attention_gqa
+
 train_gpt2cu: train_gpt2.cu llmc/matmul.cuh llmc/attention.cuh llmc/layernorm.cuh llmc/tk/layernorm_tk.cuh llmc/gelu.cuh
 	$(NVCC) $(NVCC_FLAGS) -I. $< $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) $(CUDA_OUTPUT_FILE)
 
@@ -223,5 +339,5 @@ profile_gpt2cu: profile_gpt2.cu train_gpt2.cu llmc/matmul.cuh llmc/attention.cuh
 	$(NVCC) $(NVCC_FLAGS) -I. -lineinfo $< $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) $(CUDA_OUTPUT_FILE)
 
 clean:
-	$(REMOVE_FILES) cuda_runtime_check test_dataloader test_matmul test_attention test_layernorm test_rope test_rmsnorm test_swiglu test_attention_gqa train_gpt2cu train_llama3cu gpt2_validate test_gpt2cu profile_gpt2cu
+	$(REMOVE_FILES) cuda_runtime_check test_dataloader test_matmul test_attention test_layernorm test_rope test_rmsnorm test_swiglu test_attention_gqa test_gelu test_fused_classifier test_encoder test_adamw test_global_norm probe_layernorm_ref probe_layernorm_tk probe_gelu_ref probe_gelu_tk probe_encoder_ref probe_encoder_tk probe_global_norm_ref probe_global_norm_tk probe_adamw_ref probe_adamw_tk probe_fused_classifier_ref probe_fused_classifier_tk probe_attention_ref probe_attention_tk probe_matmul_ref probe_matmul_tk probe_swiglu probe_rmsnorm probe_rope probe_attention_gqa train_gpt2cu train_llama3cu gpt2_validate test_gpt2cu profile_gpt2cu
 	rm -f $(BUILD_DIR)/*.o

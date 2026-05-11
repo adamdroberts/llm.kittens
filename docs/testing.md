@@ -363,8 +363,172 @@ Live today:
 - [`dev/cuda/test_swiglu.cu`](../dev/cuda/test_swiglu.cu) →
   `make test_swiglu`. It covers SwiGLU forward, `dgate`, and `dup` against an
   independent CPU reference.
+- [`dev/cuda/test_gelu.cu`](../dev/cuda/test_gelu.cu) → `make test_gelu`.
+  Forward and in-place backward tanh-approximation GELU.
+- [`dev/cuda/test_fused_classifier.cu`](../dev/cuda/test_fused_classifier.cu) →
+  `make test_fused_classifier`. Loss + dlogits via stable log-softmax over the
+  unaligned-vocab path (`V=1003`, `P=1024`).
+- [`dev/cuda/test_encoder.cu`](../dev/cuda/test_encoder.cu) → `make test_encoder`.
+  Token + position embedding forward (gather-add). Backward is exercised in the
+  whole-model parity gate because of stochastic-rounding nondeterminism.
+- [`dev/cuda/test_adamw.cu`](../dev/cuda/test_adamw.cu) → `make test_adamw`.
+  One AdamW step; FP32 `master_params`/`m`/`v` checked bit-close (1e-5) and the
+  bf16 `params` write within one stochastic-rounding ULP.
+- [`dev/cuda/test_global_norm.cu`](../dev/cuda/test_global_norm.cu) →
+  `make test_global_norm`. Sum-of-squares across two parameter shards followed
+  by the aggregate kernel, compared to a CPU reduction.
 
-`make all` also compile-checks `train_gpt2cu` and `test_gpt2cu`.
+`make all` also compile-checks `train_gpt2cu` and `test_gpt2cu`. The aggregate
+target `make -j test-kernels` builds all twelve smoke binaries in one go.
+
+### Per-kernel pytest harness (USE_RUNPOD_FLASH)
+
+The smokes above are also driven by a `pytest` layer under `tests/kernels/`.
+Each test wraps one binary, asserts `exit==0` and `<name> smoke OK` in stdout,
+and writes `<name>.log` to the repo root for the bash harness's
+`SMOKE_VALIDATE_ONLY` replay path.
+
+Run on the attached GPU (uses whatever `DEVICE_ARCH` you've exported, default
+`SM90`):
+
+```bash
+pytest tests/kernels/ -v
+DEVICE_ARCH=SM120 pytest tests/kernels/ -v   # local Blackwell box
+```
+
+Run on a remote H100 via runpod-flash (single warm worker, builds once):
+
+```bash
+USE_RUNPOD_FLASH=1 pytest tests/kernels/ -v
+```
+
+The flash backend lives in [`tests/runners/flash.py`](../tests/runners/flash.py)
+and uses one `Endpoint(gpu=GpuGroup.ADA_80_PRO, workers=1, idle_timeout=600)`.
+First call ships a tar.gz of the source tree (~few MB; data and `.bin` files
+are excluded), runs `make -j test-kernels` on the worker, then re-uses the
+warm container for subsequent test executions. The worker idle-scales down ~10
+minutes after the last test.
+
+A thin convenience wrapper [`scripts/validate_kernels.sh`](../scripts/validate_kernels.sh)
+runs `pytest tests/kernels --junitxml=.pytest_junit.xml` for CI. Pass
+`USE_RUNPOD_FLASH=1` through the environment to dispatch remotely. Pass
+`--parity` to switch to the parity tier described below.
+
+### Per-kernel parity (tests/parity/)
+
+The parity tier complements the CPU-reference smoke with a stronger check:
+each TK kernel is run side-by-side against an **independent authoritative
+implementation** of the same op, on the same H100, with identical bf16
+inputs. This catches regressions where the TK kernel and a hand-written CPU
+reference happen to drift in the same direction (e.g. a shared off-by-one
+indexing convention).
+
+Two test families:
+
+- **Family A (llm.c parity)** — for kernels ported directly from llm.c
+  (`/mnt/disk2/home/adam/dev/open-source/llm.c`). Two probe binaries are
+  built per kernel (`probe_<name>_ref` and `probe_<name>_tk`) — each
+  consumes the same `.npy` inputs and writes its outputs to its own subdir.
+  The pytest layer diffs them. Currently implemented: `layernorm`, `gelu`,
+  `encoder`, `global_norm`. (Pending: `matmul` — needs cuBLASLt init in
+  the ref probe; `attention`, `attention_backward`, `adamw`, and
+  `fused_classifier` — straightforward extensions of the same probe pattern.)
+- **Family B (PyTorch parity)** — for kernels with no llm.c counterpart
+  (Llama-3-specific). One TK probe binary; the reference is computed in
+  PyTorch on the Python side. Currently implemented: `swiglu`. (Pending:
+  `rmsnorm`, `rope`, `attention_gqa`.)
+
+Inputs cross the Python/CUDA boundary as `.npy` files. Because NumPy has no
+native bf16, we carry bf16 as `uint16` raw bits — the probe binaries
+reinterpret as `__nv_bfloat16` on the device. The npy I/O is handled by a
+small vendored header at [`dev/third_party/npy/npy.h`](../dev/third_party/npy/npy.h).
+
+Three execution targets, each with the same test code:
+
+| Target | How to invoke | What it actually exercises |
+|---|---|---|
+| Local **SM120** (RTX 5090) | `scripts/validate_kernels.sh --parity --sm120` | TK fast paths fall back to plain CUDA kernels identical to llm.c's, so Family A tests pass bit-exact. Validates the harness plumbing (probe build, .npy roundtrip, max_abs_diff), not the Hopper fast paths. |
+| Local **SM90** (H100 dev box, if you have one) | `scripts/validate_kernels.sh --parity` | Real parity check — TK kernels exercise WGMMA/TMA. |
+| Remote **H100** via runpod-flash | `USE_RUNPOD_FLASH=1 scripts/validate_kernels.sh --parity` | Same as local SM90 but via the flash worker. **The authoritative gate.** |
+
+Equivalent raw-pytest invocations:
+
+```bash
+DEVICE_ARCH=SM120 pytest tests/parity/ -v
+USE_RUNPOD_FLASH=1 pytest tests/parity/ -v -s   # -s shows live flash progress
+```
+
+#### Flash setup and smoke test
+
+Configure runpod-flash auth one of two ways:
+
+```bash
+export RUNPOD_API_KEY=<your_key>     # env var
+flash login                          # or browser OAuth — writes ~/.config/runpod/
+```
+
+The harness does not validate auth itself; if neither is set, the SDK will
+surface its own error. Run the smoke test below first to confirm everything's
+wired up before paying for the larger parity build.
+
+To verify flash itself works end-to-end before tying that signal to our
+build pipeline, run the standalone CUDA `1 + 1` smoke test:
+
+```bash
+python dev/flash_smoke.py
+```
+
+It takes ~1-2 min on the first call (cold start dominates), prints a
+heartbeat every 10 s while waiting, dispatches a tiny `add<<<1,1>>>` kernel
+to the same GPU group the parity tests use (`ADA_80_PRO`), and prints
+`{'sum': 2, 'gpu': 'NVIDIA H100 ...', 'step': 'ok'}` on success. If this
+fails, the parity tests can't possibly work — fix the underlying flash
+issue first.
+
+#### Live progress while waiting
+
+The `_remote()` await is opaque to us (the SDK could be cold-starting,
+apt-installing, building 30+ kernels, or stuck on a network call). The
+harness emits a heartbeat to stderr every 15 s during bootstrap and every
+10 s during per-test dispatch, e.g.:
+
+```
+[flash 14:23:01] dispatching bootstrap to H100 worker. Stages on first call:
+[flash 14:23:01]   1. cold-start H100 (~30-90s)
+[flash 14:23:01]   2. apt install build-essential (~10-30s, cached on warm worker)
+[flash 14:23:01]   3. extract tarball (~1s)
+[flash 14:23:01]   4. make -j test-kernels parity-kernels (~3-8 min, 30+ nvcc binaries)
+[flash 14:23:16]   ... bootstrap still waiting (15s elapsed)
+[flash 14:23:31]   ... bootstrap still waiting (30s elapsed)
+[flash 14:25:42] bootstrap returned in 161.3s, build_rc=0
+[flash 14:25:42] dispatching probe_layernorm_ref /tmp/.../iodir_0...
+[flash 14:25:51]   probe_layernorm_ref returned in 8.9s (exit=0)
+```
+
+Run with `pytest -s` (or `scripts/validate_kernels.sh --parity`) to see
+those lines live.
+
+The **authoritative gate** is the H100 dispatch:
+
+```bash
+USE_RUNPOD_FLASH=1 pytest tests/parity/ -v
+```
+
+The flash backend ([`tests/runners/flash.py`](../tests/runners/flash.py))
+bundles three sibling source trees — `llm.kittens`, `../ThunderKittens`,
+`../llm.c` — into one ~2 MB tar.gz, ships it once on session start, runs
+`make -j test-kernels parity-kernels` on the H100 worker, then re-uses the
+warm container for each probe call. Per-test `.npy` inputs are tarred into
+the call payload; outputs come back the same way. The Endpoint declares
+`dependencies=["torch", "numpy"]` and
+`system_dependencies=["build-essential", "libcublas-dev"]`.
+
+To run only the parity tier from CI:
+
+```bash
+scripts/validate_kernels.sh --parity                    # local
+USE_RUNPOD_FLASH=1 scripts/validate_kernels.sh --parity # remote H100
+```
 
 `test_matmul` exercises three default forward shapes, the opt-in forward
 bias+GELU epilogue, plus the two dWeight cases:
