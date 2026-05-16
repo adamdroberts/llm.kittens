@@ -13,12 +13,24 @@ ported verbatim from llm.c/llmc/attention.cuh (lines 14-83).
 #include "cuda_utils.cuh"
 #if defined(KITTENS_SM90)
 #define LLMK_USE_TK_MHA 1
+#define LLMK_USE_TK_MHA_BWD 1
 #include "tk/attention_h100.cuh"
+#elif defined(KITTENS_SM120)
+// sm_120 (consumer Blackwell, RTX 50-series): warp-scope `mma.sync` only,
+// no WGMMA, no tcgen05. Both forward and backward go through TK warp-scope
+// FlashAttention-2 (tk/attention_sm120.cuh). v1 backward covers HS=64; HS=128
+// backward falls back to the scalar path below via the bwd_supports_head_dim
+// gate in attention_backward().
+#define LLMK_USE_TK_MHA 1
+#define LLMK_USE_TK_MHA_BWD 1
+#include "tk/attention_sm120.cuh"
 #else
 #define LLMK_USE_TK_MHA 0
+#define LLMK_USE_TK_MHA_BWD 0
 namespace llmk::attention {
 inline int fwd_sequence_granularity() { return 1; }
 inline int bwd_sequence_granularity() { return 1 << 30; }
+inline bool bwd_supports_head_dim(int HS) { (void)HS; return false; }
 } // namespace llmk::attention
 #endif
 
@@ -410,9 +422,9 @@ inline void attention_backward(floatX* dinp, floatX* dqkvr, floatX* datt, floatX
     int total = B * T * C;
     int num_blocks = CEIL_DIV(total, block_size);
 
-#if LLMK_USE_TK_MHA
+#if LLMK_USE_TK_MHA_BWD
     if (datt != nullptr && att != nullptr &&
-        (HS == 64 || HS == 128) &&
+        llmk::attention::bwd_supports_head_dim(HS) &&
         T % llmk::attention::bwd_sequence_granularity() == 0) {
         const size_t qkv_elems = (size_t)B * NH * T * HS;
         floatX* o_perm = datt;

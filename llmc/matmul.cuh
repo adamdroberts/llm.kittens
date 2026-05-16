@@ -34,6 +34,9 @@ M=4096 N=V_padded=50304 K=768 the small-N fallback is selected automatically.
 #if defined(KITTENS_SM90)
 #define LLMK_USE_TK_GEMM 1
 #include "tk/gemm_h100.cuh"
+#elif defined(KITTENS_SM120)
+#define LLMK_USE_TK_GEMM 1
+#include "tk/gemm_sm120.cuh"
 #else
 #define LLMK_USE_TK_GEMM 0
 #endif
