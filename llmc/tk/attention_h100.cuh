@@ -796,6 +796,8 @@ void bwd_attend_ker(const __grid_constant__ bwd_globals<D> g) {
 inline constexpr int bwd_sequence_granularity() {
     return 4 * ::kittens::TILE_ROW_DIM<bf16> * 4;
 }
+// H100 backward supports HS=64 and HS=128.
+inline bool bwd_supports_head_dim(int HS) { return HS == 64 || HS == 128; }
 
 template<int D>
 inline void launch_backward_causal_gqa(bf16* q, bf16* k, bf16* v, bf16* o,
