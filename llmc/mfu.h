@@ -44,6 +44,12 @@ static const PerfData AMPERE_DATACENTER = {156.f, 312.f, 312.f, 312.f, -1.f, -1.
 static const PerfData AMPERE_CONSUMER = {40.f, 80.f, 80.f, 160.f, -1.f, -1.f, 1860.f, 336.f};
 static const PerfData HOPPER = {378.f, 756.f, 756.f, 756.f, 1513.f, 1513.f, 1620.f, 456.f};
 static const PerfData ADA = {82.6f, 165.2f, 165.2f, 330.3f, 330.3f, 660.6f, 2520.f, 512.f};
+// RTX 5090 dense spec-sheet TFLOPS (5th-gen tensor, GB202): TF32 209.5,
+// BF16/FP16 fp32-acc 419, FP16 fp16-acc 838, FP8 fp32-acc 838, FP8 fp16-acc 1676.
+// CLOCK / CORES below are the 5090's own boost-clock / TC count, so the
+// gpu_db entry uses identity scaling. Other Blackwell consumer SKUs scale
+// from these via (new_cores / 680) * (new_mhz / 2407).
+static const PerfData BLACKWELL_CONSUMER = {209.5f, 419.f, 419.f, 838.f, 838.f, 1676.f, 2407.f, 680.f};
 
 typedef struct {
     const char* name;
@@ -92,6 +98,7 @@ static GPUEntry gpu_db[] = {
     {"NVIDIA GeForce RTX 4060", &ADA, 96, 2460},
     {"NVIDIA H100 PCIe", &HOPPER, 456, 1620},
     {"NVIDIA H100 80GB HBM3", &HOPPER, 528, 1830}, // HBM3 = SXM5
+    {"NVIDIA GeForce RTX 5090", &BLACKWELL_CONSUMER, 680, 2407},
 };
 
 float get_flops_promised(const char* device, int precision_mode) {
