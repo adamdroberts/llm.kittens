@@ -245,10 +245,9 @@ __global__ void bwd_prep_kernel(const __grid_constant__ bwd_globals<D> g)
 
 // ---- atomicAdd helper: warp-scope fp32 rt -> fp32 gl ----------------------
 //
-// Mirrors the addressing of kittens::warp::store for row-layout fp32 rt → fp32
-// gl, but issues per-float atomicAdds instead of plain stores. Each thread does
-// 8 atomicAdds per base tile (4 fragments × 2 floats). Output is the same
-// flattened (b, h, row, col) coordinate as warp::store.
+// Used only by the legacy K-owned dQ path which is no longer wired into the
+// backward (we now compute dQ in a separate Q-owned kernel with no atomics).
+// Kept here in case a future code path needs it.
 template <typename RT, typename GL, typename COORD>
 __device__ static inline void warp_atomic_add(const GL& dst, const RT& src, const COORD& idx) {
     static_assert(::kittens::ducks::rt::row_layout<RT>);
@@ -282,7 +281,19 @@ __device__ static inline void warp_atomic_add(const GL& dst, const RT& src, cons
     }
 }
 
-// ---- Main backward kernel: dQ / dK / dV -----------------------------------
+// ---- Main backward kernel: dK / dV (K-owned, no atomics) ------------------
+//
+// One warp per (batch, head, k_block_of_16). The warp loops over Q-blocks
+// `qb ∈ [k_block, T/16)` (causal: keys at position kb only see queries at
+// qb >= kb) and accumulates dK_kb, dV_kb in registers. At the end, each warp
+// writes its own dK, dV strip to global — no atomicAdds because every K-block
+// is owned by exactly one warp.
+//
+// dQ is *not* computed here; the Q-owned bwd_dq_kernel below handles that.
+// Splitting the backward into two single-owner passes eliminates all global
+// atomics on the gradients at the cost of recomputing S / P / dP / dS in the
+// dQ kernel — a good trade because atomic contention dominates step time
+// before any of those recomputed matmuls.
 
 template <int D>
 __global__ void bwd_main_kernel(const __grid_constant__ bwd_globals<D> g)
@@ -301,7 +312,6 @@ __global__ void bwd_main_kernel(const __grid_constant__ bwd_globals<D> g)
     using o_fl_rt = rt_fl<K_BLOCK, D, ducks::rt_layout::row>;  // dK / dV accumulators
     using s_rt    = rt_fl<Q_BLOCK, K_BLOCK, ducks::rt_layout::row>;
     using p_rt    = rt_bf<Q_BLOCK, K_BLOCK, ducks::rt_layout::row>;
-    using dq_rt   = rt_fl<Q_BLOCK, D, ducks::rt_layout::row>;
     using row_cv  = typename s_rt::col_vec;
 
     const float scale = 1.0f / sqrtf((float)D);
@@ -312,7 +322,6 @@ __global__ void bwd_main_kernel(const __grid_constant__ bwd_globals<D> g)
     ::kittens::warp::load(K, g.k, {batch_idx, q_head_idx, k_block_idx, 0});
     ::kittens::warp::load(V, g.v, {batch_idx, q_head_idx, k_block_idx, 0});
 
-    // dK, dV accumulators for this warp's K-block.
     o_fl_rt dK, dV;
     ::kittens::warp::zero(dK);
     ::kittens::warp::zero(dV);
@@ -327,7 +336,6 @@ __global__ void bwd_main_kernel(const __grid_constant__ bwd_globals<D> g)
         ::kittens::warp::load(lse_vec, g.l, {batch_idx, q_head_idx, 0, qb});
         ::kittens::warp::load(d_vec,   g.d, {batch_idx, q_head_idx, 0, qb});
 
-        // S = (Q · K^T) * scale ; causal mask on the diagonal block.
         s_rt S;
         ::kittens::warp::zero(S);
         ::kittens::warp::mma_ABt(S, Q, K, S);
@@ -358,40 +366,100 @@ __global__ void bwd_main_kernel(const __grid_constant__ bwd_globals<D> g)
         auto& dO_col = ::kittens::warp::swap_layout_inplace(dO);
         ::kittens::warp::mma_AtB(dV, P_col, dO_col, dV);
 
-        // dK += scale · dS^T · Q   (we fold scale into dS just before mma).
+        // dK += scale · dS^T · Q   (scale folded into dS just before the mma).
         ::kittens::warp::mul(dS, dS, scale);
         p_rt dS_bf;
         ::kittens::warp::copy(dS_bf, dS);
         auto& dS_col = ::kittens::warp::swap_layout_inplace(dS_bf);
-        // Q was used in mma_ABt(S, Q, K, S) above as a row-layout tile; we
-        // reload its col-layout view in place. mma_ABt left Q unchanged, but
-        // we used dO above and swapped it in place — so reload dO would be
-        // needed for further work. For mma_AtB(dK, dS_col, Q_col, dK), swap Q.
-        auto& Q_col = ::kittens::warp::swap_layout_inplace(Q);
+        auto& Q_col  = ::kittens::warp::swap_layout_inplace(Q);
         ::kittens::warp::mma_AtB(dK, dS_col, Q_col, dK);
-
-        // dQ_partial = dS_bf · K   (mma_AB needs B in col layout).
-        // dS_bf is in col layout from the swap above — bring it back to row.
-        auto& dS_row = ::kittens::warp::swap_layout_inplace(dS_col);
-        // K is in row layout still (we never swapped K because the K-block
-        // contents stay constant across qb iters; swapping in place would lose
-        // them for the next iteration). Make a temporary col view by copying.
-        rt_bf<K_BLOCK, D, ducks::rt_layout::col> K_col;
-        ::kittens::warp::swap_layout(K_col, K);
-
-        dq_rt dQ_partial;
-        ::kittens::warp::zero(dQ_partial);
-        ::kittens::warp::mma_AB(dQ_partial, dS_row, K_col, dQ_partial);
-
-        // Atomic-add dQ_partial into the global dQ buffer for this Q-block.
-        warp_atomic_add(g.qg, dQ_partial,
-            ::kittens::coord<typename bwd_globals<D>::qkv_fl_tile>{batch_idx, q_head_idx, qb, 0});
     }
 
-    // dK and dV are warp-private accumulators with no contention; plain store
-    // through the fp32-tile gl<>s set up on the host.
+    // dK, dV warp-private — single store, no atomics.
     ::kittens::warp::store(g.kg, dK, {batch_idx, q_head_idx, k_block_idx, 0});
     ::kittens::warp::store(g.vg, dV, {batch_idx, q_head_idx, k_block_idx, 0});
+}
+
+// ---- dQ kernel: Q-owned, no atomics ---------------------------------------
+//
+// One warp per (batch, head, q_block_of_16). Each warp owns dQ_qb in registers.
+// Streams K, V over the causal range kb ∈ [0, qb], recomputes S / P / dP / dS
+// from (Q, K_kb, V_kb, LSE_q, D_q), and accumulates dQ += scale · dS · K_kb.
+// Final dQ is written with a plain warp::store — zero contention.
+
+template <int D>
+__global__ void bwd_dq_kernel(const __grid_constant__ bwd_globals<D> g)
+{
+    static_assert(D == 64, "sm120 attention bwd_dq: v1 supports HS==64 only");
+
+    const int batch_idx  = blockIdx.z;
+    const int q_head_idx = blockIdx.y;
+    const int qb         = blockIdx.x;
+
+    using q_rt   = rt_bf<Q_BLOCK, D, ducks::rt_layout::row>;
+    using k_rt   = rt_bf<K_BLOCK, D, ducks::rt_layout::row>;
+    using v_rt   = rt_bf<K_BLOCK, D, ducks::rt_layout::row>;
+    using s_rt   = rt_fl<Q_BLOCK, K_BLOCK, ducks::rt_layout::row>;
+    using p_rt   = rt_bf<Q_BLOCK, K_BLOCK, ducks::rt_layout::row>;
+    using dq_rt  = rt_fl<Q_BLOCK, D, ducks::rt_layout::row>;
+    using row_cv = typename s_rt::col_vec;
+
+    const float scale = 1.0f / sqrtf((float)D);
+
+    // Q-owned constants for the whole K loop.
+    q_rt   Q, dO;
+    row_cv lse_vec, d_vec;
+    ::kittens::warp::load(Q,       g.q,  {batch_idx, q_head_idx, qb, 0});
+    ::kittens::warp::load(dO,      g.og, {batch_idx, q_head_idx, qb, 0});
+    ::kittens::warp::load(lse_vec, g.l,  {batch_idx, q_head_idx, 0,  qb});
+    ::kittens::warp::load(d_vec,   g.d,  {batch_idx, q_head_idx, 0,  qb});
+
+    dq_rt dQ;
+    ::kittens::warp::zero(dQ);
+
+    #pragma unroll 1
+    for (int kb = 0; kb <= qb; ++kb) {
+        k_rt K;
+        v_rt V;
+        ::kittens::warp::load(K, g.k, {batch_idx, q_head_idx, kb, 0});
+        ::kittens::warp::load(V, g.v, {batch_idx, q_head_idx, kb, 0});
+
+        // S = (Q · K^T) * scale ; causal mask on the diagonal block.
+        s_rt S;
+        ::kittens::warp::zero(S);
+        ::kittens::warp::mma_ABt(S, Q, K, S);
+        ::kittens::warp::mul(S, S, scale);
+        if (kb == qb) {
+            ::kittens::warp::make_causal(S, S, -INFINITY);
+        }
+
+        // P = exp(S - LSE_q)
+        s_rt P;
+        ::kittens::warp::sub_row(P, S, lse_vec);
+        ::kittens::warp::exp(P, P);
+
+        // dP = dO · V^T
+        s_rt dP;
+        ::kittens::warp::zero(dP);
+        ::kittens::warp::mma_ABt(dP, dO, V, dP);
+
+        // dS = P * (dP - D_q), then fold scale.
+        s_rt dS;
+        ::kittens::warp::sub_row(dS, dP, d_vec);
+        ::kittens::warp::mul(dS, dS, P);
+        ::kittens::warp::mul(dS, dS, scale);
+
+        // dQ += dS · K  (need K in col layout for mma_AB; swap via copy so K
+        // remains intact across iterations — but here K is re-loaded each iter,
+        // so we can swap in-place).
+        p_rt dS_bf;
+        ::kittens::warp::copy(dS_bf, dS);
+        auto& K_col = ::kittens::warp::swap_layout_inplace(K);
+        ::kittens::warp::mma_AB(dQ, dS_bf, K_col, dQ);
+    }
+
+    // dQ warp-private — single plain store, no atomicAdds anywhere.
+    ::kittens::warp::store(g.qg, dQ, {batch_idx, q_head_idx, qb, 0});
 }
 
 } // namespace sm120_detail
@@ -479,9 +547,13 @@ inline void launch_backward_causal(bf16* q, bf16* k, bf16* v, bf16* o,
     globals g{q_arg, k_arg, v_arg, o_arg, og_arg, l_arg, d_arg, qg_arg, kg_arg, vg_arg, T};
 
     dim3 grid(T / sm120_detail::Q_BLOCK, NH, B);
-    // Prep computes D for every (b, h, q_block); main computes dQ/dK/dV.
+    // 3 single-warp passes. Grid shape is identical for all three.
+    //   prep  → compute  D = rowsum(dO ⊙ O) per Q-row.
+    //   main  → K-owned: each warp produces dK_kb, dV_kb (no atomics).
+    //   dq    → Q-owned: each warp produces dQ_qb  (no atomics).
     sm120_detail::bwd_prep_kernel<D><<<grid, ::kittens::WARP_THREADS, 0, stream>>>(g);
     sm120_detail::bwd_main_kernel<D><<<grid, ::kittens::WARP_THREADS, 0, stream>>>(g);
+    sm120_detail::bwd_dq_kernel  <D><<<grid, ::kittens::WARP_THREADS, 0, stream>>>(g);
 }
 
 inline void launch_backward_causal(bf16* q, bf16* k, bf16* v, bf16* o,
