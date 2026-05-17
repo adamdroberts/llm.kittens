@@ -227,15 +227,62 @@ inline void matmul_forward(floatX* out, const floatX* inp, const floatX* weight,
     const int K = C;
 
 #if LLMK_USE_TK_GEMM
-    // Dispatch on shape constraints. Default kernel needs N % 256 == 0;
-    // small-N fallback only needs N % 128 == 0.
     assert(M % 128 == 0 && "matmul_forward: B*T must be a multiple of 128");
     assert(K % 64  == 0 && "matmul_forward: C must be a multiple of 64");
 
-    auto* A = llmk::to_bf16(const_cast<floatX*>(inp));
-    auto* B_= llmk::to_bf16(const_cast<floatX*>(weight));
-    auto* C_= llmk::to_bf16(out);
+    auto* A     = llmk::to_bf16(const_cast<floatX*>(inp));
+    auto* B_    = llmk::to_bf16(const_cast<floatX*>(weight));
+    auto* C_    = llmk::to_bf16(out);
+    auto* bias_ = bias != nullptr ? llmk::to_bf16(const_cast<floatX*>(bias)) : (decltype(B_))nullptr;
 
+#if defined(KITTENS_SM120)
+    // Shape-specialized SM120 dispatch:
+    //   N >= 8192 && N % 128 == 0 → matmul_huge_n_*  (128×128 tile, fewer N-CTAs)
+    //   M % 256 == 0 && N % 64 == 0 → matmul_wide_*  (256×64 tile, max M reuse)
+    //   else                          → matmul_default_* / small_n_*
+    //
+    // The bias-present path uses the fused *_nt_bias kernel (epilogue is the
+    // same matmul, with bias added inside the kernel) — no trailing
+    // add_bias_kernel launch needed.
+    //
+    // A/B knob: define LLMK_SM120_FORCE_DEFAULT_TILE to disable shape
+    // specialization and stick to traits_128x64 (still picks fused bias).
+#ifdef LLMK_SM120_FORCE_DEFAULT_TILE
+    const bool huge_n = false;
+    const bool wide   = false;
+#else
+    const bool huge_n = (N >= 8192) && (N % 128 == 0);
+    const bool wide   = !huge_n && (M % 256 == 0) && (N % 64 == 0);
+#endif
+
+    if (bias != nullptr) {
+        if (huge_n) {
+            llmk::gemm::launch<llmk::gemm::matmul_huge_n_nt_bias>(A, B_, C_, M, N, K, stream, nullptr, bias_);
+        } else if (wide) {
+            llmk::gemm::launch<llmk::gemm::matmul_wide_nt_bias>(A, B_, C_, M, N, K, stream, nullptr, bias_);
+        } else if (N % 256 == 0) {
+            llmk::gemm::launch<llmk::gemm::matmul_default_nt_bias>(A, B_, C_, M, N, K, stream, nullptr, bias_);
+        } else {
+            assert(N % 128 == 0 && "matmul_forward: OC must be a multiple of 128");
+            llmk::gemm::launch<llmk::gemm::matmul_small_n_nt_bias>(A, B_, C_, M, N, K, stream, nullptr, bias_);
+        }
+    } else {
+        if (huge_n) {
+            llmk::gemm::launch<llmk::gemm::matmul_huge_n_nt>(A, B_, C_, M, N, K, stream);
+        } else if (wide) {
+            llmk::gemm::launch<llmk::gemm::matmul_wide_nt>(A, B_, C_, M, N, K, stream);
+        } else if (N % 256 == 0) {
+            llmk::gemm::launch<llmk::gemm::matmul_default_nt>(A, B_, C_, M, N, K, stream);
+        } else {
+            assert(N % 128 == 0 && "matmul_forward: OC must be a multiple of 128");
+            llmk::gemm::launch<llmk::gemm::matmul_small_n_nt>(A, B_, C_, M, N, K, stream);
+        }
+    }
+    cudaCheck(cudaGetLastError());
+    // Bias was folded into the kernel epilogue; no separate add_bias pass.
+#else
+    // SM90 (H100): keep the original binary dispatch; the gemm_h100.cuh path
+    // does not expose wide/huge_n aliases.
     if (N % 256 == 0) {
         llmk::gemm::launch<llmk::gemm::matmul_default_nt>(A, B_, C_, M, N, K, stream);
     } else {
@@ -243,8 +290,8 @@ inline void matmul_forward(floatX* out, const floatX* inp, const floatX* weight,
         llmk::gemm::launch<llmk::gemm::matmul_small_n_nt>(A, B_, C_, M, N, K, stream);
     }
     cudaCheck(cudaGetLastError());
-
     add_bias(out, bias, M, OC, stream);
+#endif
 #else
     matmul_forward_cuda_launch(out, inp, weight, bias, M, K, N, stream);
 #endif
@@ -320,11 +367,30 @@ inline void matmul_dispatch_tk_ab(floatX* out, const floatX* a, const floatX* b,
     auto* A = llmk::to_bf16(const_cast<floatX*>(a));
     auto* B = llmk::to_bf16(const_cast<floatX*>(b));
     auto* C = llmk::to_bf16(out);
+#if defined(KITTENS_SM120)
+#ifdef LLMK_SM120_FORCE_DEFAULT_TILE
+    const bool huge_n = false;
+    const bool wide   = false;
+#else
+    const bool huge_n = (N >= 8192) && (N % 128 == 0);
+    const bool wide   = !huge_n && (M % 256 == 0) && (N % 64 == 0);
+#endif
+    if (huge_n) {
+        llmk::gemm::launch<llmk::gemm::matmul_huge_n>(A, B, C, M, N, K, stream);
+    } else if (wide) {
+        llmk::gemm::launch<llmk::gemm::matmul_wide>(A, B, C, M, N, K, stream);
+    } else if (N % 256 == 0) {
+        llmk::gemm::launch<llmk::gemm::matmul_default>(A, B, C, M, N, K, stream);
+    } else {
+        llmk::gemm::launch<llmk::gemm::matmul_small_n>(A, B, C, M, N, K, stream);
+    }
+#else
     if (N % 256 == 0) {
         llmk::gemm::launch<llmk::gemm::matmul_default>(A, B, C, M, N, K, stream);
     } else {
         llmk::gemm::launch<llmk::gemm::matmul_small_n>(A, B, C, M, N, K, stream);
     }
+#endif
     cudaCheck(cudaGetLastError());
 #else
     (void)out;
@@ -344,11 +410,30 @@ inline void matmul_dispatch_tk_atb(floatX* out, const floatX* a, const floatX* b
     auto* A = llmk::to_bf16(const_cast<floatX*>(a));
     auto* B = llmk::to_bf16(const_cast<floatX*>(b));
     auto* C = llmk::to_bf16(out);
+#if defined(KITTENS_SM120)
+#ifdef LLMK_SM120_FORCE_DEFAULT_TILE
+    const bool huge_n = false;
+    const bool wide   = false;
+#else
+    const bool huge_n = (N >= 8192) && (N % 128 == 0);
+    const bool wide   = !huge_n && (M % 256 == 0) && (N % 64 == 0);
+#endif
+    if (huge_n) {
+        llmk::gemm::launch<llmk::gemm::matmul_huge_n_tn>(A, B, C, M, N, K, stream);
+    } else if (wide) {
+        llmk::gemm::launch<llmk::gemm::matmul_wide_tn>(A, B, C, M, N, K, stream);
+    } else if (N % 256 == 0) {
+        llmk::gemm::launch<llmk::gemm::matmul_default_tn>(A, B, C, M, N, K, stream);
+    } else {
+        llmk::gemm::launch<llmk::gemm::matmul_small_n_tn>(A, B, C, M, N, K, stream);
+    }
+#else
     if (N % 256 == 0) {
         llmk::gemm::launch<llmk::gemm::matmul_default_tn>(A, B, C, M, N, K, stream);
     } else {
         llmk::gemm::launch<llmk::gemm::matmul_small_n_tn>(A, B, C, M, N, K, stream);
     }
+#endif
     cudaCheck(cudaGetLastError());
 #else
     (void)out;
