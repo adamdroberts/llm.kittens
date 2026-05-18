@@ -506,6 +506,15 @@ changelog is the diary; `goal.md` is the plan.
   required TinyStories 3-step validation averaged `3337.92 ms` with steps
   `3353.31`, `3333.54`, and `3342.30 ms`, slightly slower than the current
   pure-TK no-master rebaseline.
+- Re-tested the dWeight-only `LLMK_SM120_DWEIGHT_K_TILE=32` split under the
+  current no-master pure-TK path. The temporary trait hook kept dInput on the
+  valid `LLMK_SM120_GRAD_K_TILE=64` route and passed `test_matmul` (`8/8`) plus
+  `test_attention` (all three smoke shapes), but the focused benchmark still
+  left every dWeight row behind cuBLASLt (`1.56x`, `1.79x`, `1.40x`, `1.48x`,
+  and `1.11x` slower for qkv, attention projection, MLP-up, MLP projection,
+  and LM-head). The required TinyStories 3-step validation regressed badly to
+  `5272.44 ms` with steps `5036.14`, `5312.39`, and `5232.49 ms`, so the hook
+  was removed again.
 
 ## 2026-05-09 — Blackwell build support
 
