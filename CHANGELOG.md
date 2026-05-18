@@ -8,6 +8,14 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Tested the combined SM120 forward+dInput cuBLASLt fallback probe with
+  dWeight still on TK. The build passed `test_matmul` (`8/8`) and
+  `test_attention` (all three smoke shapes), then TinyStories 3-step
+  validation averaged `2708.81 ms` with steps `2703.57`, `2710.60`, and
+  `2712.26 ms` (`2711.43 ms` excluding first-step warmup). The single-role
+  effects stack, so forward plus dInput GEMMs account for most of the
+  training-level gap; dWeight and residual scheduling/non-GEMM overhead remain
+  the next blockers versus the all-cuBLASLt fallback.
 - Tested the SM120 forward-only cuBLASLt fallback probe with dInput and
   dWeight still on TK. The build passed `test_matmul` (`8/8`) and
   `test_attention` (all three smoke shapes), then TinyStories 3-step
