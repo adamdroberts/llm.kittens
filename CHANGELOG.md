@@ -1304,6 +1304,13 @@ changelog is the diary; `goal.md` is the plan.
   shapes), but TinyStories 3-step validation slowed to `2831.42 ms` with steps
   `2863.52`, `2820.11`, and `2842.72 ms`. The attention prep launch remains
   at `3` warps.
+- Rejected retesting pure SM120 TK `LLMK_SM120_DWEIGHT_SUPER_M=8` on the
+  current K-tile 16/dInput stack. The macro build passed `test_matmul` (`8/8`)
+  and `test_attention` (all three smoke shapes), but the focused benchmark
+  still trailed cuBLASLt on every dWeight row and worsened fcproj dWeight to
+  `1872.37 us`. TinyStories 3-step validation regressed sharply to
+  `3491.02 ms` with steps `3503.58`, `3421.97`, and `3560.07 ms`, so the
+  source default remains `LLMK_SM120_DWEIGHT_SUPER_M=2`.
 
 ## 2026-05-09 — Blackwell build support
 
