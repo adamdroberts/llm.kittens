@@ -8,6 +8,13 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Rejected retesting `LLMK_SM120_DWEIGHT_SUPER_M=6` on the current source. The
+  first `test_matmul` hit the known transient MLP-up forward row, the immediate
+  rerun passed `8/8`, and `test_attention` passed all three smoke shapes, but
+  TinyStories 3-step validation averaged `2842.01 ms` with steps `2836.51`,
+  `2840.52`, and `2848.99 ms` (`2844.75 ms` excluding first-step warmup),
+  slower than the best accepted `LLMK_SM120_SUPER_M=7` run. The dWeight swizzle
+  remains `LLMK_SM120_DWEIGHT_SUPER_M=2`.
 - Rejected disabling split-K dWeight/dInput overlap with
   `LLMK_SM120_OVERLAP_DINP_DWEIGHT=0`. The macro build passed `test_matmul`
   (`8/8`) and `test_attention` (all three smoke shapes), but TinyStories
