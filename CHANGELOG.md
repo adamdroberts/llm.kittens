@@ -1527,6 +1527,12 @@ changelog is the diary; `goal.md` is the plan.
   (`1162.90 us`), but all dWeight rows still trailed cuBLASLt and TinyStories
   3-step validation regressed to `3077.65 ms` with steps `3013.40`, `3070.49`,
   and `3084.81 ms`. The temporary route was removed.
+- Rejected narrowing that N64/K16 dWeight route to only the `M=768` rows. The
+  `LLMK_SM120_DWEIGHT_M768_N64_K16=1` build passed the matmul and attention
+  smokes and improved fcproj dWeight to `1499.45 us` in the focused benchmark,
+  but the dWeight rows still trailed cuBLASLt and TinyStories 3-step validation
+  regressed to `3007.03 ms` with steps `3020.74`, `3004.63`, and `3009.44 ms`.
+  The temporary route was removed.
 
 ## 2026-05-09 — Blackwell build support
 
