@@ -8,6 +8,11 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Rejected `LLMK_SM120_HUGE_N_K_TILE=32` after a huge-N LM-head retest. The
+  macro build passed `test_matmul` (`8/8`), but TinyStories 3-step validation
+  regressed from the current `2837.54 ms` source average to `2861.12 ms` with
+  steps `2855.39`, `2862.02`, and `2865.94 ms` (`2863.98 ms` excluding
+  first-step warmup). The default remains `LLMK_SM120_HUGE_N_K_TILE=16`.
 - Rejected `LLMK_SM120_HUGE_N_M256=0` at the matmul smoke gate. The macro
   build completed, but `test_matmul` failed reproducibly: the first run failed
   the GPT-2 LM-head row with max diff `7.6719` versus `0.50`, and the rerun
