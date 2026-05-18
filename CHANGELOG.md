@@ -33,6 +33,11 @@ changelog is the diary; `goal.md` is the plan.
   accumulated dWeight row again while also hitting the recurring unrelated
   GPT-2 MLP-up forward transient. No focused benchmark or TinyStories 3-step
   validation was run because the dWeight kernel was numerically unsafe.
+- Rejected macro-only `LLMK_SM120_DINP_SUPER_M=13` at the smoke gate. The
+  first `test_matmul` run failed the plain dInput row with max diff `7.2109`
+  versus the `0.50` tolerance, and an immediate rerun failed the same row with
+  max diff `6.2969`. No focused benchmark or TinyStories 3-step validation was
+  run because the dInput kernel was numerically unsafe.
 
 ## 2026-05-17 — SM120 RTX 5090 GEMM fallback and pure-TK tuning
 
