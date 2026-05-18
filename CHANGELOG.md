@@ -899,6 +899,11 @@ changelog is the diary; `goal.md` is the plan.
   passed `test_attention` (all three smoke shapes), but TinyStories 3-step
   validation regressed to `2835.20 ms` with steps `2828.63`, `2833.57`, and
   `2836.83 ms`. The source default remains a 16-row backward tile.
+- Rejected lowering the SM120 attention backward tile to
+  `LLMK_SM120_ATTN_BWD_BLOCK=8`. The candidate does not compile: the SM120
+  attention implementation explicitly supports only 16, 32, or 64 rows, and
+  ThunderKittens register/shared tile types also require dimensions divisible
+  by the tile granularity.
 
 ## 2026-05-09 — Blackwell build support
 
