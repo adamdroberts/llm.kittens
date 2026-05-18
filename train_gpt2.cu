@@ -1069,6 +1069,8 @@ void gpt2_backward_and_reduce(GPT2 *model, int* inputs, const int* targets, int 
     floatX* scratchX = (floatX*)acts.output;
     floatX* matmul_scratch = acts.matmul_scratch;
     const size_t matmul_scratch_elements = model->acts_specs[21].size;
+    MatmulAsyncJob lmhead_dweight_job;
+    bool lmhead_dweight_deferred = false;
 
     // we kick off the chain rule by filling in dlosses with 1.0f/(B*T)
     // this was done in the fused classifier kernel as last step of forward pass
@@ -1077,7 +1079,23 @@ void gpt2_backward_and_reduce(GPT2 *model, int* inputs, const int* targets, int 
     // next: backward the classifier matmul
     {
         LLMK_PROFILE_SCOPE(LLMK_PROFILE_BWD_LMHEAD);
-        matmul_backward(model->acts.scratch_bt4c, grads.wte, NULL, acts.output, acts.lnf, params.wte, NULL, B, T, C, Vp, main_stream, dweight_accumulate, matmul_scratch, matmul_scratch_elements);
+#if defined(KITTENS_SM120) && !defined(LLMK_SM120_USE_CUBLASLT_GEMM)
+#ifndef LLMK_SM120_DEFER_LMHEAD_DWEIGHT
+#define LLMK_SM120_DEFER_LMHEAD_DWEIGHT 1
+#endif
+#if LLMK_SM120_DEFER_LMHEAD_DWEIGHT
+        if (matmul_tk_shape_ok(Vp, C, B * T) && matmul_tk_shape_ok(B * T, C, Vp)) {
+            lmhead_dweight_deferred = matmul_dispatch_tk_atb_async_start(
+                &lmhead_dweight_job, grads.wte, acts.output, acts.lnf,
+                Vp, C, B * T, main_stream, dweight_accumulate);
+            matmul_dispatch_tk_ab(model->acts.scratch_bt4c, acts.output, params.wte,
+                                  B * T, C, Vp, main_stream);
+        }
+#endif
+#endif
+        if (!lmhead_dweight_deferred) {
+            matmul_backward(model->acts.scratch_bt4c, grads.wte, NULL, acts.output, acts.lnf, params.wte, NULL, B, T, C, Vp, main_stream, dweight_accumulate, matmul_scratch, matmul_scratch_elements);
+        }
     }
     // backward the final layernorm
     floatX* residual = acts.residual3 + (L-1) * B * T * C; // last residual is in residual3
@@ -1224,6 +1242,9 @@ void gpt2_backward_and_reduce(GPT2 *model, int* inputs, const int* targets, int 
     }
     {
         LLMK_PROFILE_SCOPE(LLMK_PROFILE_BWD_ENCODER);
+        if (lmhead_dweight_deferred) {
+            matmul_dispatch_tk_atb_async_finish(lmhead_dweight_job, main_stream);
+        }
         encoder_backward(grads.wte, grads.wpe, scratchX, model->workload_indices, model->bucket_info,
                          dresidual, model->inputs, inputs, B, T, C, random_u32(&model->rng_state), main_stream);
     }

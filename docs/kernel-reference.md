@@ -161,7 +161,10 @@ Current status:
    call launches dInput and bias-grad on the main stream, then reduce after
    those independent kernels are enqueued. One-part direct dWeight rows use the
    same overlap pattern through a single nonblocking dWeight stream. Both
-   routes keep the external wrapper contract unchanged.
+   routes keep the external wrapper contract unchanged. GPT-2's tied LM-head
+   dWeight path defers that direct dWeight wait until just before
+   `encoder_backward()` so it can overlap with transformer-layer backward while
+   still completing before token-embedding gradients accumulate into `grads.wte`.
 3. `dbias (OC) = column-sum of dout over B*T` — `matmul_backward_bias_kernel9` followed by `reduce_add_sum_kernel` when `dbias_buffer` is available. Both kernels are verbatim from llm.c. SM120 keeps the same kernels but uses a 512-thread launch block by default (`LLMK_SM120_BIAS_BLOCK_SIZE`) after RTX 5090 timing showed it faster than the H100-derived 768-thread choice.
 
 The slow CUDA dWeight kernel remains only as a fallback for unsupported TK shapes

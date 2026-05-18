@@ -8,6 +8,17 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Promoted deferring the SM120 pure-TK LM-head dWeight wait until just before
+  token-embedding backward. The GPT-2 backward path now starts the tied
+  LM-head dWeight GEMM on a nonblocking side stream, runs the LM-head dInput
+  and transformer-layer backward work on the main stream, then waits before
+  `encoder_backward()` writes into `grads.wte`. `test_matmul` passed `8/8`,
+  `test_attention` passed all three smoke shapes, and TinyStories 3-step
+  validation improved the current source from `2880.34 ms` to `2877.19 ms`
+  average with steps `2873.57`, `2873.77`, and `2884.22 ms` (`2879.00 ms`
+  excluding the first-step warmup in the trainer's total-average line). Pure
+  TK still trails the supplied llm.c baseline and SM120 cuBLASLt fallback, so
+  the goal remains open.
 - Re-profiled the current pure SM120 TK overlap stack with
   `LLMK_SM120_PROFILE_TRAIN_STEP`. The profiled TinyStories 3-step run averaged
   `2917.04 ms` with expected profiler overhead. The dominant buckets remain
