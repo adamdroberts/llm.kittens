@@ -435,6 +435,11 @@ changelog is the diary; `goal.md` is the plan.
   `test_matmul` aborted before training because the shared gradient tile also
   applies to dInput shapes whose reduction dimension is not divisible by `48`.
   No 3-step TinyStories validation was run for this invalid build.
+- Rejected a dWeight-scoped `LLMK_SM120_DWEIGHT_K_TILE=48` hook. The temporary
+  hook kept dInput on the valid `64`-wide gradient tile, but `test_matmul`
+  still aborted because the dWeight reduction dimension is not divisible by
+  `48` for the covered shapes. The hook was removed and no 3-step TinyStories
+  validation was run.
 
 ## 2026-05-09 — Blackwell build support
 
