@@ -860,6 +860,11 @@ changelog is the diary; `goal.md` is the plan.
   reduction path. The build passed `test_matmul` (`8/8`) and `test_attention`
   (all three smoke shapes), but TinyStories 3-step validation regressed to
   `2827.01 ms` with steps `2819.71`, `2825.94`, and `2828.09 ms`.
+- Rejected a scoped fixed-16 split-K partial reducer for the current qkv
+  dWeight default. The source-default build passed `test_matmul` (`8/8`) and
+  `test_attention` (all three smoke shapes), but the focused benchmark did not
+  improve qkv dWeight and TinyStories 3-step validation regressed to
+  `2824.83 ms` with steps `2820.62`, `2823.10`, and `2826.57 ms`.
 
 ## 2026-05-09 — Blackwell build support
 
