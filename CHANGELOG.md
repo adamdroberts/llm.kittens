@@ -212,6 +212,13 @@ changelog is the diary; `goal.md` is the plan.
   focused benchmark did not improve the `fc fwd+GeLU` row and TinyStories
   3-step validation regressed to `2929.27 ms` with steps `2922.14`, `2929.21`,
   and `2929.32 ms`, so the hook was removed.
+- Rejected retesting `LLMK_SM120_SUPER_M=8` on the current direct-accumulate
+  stack. The macro build passed `test_matmul` (`8/8`) and `test_attention`
+  (all three shapes), and the focused benchmark improved qkv forward but
+  worsened several dWeight rows. TinyStories 3-step validation averaged
+  `2899.85 ms` with steps `2895.86`, `2895.82`, and `2903.89 ms`, slightly
+  slower than the current source default, so the shared forward swizzle remains
+  `9`.
 
 ## 2026-05-17 — SM120 RTX 5090 GEMM fallback and pure-TK tuning
 
