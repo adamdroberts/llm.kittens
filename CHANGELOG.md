@@ -358,6 +358,11 @@ changelog is the diary; `goal.md` is the plan.
   rows stayed behind. The required TinyStories 3-step validation again made no
   step progress after allocation and was terminated with the trainer at about
   `99.6%` CPU, so the hook was removed.
+- Rejected a narrower dWeight-only N-swizzle retry. The hook limited the
+  alternate N-grouped grid order to `A^T*B` launches and used the normal grid
+  for forward/dInput kernels, but the enabled build still failed `test_matmul`
+  on the GPT-2 MLP-up forward row with max diff `6.1250`, so it was removed
+  before benchmark or training.
 
 ## 2026-05-09 — Blackwell build support
 
