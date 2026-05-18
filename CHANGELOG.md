@@ -1558,6 +1558,13 @@ changelog is the diary; `goal.md` is the plan.
   `bench_sm120_matmul` again hit an illegal memory access during qkv dWeight
   timing before any useful dWeight measurement. No TinyStories 3-step
   validation was run, and the temporary 192x128 hook was removed.
+- Rejected an isolated dWeight-only N-swizzle grid traversal with
+  `LLMK_SM120_DWEIGHT_SUPER_N=6`. The corrected TN-only hook passed
+  `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes), but
+  the focused benchmark worsened material dWeight rows (qkv `1318.50 us`,
+  attention projection `517.49 us`, MLP-up `1703.62 us`) and TinyStories
+  3-step validation regressed to `3391.70 ms` with steps `3499.31`,
+  `3391.40`, and `3392.00 ms`, so the hook was removed.
 
 ## 2026-05-09 — Blackwell build support
 
