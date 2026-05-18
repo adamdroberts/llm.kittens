@@ -602,6 +602,12 @@ changelog is the diary; `goal.md` is the plan.
   `25602.48 us` versus cuBLASLt `21762.29 us`, and the required TinyStories
   3-step validation averaged `3569.09 ms` with steps `3584.11`, `3567.63`, and
   `3570.55 ms`, so the default huge-N K tile remains `64`.
+- Rejected a temporary `LLMK_SM120_DWEIGHT_REDUCE_BLOCK_SIZE=512` hook for the
+  split-K BF16 partial reducer. The candidate passed `test_matmul` (`8/8`) and
+  `test_attention` (all three smoke shapes), but the focused benchmark did not
+  improve the dWeight rows and the required TinyStories 3-step validation
+  regressed to `3605.23 ms` with steps `3612.75`, `3601.57`, and `3608.89 ms`.
+  The reducer stays at its 256-thread launch.
 
 ## 2026-05-09 — Blackwell build support
 
