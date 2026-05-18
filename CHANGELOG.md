@@ -1435,6 +1435,11 @@ changelog is the diary; `goal.md` is the plan.
   `1006.93 us`) and LM-head dInput (`28154.13 us` versus `21951.83 us`).
   TinyStories 3-step validation averaged `2874.72 ms` with steps `2866.70`,
   `2869.52`, and `2879.93 ms`, so the temporary hook was removed.
+- Rejected a temporary 8-warp forward N96 tile. The
+  `LLMK_SM120_FORWARD_N96_WARPS8=1` build completed, but `test_matmul`
+  deterministically hit an illegal memory access on the GPT-2 124M MLP-up
+  forward row; an immediate rerun failed at the same row. No focused benchmark
+  or TinyStories validation was run.
 
 ## 2026-05-09 — Blackwell build support
 
