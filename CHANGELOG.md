@@ -595,6 +595,13 @@ changelog is the diary; `goal.md` is the plan.
   validation averaged `3567.69 ms` with steps `3566.36`, `3558.51`, and
   `3576.86 ms`, effectively identical to the current pure-TK default and still
   behind the supplied llm.c baseline, so the hook was removed.
+- Rejected a macro-only `LLMK_SM120_HUGE_N_K_TILE=16` sweep for the pure SM120
+  TK huge-N route. The first `test_matmul` pass had a transient MLP-up forward
+  failure, but an immediate rerun passed `8/8` and `test_attention` passed all
+  three smoke shapes. Focused benchmarking worsened LM-head forward to
+  `25602.48 us` versus cuBLASLt `21762.29 us`, and the required TinyStories
+  3-step validation averaged `3569.09 ms` with steps `3584.11`, `3567.63`, and
+  `3570.55 ms`, so the default huge-N K tile remains `64`.
 
 ## 2026-05-09 — Blackwell build support
 
