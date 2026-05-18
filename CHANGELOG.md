@@ -702,6 +702,13 @@ changelog is the diary; `goal.md` is the plan.
   LM-head forward row on the first run and failed both MLP-up and LM-head
   forward rows on the immediate rerun, so no benchmark or training validation
   was run. The huge-N tile remains 256x128x64.
+- Rejected re-enabling the huge-N wide forward route
+  (`LLMK_SM120_HUGE_N_FORWARD_WIDE=1`) under the current O2/M256 defaults. The
+  build passed `test_matmul` (`8/8`) and `test_attention` (all three smoke
+  shapes), but the focused benchmark regressed LM-head forward to
+  `26982.29 us` versus cuBLASLt `21752.51 us`, and the required TinyStories
+  3-step validation averaged `3595.56 ms` with steps `3609.62`, `3576.41`, and
+  `3614.71 ms`. The huge-N wide route remains disabled.
 
 ## 2026-05-09 — Blackwell build support
 
