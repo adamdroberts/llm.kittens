@@ -8,6 +8,11 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Rejected `LLMK_SM120_DWEIGHT_SPLIT_K=4` after testing the lower split-K
+  direction. The macro build passed `test_matmul` (`8/8`), but TinyStories
+  3-step validation averaged `2847.76 ms` with steps `2844.02`, `2850.14`,
+  and `2849.12 ms` (`2849.63 ms` excluding first-step warmup), slower than the
+  best accepted `LLMK_SM120_SUPER_M=7` run. The default remains split-K 8.
 - Re-ran the clean current pure SM120 TK default after the latest rejection
   rounds and disk cleanup. The default build passed `test_matmul` (`8/8`) and
   `test_attention` (all three smoke shapes), but TinyStories 3-step validation
