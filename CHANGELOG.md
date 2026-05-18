@@ -193,6 +193,13 @@ changelog is the diary; `goal.md` is the plan.
   averaged `2918.78 ms` with steps `2920.96`, `2913.55`, and `2924.01 ms`,
   slower than the O2 direct-accumulate default, so pure SM120 TK remains on
   `O2`.
+- Re-profiled the current pure SM120 TK direct-accumulate default. The profiled
+  TinyStories 3-step run averaged `2957.81 ms`; the dominant buckets remain
+  GEMM-heavy: forward `~865 ms/step`, LM-head backward `~431 ms/step`,
+  FC/FCProj backward `~733 ms/step` combined, attention backward
+  `~294 ms/step`, and QKV backward `~285 ms/step`. The direct dWeight
+  accumulate change did not move the next target away from forward and dense
+  backward GEMM paths.
 
 ## 2026-05-17 — SM120 RTX 5090 GEMM fallback and pure-TK tuning
 
