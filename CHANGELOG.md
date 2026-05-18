@@ -8,6 +8,13 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Promoted `LLMK_SM120_SUPER_M=7` after the adjacent swizzle retest on the O3
+  stack. The macro build passed `test_matmul` (`8/8`) and `test_attention`
+  (all three smoke shapes), and TinyStories 3-step validation improved the
+  current pure-TK source from `2840.38 ms` to `2837.54 ms` average with steps
+  `2830.43`, `2833.28`, and `2848.90 ms` (`2841.09 ms` excluding first-step
+  warmup). Pure TK still trails the supplied llm.c baseline and SM120 cuBLASLt
+  fallback, so the goal remains open.
 - Promoted `LLMK_SM120_SUPER_M=8` on top of the O3, dWeight-overlap, and
   narrowed LM-head wait stack. The macro build passed `test_matmul` (`8/8`)
   and `test_attention` (all three smoke shapes), and TinyStories 3-step
