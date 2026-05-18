@@ -151,7 +151,7 @@ int main(int argc, char** argv) {
         printf("⚠ This smoke test targets H100 (sm_90); detected sm_%d%d. Continuing anyway.\n",
                deviceProp.major, deviceProp.minor);
     }
-#if defined(LLMK_SM120_USE_CUBLASLT_GEMM)
+#if LLMK_SM120_HAS_CUBLASLT_GEMM
     llmk::cublaslt_sm120::init();
 #endif
 
@@ -548,7 +548,7 @@ int main(int argc, char** argv) {
     if (failures == 0) {
         printf("test_matmul smoke OK\n");
     }
-#if defined(LLMK_SM120_USE_CUBLASLT_GEMM)
+#if LLMK_SM120_HAS_CUBLASLT_GEMM
     llmk::cublaslt_sm120::destroy();
 #endif
     return failures == 0 ? 0 : 1;

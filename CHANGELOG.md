@@ -8,6 +8,15 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Added disabled-by-default SM120 role-specific cuBLASLt probe switches for
+  forward, dInput, and dWeight GEMMs, then tested the dWeight-only fallback
+  with forward/dInput still on TK. The first `test_matmul` pass hit the known
+  transient MLP-up forward row, the immediate rerun passed `8/8`, and
+  `test_attention` passed all three smoke shapes. TinyStories 3-step
+  validation averaged `2790.55 ms` with steps `2788.75`, `2793.55`, and
+  `2789.35 ms` (`2791.45 ms` excluding first-step warmup), faster than the
+  current pure-TK source but still well behind the all-cuBLASLt fallback, so
+  dWeight is material but not the only remaining blocker.
 - Rejected raising the current non-QKV dWeight split-K cap by building with
   `LLMK_SM120_DWEIGHT_SPLIT_K=16` and
   `LLMK_SM120_NON_QKV_DWEIGHT_SPLIT_K_CAP=16`. The macro build passed

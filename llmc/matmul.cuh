@@ -31,7 +31,14 @@ M=4096 N=V_padded=50304 K=768 the small-N fallback is selected automatically.
 #include <type_traits>
 #include "cuda_common.h"
 #include "cuda_utils.cuh"
-#if defined(LLMK_SM120_USE_CUBLASLT_GEMM)
+#if defined(KITTENS_SM120) && (defined(LLMK_SM120_USE_CUBLASLT_GEMM) || \
+    LLMK_SM120_CUBLASLT_FORWARD_FALLBACK || LLMK_SM120_CUBLASLT_DINP_FALLBACK || \
+    LLMK_SM120_CUBLASLT_DWEIGHT_FALLBACK)
+#define LLMK_SM120_HAS_CUBLASLT_GEMM 1
+#else
+#define LLMK_SM120_HAS_CUBLASLT_GEMM 0
+#endif
+#if LLMK_SM120_HAS_CUBLASLT_GEMM
 #include <cublasLt.h>
 #include <cublas_v2.h>
 #include <vector>
@@ -46,7 +53,7 @@ M=4096 N=V_padded=50304 K=768 the small-N fallback is selected automatically.
 #define LLMK_USE_TK_GEMM 0
 #endif
 
-#if defined(LLMK_SM120_USE_CUBLASLT_GEMM)
+#if LLMK_SM120_HAS_CUBLASLT_GEMM
 namespace llmk::cublaslt_sm120 {
 
 #ifndef LLMK_SM120_CUBLASLT_WORKSPACE_MB
@@ -623,7 +630,7 @@ inline void matmul_forward(floatX* out, const floatX* inp, const floatX* weight,
     const int N = OC;
     const int K = C;
 
-#if defined(LLMK_SM120_USE_CUBLASLT_GEMM) && defined(KITTENS_SM120)
+#if defined(KITTENS_SM120) && (defined(LLMK_SM120_USE_CUBLASLT_GEMM) || LLMK_SM120_CUBLASLT_FORWARD_FALLBACK)
     llmk::cublaslt_sm120::matmul(
         out, weight, inp, bias, N, M, K, stream,
         /*transA=*/true, /*transB=*/false,
@@ -841,7 +848,7 @@ inline bool matmul_forward_gelu_supported(int B, int T, int C, int OC) {
 }
 
 inline bool matmul_backward_gelu_fusion_supported() {
-#if defined(LLMK_SM120_USE_CUBLASLT_GEMM) && defined(KITTENS_SM120)
+#if defined(KITTENS_SM120) && (defined(LLMK_SM120_USE_CUBLASLT_GEMM) || LLMK_SM120_CUBLASLT_DINP_FALLBACK)
     return true;
 #elif defined(KITTENS_SM120)
 #ifndef LLMK_SM120_FUSE_DGELU
@@ -1169,7 +1176,7 @@ inline void matmul_forward_gelu(floatX* out, floatX* pre_gelu,
     const int N = OC;
     const int K = C;
 
-#if defined(LLMK_SM120_USE_CUBLASLT_GEMM) && defined(KITTENS_SM120)
+#if defined(KITTENS_SM120) && (defined(LLMK_SM120_USE_CUBLASLT_GEMM) || LLMK_SM120_CUBLASLT_FORWARD_FALLBACK)
     llmk::cublaslt_sm120::matmul(
         out, weight, inp, bias, N, M, K, stream,
         /*transA=*/true, /*transB=*/false,
@@ -1274,7 +1281,7 @@ inline void matmul_backward(floatX* dinp, floatX* dweight, floatX* dbias,
     (void)block;
 #endif
 
-#if !(defined(LLMK_SM120_USE_CUBLASLT_GEMM) && defined(KITTENS_SM120))
+#if !(defined(LLMK_SM120_USE_CUBLASLT_GEMM) && defined(KITTENS_SM120)) && !LLMK_SM120_CUBLASLT_DWEIGHT_FALLBACK
     MatmulSplitKJob dweight_split_job;
     MatmulAsyncJob dweight_direct_job;
     bool dweight_split_started = false;
@@ -1282,7 +1289,7 @@ inline void matmul_backward(floatX* dinp, floatX* dweight, floatX* dbias,
     bool dweight_split_finish_pending = false;
     bool dweight_direct_finish_pending = false;
 #endif
-#if LLMK_USE_TK_GEMM && defined(KITTENS_SM120) && !defined(LLMK_SM120_USE_CUBLASLT_GEMM)
+#if LLMK_USE_TK_GEMM && defined(KITTENS_SM120) && !defined(LLMK_SM120_USE_CUBLASLT_GEMM) && !LLMK_SM120_CUBLASLT_DWEIGHT_FALLBACK
 #ifndef LLMK_SM120_OVERLAP_DINP_DWEIGHT
 #define LLMK_SM120_OVERLAP_DINP_DWEIGHT 1
 #endif
@@ -1306,7 +1313,7 @@ inline void matmul_backward(floatX* dinp, floatX* dweight, floatX* dbias,
 #endif
 
     if (dinp != nullptr) {
-#if defined(LLMK_SM120_USE_CUBLASLT_GEMM) && defined(KITTENS_SM120)
+#if defined(KITTENS_SM120) && (defined(LLMK_SM120_USE_CUBLASLT_GEMM) || LLMK_SM120_CUBLASLT_DINP_FALLBACK)
         llmk::cublaslt_sm120::matmul(
             dinp, weight, dout, nullptr, C, M, OC, stream,
             /*transA=*/false, /*transB=*/false,
@@ -1330,7 +1337,7 @@ inline void matmul_backward(floatX* dinp, floatX* dweight, floatX* dbias,
     }
     if (dweight != nullptr) {
         const size_t dweight_elements = (size_t)OC * C;
-#if defined(LLMK_SM120_USE_CUBLASLT_GEMM) && defined(KITTENS_SM120)
+#if defined(KITTENS_SM120) && (defined(LLMK_SM120_USE_CUBLASLT_GEMM) || LLMK_SM120_CUBLASLT_DWEIGHT_FALLBACK)
         (void)dweight_elements;
         llmk::cublaslt_sm120::matmul(
             dweight, inp, dout, nullptr, C, OC, M, stream,
@@ -1379,7 +1386,7 @@ inline void matmul_backward(floatX* dinp, floatX* dweight, floatX* dbias,
     if (dbias != nullptr) {
         matmul_backward_bias(dbias, dout, dbias_buffer, B, T, OC, stream);
     }
-#if !(defined(LLMK_SM120_USE_CUBLASLT_GEMM) && defined(KITTENS_SM120))
+#if !(defined(LLMK_SM120_USE_CUBLASLT_GEMM) && defined(KITTENS_SM120)) && !LLMK_SM120_CUBLASLT_DWEIGHT_FALLBACK
     if (dweight_split_finish_pending) {
         matmul_dispatch_tk_atb_splitk_finish(dweight_split_job, stream);
     }

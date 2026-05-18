@@ -1509,14 +1509,14 @@ void common_start(bool override_enable_tf32 = true, bool print_device_info = tru
     // set up the cuda streams. atm everything is on the single main stream
     cudaCheck(cudaStreamCreate(&main_stream));
     nvtxNameCudaStreamA(main_stream, "main stream");
-#if defined(LLMK_SM120_USE_CUBLASLT_GEMM)
+#if LLMK_SM120_HAS_CUBLASLT_GEMM
     llmk::cublaslt_sm120::init();
 #endif
     (void)override_enable_tf32;
 }
 
 void common_free(GPT2 &model) {
-#if defined(LLMK_SM120_USE_CUBLASLT_GEMM)
+#if LLMK_SM120_HAS_CUBLASLT_GEMM
     llmk::cublaslt_sm120::destroy();
 #endif
     cudaCheck(cudaStreamDestroy(main_stream));

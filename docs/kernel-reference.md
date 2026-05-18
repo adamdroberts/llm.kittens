@@ -64,6 +64,12 @@ defaults to `7` after RTX 5090 3-step validation. dInput uses a separate
 `LLMK_SM120_DINP_SUPER_M=8` default, while dWeight keeps its separate
 `LLMK_SM120_DWEIGHT_SUPER_M=2` default and routes supported TN dWeight shapes
 through a 128x128 tile by default (`LLMK_SM120_DWEIGHT_N128=1`).
+Disabled-by-default SM120 diagnostic fallbacks
+(`LLMK_SM120_CUBLASLT_FORWARD_FALLBACK`,
+`LLMK_SM120_CUBLASLT_DINP_FALLBACK`,
+`LLMK_SM120_CUBLASLT_DWEIGHT_FALLBACK`) can route one GEMM role through the
+same GPU cuBLASLt path as the full SM120 fallback build while leaving the other
+roles on TK; they are for A/B timing only and do not change pure-TK defaults.
 
 `matmul_template<M_BLOCK, N_BLOCK, SUPER_M, A_TRANSPOSED, B_TRANSPOSED,
 APPLY_BIAS, APPLY_GELU, STORE_PRE_GELU>` is ported from
