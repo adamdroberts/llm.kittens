@@ -479,6 +479,10 @@ changelog is the diary; `goal.md` is the plan.
   (`1.12x` slower than cuBLASLt), but the required TinyStories 3-step
   validation still regressed to `3545.80 ms` average with steps `3507.21`,
   `3532.32`, and `3559.29 ms`. The selector hook was removed.
+- Rejected a temporary huge-N `64x128` tile shape. It compiled, but
+  `test_matmul` failed the GPT-2 MLP-up and LM-head rows (`7.0625` and
+  `10.3359` max diff versus `0.50` tolerance), so no benchmark or TinyStories
+  3-step validation was run and the source edit was reverted.
 
 ## 2026-05-09 — Blackwell build support
 
