@@ -979,6 +979,13 @@ changelog is the diary; `goal.md` is the plan.
   but the focused benchmark badly regressed the qkv, attention-projection, MLP,
   and projection forward rows, and TinyStories 3-step validation slowed to
   `2874.11 ms` with steps `2868.20`, `2872.32`, and `2875.90 ms`.
+- Promoted `LLMK_SM120_DPREP_WARPS=3` for the SM120 packed-QKV attention
+  backward prep launch. The macro A/B passed `test_attention` (all three smoke
+  shapes) and averaged `2812.93 ms` on TinyStories 3-step validation with
+  steps `2808.03`, `2810.46`, and `2815.40 ms`. The no-override source-default
+  rebuild passed `test_matmul` on rerun after the known MLP-up transient,
+  passed `test_attention`, and confirmed `2813.17 ms` with steps `2807.86`,
+  `2810.93`, and `2815.41 ms`.
 
 ## 2026-05-09 — Blackwell build support
 

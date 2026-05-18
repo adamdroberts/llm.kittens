@@ -181,6 +181,9 @@ unsupported backward shapes fall back to the existing recompute CUDA baseline.
   `LLMK_SM120_ATTN_BWD_BLOCK`, or the shorthand `LLMK_SM120_ATTN_BLOCK` can be
   used for controlled experiments; 64-row tiles are correct but slower on RTX
   5090 GPT-2 training.
+- SM120 attention backward prep uses a 3-warp CUDA launch
+  (`LLMK_SM120_DPREP_WARPS=3`) after RTX 5090 validation found it faster than
+  the earlier 4-warp default and the rejected 2-warp variant.
 - BF16 only (same as the rest of v1).
 
 ### Layout glue
