@@ -8,6 +8,12 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Rejected making the SM120 background dWeight streams low priority after the
+  deferred LM-head wait change. The source hook passed `test_matmul` (`8/8`)
+  and `test_attention` (all three smoke shapes), but TinyStories 3-step
+  validation averaged `2877.38 ms` with steps `2873.22`, `2876.44`, and
+  `2882.49 ms` (`2879.46 ms` excluding first-step warmup), slightly slower
+  than the current default. The temporary priority hook was removed.
 - Re-profiled after deferring the LM-head dWeight wait. The profiled
   TinyStories 3-step run averaged `2919.65 ms` with expected profiler overhead.
   `bwd_lmhead` dropped to `~263 ms/step`, but `bwd_lnf` rose to
