@@ -8,6 +8,15 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Rejected raising the current non-QKV dWeight split-K cap by building with
+  `LLMK_SM120_DWEIGHT_SPLIT_K=16` and
+  `LLMK_SM120_NON_QKV_DWEIGHT_SPLIT_K_CAP=16`. The macro build passed
+  `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes), but
+  TinyStories 3-step validation averaged `2849.52 ms` with steps `2843.50`,
+  `2851.88`, and `2853.17 ms` (`2852.52 ms` excluding first-step warmup),
+  slower than the best accepted `LLMK_SM120_SUPER_M=7` run. The temporary cap
+  macro was removed; source defaults remain qkv split-K 8 with non-QKV
+  dWeight capped at 8-way split-K.
 - Refreshed `bench_sm120_matmul` on the current pure SM120 TK source against
   the cuBLASLt fallback variants to pick the next optimization target. The
   largest remaining gaps were attention-projection dWeight (`517.94 us` TK vs
