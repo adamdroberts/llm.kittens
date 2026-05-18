@@ -224,6 +224,12 @@ changelog is the diary; `goal.md` is the plan.
   the runtime validation gate; TinyStories 3-step validation regressed to
   `2969.23 ms` with steps `2962.71`, `2964.04`, and `2974.43 ms`. The hook was
   removed and the classifier remains at the existing 256-thread block.
+- Rejected a temporary forward-only `LLMK_SM120_FORWARD_SUPER_M=8` hook that
+  left dInput and dWeight on the accepted swizzles. It passed `test_matmul`
+  (`8/8`) and `test_attention` (all three shapes), but the focused benchmark
+  worsened every forward row and TinyStories 3-step validation regressed to
+  `2907.58 ms` with steps `2909.61`, `2903.73`, and `2911.44 ms`, so the hook
+  was removed.
 
 ## 2026-05-17 — SM120 RTX 5090 GEMM fallback and pure-TK tuning
 
