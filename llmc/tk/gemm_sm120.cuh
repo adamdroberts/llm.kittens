@@ -59,7 +59,7 @@ constexpr int LOAD_BAR = 0;
 #endif
 
 #ifndef LLMK_SM120_HUGE_N_K_TILE
-#define LLMK_SM120_HUGE_N_K_TILE 32
+#define LLMK_SM120_HUGE_N_K_TILE 16
 #endif
 
 #ifndef LLMK_SM120_HUGE_N_M256

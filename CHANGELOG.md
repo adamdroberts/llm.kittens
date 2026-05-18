@@ -1028,6 +1028,16 @@ changelog is the diary; `goal.md` is the plan.
   and TinyStories 3-step validation averaged `2750.73 ms` with steps
   `2745.21`, `2749.58`, and `2751.88 ms`, slower than the committed
   split-K `16` default.
+- Promoted `LLMK_SM120_HUGE_N_K_TILE=16` for the shared SM120 huge-N/N128 tile
+  family. The macro A/B build passed `test_matmul` (`8/8`) and
+  `test_attention` (all three smoke shapes), improved dWeight rows despite a
+  slower LM-head forward path (qkv dWeight `1182.34 us`, attproj `504.47 us`,
+  fcproj `1517.71 us`, lmhead `22671.24 us`), and averaged `2746.71 ms` on
+  TinyStories with steps `2739.70`, `2745.03`, and `2748.40 ms`. The
+  no-override source-default rebuild passed the same smokes, confirmed the
+  dWeight improvement (qkv `1177.66 us`, attproj `497.04 us`, fcproj
+  `1507.44 us`, lmhead `22761.23 us`), and averaged `2745.01 ms` with steps
+  `2739.79`, `2742.41`, and `2747.62 ms`.
 
 ## 2026-05-09 — Blackwell build support
 
