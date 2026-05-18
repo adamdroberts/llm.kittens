@@ -1602,6 +1602,11 @@ changelog is the diary; `goal.md` is the plan.
   still trailed cuBLASLt on every dWeight row, and TinyStories 3-step
   validation regressed to `2982.84 ms` with steps `3033.89`, `3038.07`, and
   `2927.62 ms`. The dWeight swizzle remains `2`.
+- Rejected `LLMK_SM120_DWEIGHT_SUPER_M=13`. The macro build passed
+  `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes), but
+  the focused benchmark still trailed cuBLASLt on every dWeight row and
+  TinyStories 3-step validation regressed to `3030.43 ms` with steps
+  `3019.57`, `3026.12`, and `3034.73 ms`. The dWeight swizzle remains `2`.
 
 ## 2026-05-09 — Blackwell build support
 
