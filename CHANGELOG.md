@@ -1157,6 +1157,14 @@ changelog is the diary; `goal.md` is the plan.
   TinyStories 3-step validation regressed to `2747.90 ms` with steps
   `2742.96`, `2745.97`, and `2749.82 ms`. The shared SM120 swizzle remains at
   the source default `9`.
+- Rejected retesting the adjacent shared forward/huge-N swizzle
+  `LLMK_SM120_SUPER_M=10` on the same current stack. The macro build passed
+  `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes), but the
+  focused benchmark worsened key qkv and attention dWeight rows versus the
+  committed default (qkv dWeight `1271.68 us`, attproj dWeight `518.32 us`) and
+  TinyStories 3-step validation regressed to `2748.25 ms` with steps
+  `2741.36`, `2746.30`, and `2750.21 ms`. The shared SM120 swizzle remains at
+  `9`.
 
 ## 2026-05-09 — Blackwell build support
 
