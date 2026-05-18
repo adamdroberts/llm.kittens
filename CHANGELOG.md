@@ -1553,6 +1553,11 @@ changelog is the diary; `goal.md` is the plan.
   benchmark then hit an illegal memory access during qkv dWeight timing after
   qkv forward/dInput, so no TinyStories 3-step validation was run and the
   temporary 96x128 hook was removed.
+- Rejected a temporary dWeight-only 192x128 TN tile route. The candidate passed
+  `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes), but
+  `bench_sm120_matmul` again hit an illegal memory access during qkv dWeight
+  timing before any useful dWeight measurement. No TinyStories 3-step
+  validation was run, and the temporary 192x128 hook was removed.
 
 ## 2026-05-09 — Blackwell build support
 
