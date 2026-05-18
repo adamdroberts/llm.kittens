@@ -877,6 +877,12 @@ changelog is the diary; `goal.md` is the plan.
   `1458.18 us` versus cuBLASLt `988.77 us`, and TinyStories 3-step validation
   regressed to `2844.07 ms` with steps `2839.29`, `2842.58`, and
   `2845.57 ms`.
+- Rejected enabling the SM120 backward `N % 96` tile
+  (`LLMK_SM120_BACKWARD_N96=1`) under the current swizzle and split-K defaults.
+  The build passed `test_matmul` (`8/8`) and `test_attention` (all three smoke
+  shapes), and qkv dWeight improved to `1379.51 us` in the focused benchmark,
+  but other backward rows regressed and TinyStories 3-step validation slowed to
+  `2921.11 ms` with steps `2917.34`, `2920.17`, and `2922.04 ms`.
 
 ## 2026-05-09 — Blackwell build support
 
