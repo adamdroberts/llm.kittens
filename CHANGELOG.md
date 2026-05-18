@@ -338,6 +338,11 @@ changelog is the diary; `goal.md` is the plan.
   `LLMK_SM120_DWEIGHT_REDUCE_BF162=1` build compiled, but `test_matmul` failed
   both dWeight rows at max diff `0.5000` against the strict `< 0.50` tolerance,
   so it was removed without benchmarking.
+- Rejected a dInput-only 128-column NN tile route. The
+  `LLMK_SM120_DINP_N128=1` build passed `test_matmul` (`8/8`), but
+  `bench_sm120_matmul` regressed every dInput row, including LM-head dInput to
+  `1.32x` slower than cuBLASLt. The required TinyStories 3-step pure-TK
+  validation then averaged `6849.22 ms`, so the hook was removed.
 
 ## 2026-05-09 — Blackwell build support
 
