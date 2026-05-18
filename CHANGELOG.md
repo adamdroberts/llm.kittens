@@ -1641,6 +1641,12 @@ changelog is the diary; `goal.md` is the plan.
   and the material dWeight rows were still behind. TinyStories 3-step
   validation regressed to `3585.88 ms` with steps `3569.84`, `3594.94`, and
   `3576.82 ms`, so the temporary hooks were removed.
+- Rejected isolating the direct column-layout load to TN dWeight only. It
+  passed `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes),
+  but the focused benchmark still left every dWeight row behind cuBLASLt and
+  worsened several dInput rows. TinyStories 3-step validation averaged
+  `3205.80 ms` with steps `3209.82`, `3208.68`, and `3202.92 ms`, and shifted
+  the norm trace, so the temporary hook was removed.
 
 ## 2026-05-09 — Blackwell build support
 
