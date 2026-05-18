@@ -8,6 +8,13 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Re-ran the clean current pure SM120 TK default after the latest rejection
+  rounds and disk cleanup. The default build passed `test_matmul` (`8/8`) and
+  `test_attention` (all three smoke shapes), but TinyStories 3-step validation
+  averaged `2860.87 ms` with steps `2835.50`, `2871.28`, and `2875.82 ms`
+  (`2873.55 ms` excluding first-step warmup), slower than the earlier accepted
+  `LLMK_SM120_SUPER_M=7` macro run. Future candidates should compare against
+  both the best observed `2837.54 ms` and this latest clean-source rebaseline.
 - Rejected the bundled rollback toward the older O2/split-K dWeight stack:
   `FORCE_NVCC_O=2`, `LLMK_SM120_SUPER_M=9`,
   `LLMK_SM120_DWEIGHT_DIRECT_ACCUM=0`,
