@@ -8,6 +8,12 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Rejected retesting `LLMK_SM120_LARGE_DWEIGHT_SPLIT_K=2` on top of the new
+  dWeight overlap stack at the smoke gate. The macro build completed, but
+  `test_matmul` failed the GPT-2 MLP-up forward row twice with max diffs
+  `6.1465` and `6.5000` versus the `0.50` tolerance while the other seven rows
+  passed. No TinyStories 3-step validation was run because the candidate was
+  numerically unsafe.
 - Promoted SM120 pure-TK direct dWeight overlap for dWeight rows where the
   split-K planner collapses to one part, notably the LM-head-sized dWeight
   route. These direct dWeight GEMMs now start on a nonblocking side stream,
