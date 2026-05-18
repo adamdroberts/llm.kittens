@@ -8,6 +8,12 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Rejected `LLMK_SM120_OVERLAP_DIRECT_DWEIGHT=0` after retesting whether the
+  direct dWeight side-stream overlap still pays off. The macro build passed
+  `test_matmul` (`8/8`), but TinyStories 3-step validation regressed from the
+  current `2837.54 ms` source average to `2841.57 ms` with steps `2834.78`,
+  `2846.59`, and `2843.34 ms` (`2844.97 ms` excluding first-step warmup). The
+  default keeps direct dWeight overlap enabled.
 - Rejected `LLMK_SM120_DINP_SUPER_M=9` after the adjacent dInput swizzle
   retest. The macro build passed `test_matmul` (`8/8`), but TinyStories
   3-step validation regressed from the current `2837.54 ms` source average to
