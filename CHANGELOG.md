@@ -837,6 +837,12 @@ changelog is the diary; `goal.md` is the plan.
   and averaged `2822.76 ms` with steps `2817.86`, `2821.16`, and `2824.36 ms`.
   Pure TK remains slightly above the supplied llm.c baseline and still behind
   cuBLASLt on the material dWeight rows.
+- Rejected retesting `LLMK_SM120_DWEIGHT_SPLIT_K=32` under the current swizzle
+  stack. The build passed `test_matmul` (`8/8`) and `test_attention` (all three
+  smoke shapes), and qkv dWeight improved to `1357.94 us` in the focused
+  benchmark, but the extra split launches regressed TinyStories 3-step
+  validation to `2825.12 ms` with steps `2818.94`, `2823.61`, and
+  `2826.63 ms`.
 
 ## 2026-05-09 — Blackwell build support
 
