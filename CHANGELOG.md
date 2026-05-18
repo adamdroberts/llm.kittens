@@ -871,6 +871,12 @@ changelog is the diary; `goal.md` is the plan.
   mixed and TinyStories 3-step validation regressed to `2826.49 ms` with steps
   `2821.64`, `2825.24`, and `2827.74 ms`, so pure SM120 TK builds keep the O2
   default.
+- Rejected retesting `LLMK_SM120_DWEIGHT_SPLIT_K=64` under the current swizzle
+  stack. The build passed `test_matmul` (`8/8`) and `test_attention` (all three
+  smoke shapes), but the focused benchmark worsened qkv dWeight to
+  `1458.18 us` versus cuBLASLt `988.77 us`, and TinyStories 3-step validation
+  regressed to `2844.07 ms` with steps `2839.29`, `2842.58`, and
+  `2845.57 ms`.
 
 ## 2026-05-09 — Blackwell build support
 
