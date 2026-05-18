@@ -1143,6 +1143,11 @@ changelog is the diary; `goal.md` is the plan.
   TinyStories 3-step validation regressed catastrophically to `7223.85 ms`
   with steps `7309.41`, `7221.44`, and `7226.25 ms`. The backward attention
   tile remains `16`.
+- Rejected the SM120 attention `LLMK_SM120_ATOMIC_DQ` accumulation path. The
+  macro build passed `test_matmul` (`8/8` on rerun after the known transient
+  MLP-up row) and `test_attention`, but TinyStories 3-step validation regressed
+  to `3111.17 ms` with steps `3105.52`, `3108.17`, and `3114.17 ms`. The
+  default non-atomic dQ path remains in place.
 
 ## 2026-05-09 — Blackwell build support
 
