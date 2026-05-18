@@ -156,7 +156,11 @@ Current status:
    The SM120 TN
    swizzle now defaults to `LLMK_SM120_DWEIGHT_SUPER_M=2` after the K-tile 16
    route made it faster in 3-step validation; `1` fails smoke, while `4` and
-   higher tested values were slower or mixed.
+   higher tested values were slower or mixed. Eligible split-K dWeight rows are
+   now started on their nonblocking part streams before the same
+   `matmul_backward()` call launches dInput on the main stream, then reduced
+   after dInput is enqueued; this overlaps independent backward GEMM work
+   without changing the external wrapper contract.
 3. `dbias (OC) = column-sum of dout over B*T` — `matmul_backward_bias_kernel9` followed by `reduce_add_sum_kernel` when `dbias_buffer` is available. Both kernels are verbatim from llm.c. SM120 keeps the same kernels but uses a 512-thread launch block by default (`LLMK_SM120_BIAS_BLOCK_SIZE`) after RTX 5090 timing showed it faster than the H100-derived 768-thread choice.
 
 The slow CUDA dWeight kernel remains only as a fallback for unsupported TK shapes

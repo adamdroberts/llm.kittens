@@ -795,6 +795,16 @@ __global__ void matmul_reduce_bf16_partials_kernel(floatX* dst, const floatX* sr
     store128(dst + idx, out);
 }
 
+struct MatmulSplitKJob {
+    bool active = false;
+    floatX* out = nullptr;
+    const floatX* partials = nullptr;
+    const cudaEvent_t* done_events = nullptr;
+    size_t out_elements = 0;
+    int parts = 0;
+    bool accumulate = false;
+};
+
 inline bool matmul_tk_shape_ok(int M, int N, int K) {
 #if LLMK_USE_TK_GEMM
     return M % 128 == 0 && K % 64 == 0 && N % 128 == 0;
@@ -962,11 +972,34 @@ inline void matmul_dispatch_tk_atb(floatX* out, const floatX* a, const floatX* b
 #endif
 }
 
+inline bool matmul_dispatch_tk_atb_splitk_start(MatmulSplitKJob* job,
+                                                floatX* out, const floatX* a, const floatX* b,
+                                                int M, int N, int K, cudaStream_t stream,
+                                                bool accumulate,
+                                                floatX* partials,
+                                                size_t partial_elements);
+inline void matmul_dispatch_tk_atb_splitk_finish(const MatmulSplitKJob& job, cudaStream_t stream);
+
 inline bool matmul_dispatch_tk_atb_splitk(floatX* out, const floatX* a, const floatX* b,
                                           int M, int N, int K, cudaStream_t stream,
                                           bool accumulate,
                                           floatX* partials,
                                           size_t partial_elements) {
+    MatmulSplitKJob job;
+    if (!matmul_dispatch_tk_atb_splitk_start(&job, out, a, b, M, N, K, stream,
+                                             accumulate, partials, partial_elements)) {
+        return false;
+    }
+    matmul_dispatch_tk_atb_splitk_finish(job, stream);
+    return true;
+}
+
+inline bool matmul_dispatch_tk_atb_splitk_start(MatmulSplitKJob* job,
+                                                floatX* out, const floatX* a, const floatX* b,
+                                                int M, int N, int K, cudaStream_t stream,
+                                                bool accumulate,
+                                                floatX* partials,
+                                                size_t partial_elements) {
 #if LLMK_USE_TK_GEMM && defined(KITTENS_SM120)
 #ifndef LLMK_SM120_DWEIGHT_SPLIT_K
 #define LLMK_SM120_DWEIGHT_SPLIT_K 8
@@ -989,6 +1022,13 @@ inline bool matmul_dispatch_tk_atb_splitk(floatX* out, const floatX* a, const fl
     if (partials == nullptr || parts <= 1) return false;
 
     const int split_k = K / parts;
+    *job = {};
+    job->active = true;
+    job->out = out;
+    job->partials = partials;
+    job->out_elements = out_elements;
+    job->parts = parts;
+    job->accumulate = accumulate;
 #if LLMK_SM120_DWEIGHT_SPLIT_K_STREAMS
     static bool initialized = false;
     static cudaStream_t part_streams[LLMK_SM120_DWEIGHT_SPLIT_K];
@@ -1013,9 +1053,7 @@ inline bool matmul_dispatch_tk_atb_splitk(floatX* out, const floatX* a, const fl
             M, N, split_k, part_streams[part]);
         cudaCheck(cudaEventRecord(done_events[part], part_streams[part]));
     }
-    for (int part = 0; part < parts; ++part) {
-        cudaCheck(cudaStreamWaitEvent(stream, done_events[part], 0));
-    }
+    job->done_events = done_events;
 #else
     for (int part = 0; part < parts; ++part) {
         const int k0 = part * split_k;
@@ -1026,13 +1064,9 @@ inline bool matmul_dispatch_tk_atb_splitk(floatX* out, const floatX* a, const fl
             M, N, split_k, stream);
     }
 #endif
-    const int block = 256;
-    const int grid = CEIL_DIV(out_elements, block * x128::size);
-    matmul_reduce_bf16_partials_kernel<<<grid, block, 0, stream>>>(
-        out, partials, out_elements, parts, accumulate);
-    cudaCheck(cudaGetLastError());
     return true;
 #else
+    (void)job;
     (void)out;
     (void)a;
     (void)b;
@@ -1044,6 +1078,25 @@ inline bool matmul_dispatch_tk_atb_splitk(floatX* out, const floatX* a, const fl
     (void)partials;
     (void)partial_elements;
     return false;
+#endif
+}
+
+inline void matmul_dispatch_tk_atb_splitk_finish(const MatmulSplitKJob& job, cudaStream_t stream) {
+#if LLMK_USE_TK_GEMM && defined(KITTENS_SM120)
+    if (!job.active) return;
+#if LLMK_SM120_DWEIGHT_SPLIT_K_STREAMS
+    for (int part = 0; part < job.parts; ++part) {
+        cudaCheck(cudaStreamWaitEvent(stream, job.done_events[part], 0));
+    }
+#endif
+    const int block = 256;
+    const int grid = CEIL_DIV(job.out_elements, block * x128::size);
+    matmul_reduce_bf16_partials_kernel<<<grid, block, 0, stream>>>(
+        job.out, job.partials, job.out_elements, job.parts, job.accumulate);
+    cudaCheck(cudaGetLastError());
+#else
+    (void)job;
+    (void)stream;
 #endif
 }
 
@@ -1164,6 +1217,25 @@ inline void matmul_backward(floatX* dinp, floatX* dweight, floatX* dbias,
     (void)block;
 #endif
 
+    MatmulSplitKJob dweight_split_job;
+    bool dweight_split_started = false;
+#if defined(LLMK_SM120_USE_CUBLASLT_GEMM) && defined(KITTENS_SM120)
+    (void)dweight_split_job;
+    (void)dweight_split_started;
+#endif
+#if LLMK_USE_TK_GEMM && defined(KITTENS_SM120) && !defined(LLMK_SM120_USE_CUBLASLT_GEMM)
+#ifndef LLMK_SM120_OVERLAP_DINP_DWEIGHT
+#define LLMK_SM120_OVERLAP_DINP_DWEIGHT 1
+#endif
+#if LLMK_SM120_OVERLAP_DINP_DWEIGHT
+    if (dweight != nullptr && matmul_tk_shape_ok(OC, C, M)) {
+        dweight_split_started = matmul_dispatch_tk_atb_splitk_start(
+            &dweight_split_job, dweight, dout, inp, OC, C, M, stream,
+            dweight_accumulate, dweight_accum_scratch, dweight_accum_scratch_elements);
+    }
+#endif
+#endif
+
     if (dinp != nullptr) {
 #if defined(LLMK_SM120_USE_CUBLASLT_GEMM) && defined(KITTENS_SM120)
         llmk::cublaslt_sm120::matmul(
@@ -1198,7 +1270,9 @@ inline void matmul_backward(floatX* dinp, floatX* dweight, floatX* dbias,
             /*accumulate=*/dweight_accumulate, /*pre_gelu=*/nullptr, /*backward=*/true);
 #else
         if (matmul_tk_shape_ok(OC, C, M)) {
-            if (matmul_dispatch_tk_atb_splitk(
+            if (dweight_split_started) {
+                matmul_dispatch_tk_atb_splitk_finish(dweight_split_job, stream);
+            } else if (matmul_dispatch_tk_atb_splitk(
                     dweight, dout, inp, OC, C, M, stream, dweight_accumulate,
                     dweight_accum_scratch, dweight_accum_scratch_elements)) {
                 // split-K path wrote or accumulated dweight directly
