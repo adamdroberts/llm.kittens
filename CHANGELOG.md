@@ -8,6 +8,11 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Rejected reverting the current pure SM120 TK source to `FORCE_NVCC_O=2`.
+  The O2 build passed `test_matmul` (`8/8`), but TinyStories 3-step validation
+  averaged `2841.29 ms` with steps `2831.71`, `2841.73`, and `2850.44 ms`
+  (`2846.08 ms` excluding first-step warmup), slower than the current O3
+  `LLMK_SM120_SUPER_M=7` source average of `2837.54 ms`.
 - Rejected `LLMK_SM120_DWEIGHT_N128=0` after retesting the older TN dWeight
   tile path. The macro build passed `test_matmul` (`8/8`), but TinyStories
   3-step validation regressed from the current `2837.54 ms` source average to
