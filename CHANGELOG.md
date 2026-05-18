@@ -849,6 +849,13 @@ changelog is the diary; `goal.md` is the plan.
   shapes. The focused benchmark was mixed and TinyStories 3-step validation
   regressed to `2824.67 ms` with steps `2821.31`, `2821.56`, and
   `2827.78 ms`, so the reducer remains at the 256-thread launch.
+- Rejected retesting `LLMK_SM120_BIAS_BLOCK_SIZE=768` for the CUDA
+  bias-gradient reduction under the current pure SM120 TK defaults. The macro
+  build passed `test_matmul` (`8/8`) and `test_attention` (all three smoke
+  shapes), and the first TinyStories 3-step validation averaged `2821.93 ms`
+  with steps `2818.46`, `2820.37`, and `2823.49 ms`; however, the no-override
+  source-default confirmation regressed to `2824.64 ms` with steps `2821.18`,
+  `2822.14`, and `2827.14 ms`, so the source default stays at `512`.
 
 ## 2026-05-09 — Blackwell build support
 
