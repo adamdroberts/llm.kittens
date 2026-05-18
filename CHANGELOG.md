@@ -1138,6 +1138,11 @@ changelog is the diary; `goal.md` is the plan.
   explicitly supports only `16`, `32`, or `64`, and TK register/shared tile
   types also require tile dimensions divisible by their base dimensions. No
   runtime validation was run for this invalid tile.
+- Rejected `LLMK_SM120_ATTN_BWD_BLOCK=64`. The macro build passed
+  `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes), but
+  TinyStories 3-step validation regressed catastrophically to `7223.85 ms`
+  with steps `7309.41`, `7221.44`, and `7226.25 ms`. The backward attention
+  tile remains `16`.
 
 ## 2026-05-09 — Blackwell build support
 
