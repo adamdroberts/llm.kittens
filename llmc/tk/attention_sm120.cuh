@@ -1,25 +1,18 @@
 /*
-attention_sm120.cuh — ThunderKittens causal multi-head attention forward for
-consumer Blackwell (sm_120). Drop-in counterpart of attention_h100.cuh: same
-`llmk::attention::launch_forward_causal(...)` signature and granularity
-helpers, but using warp-scope MMAs only.
+attention_sm120.cuh — ThunderKittens causal multi-head attention for consumer
+Blackwell (sm_120). Drop-in counterpart of attention_h100.cuh: same launcher
+signatures and granularity helpers, but using warp-scope MMAs only.
 
-v1 covers FORWARD only. The backward path on sm_120 stays on the existing
-scalar fallback in attention.cuh (which is correct, just slow). Adding a TK
-backward is a separate follow-up.
-
-Algorithm: FlashAttention-2 forward, single-warp granularity.
+Algorithm: FlashAttention-2 style, single-warp granularity.
   * One warp per CTA.
-  * Each warp owns one (batch, head, q_block) where q_block is 16 query rows.
-  * Grid: dim3(T / 16, NH, B). Block: 32 threads (one warp).
-  * Streaming K/V: load one (k, v) 16-row block at a time, compute partial
-    attention with online softmax, accumulate O. Causal mask is the standard
-    upper-triangular mask on the diagonal block (kb == q_block).
+  * Each warp owns one (batch, head, q_block).
+  * Forward defaults to 32-row Q/K/V tiles; backward defaults to 16-row tiles.
+  * Streaming K/V blocks compute partial attention with online softmax and
+    accumulate O. Causal mask is the standard upper-triangular mask on the
+    diagonal block (kb == q_block).
 
-Supports HS == 64 and HS == 128. GPT-2 124M / 350M / 774M use HS = 64;
-GPT-2 XL and Llama-style models use HS = 128. Both fit in the 256-register
-per-thread budget on sm_120 for the forward (HS=128 forward sits around
-~180 regs/thread).
+Forward supports HS == 64 and HS == 128. Backward currently supports HS == 64,
+which covers GPT-2 124M / 350M / 774M. HS=128 backward remains a follow-up.
 */
 #pragma once
 
@@ -33,21 +26,43 @@ using namespace ::kittens;
 
 namespace sm120_detail {
 
-// We tile Q in 16-row blocks. K and V are streamed 16 rows at a time.
-constexpr int Q_BLOCK = 16;
-constexpr int K_BLOCK = 16;
+// The block size is a compile-time tuning knob because larger warp tiles trade
+// fewer loop iterations for much higher register pressure on consumer
+// Blackwell. RTX 5090 GPT-2 training validated forward=32, backward=16 as the
+// default split; 64 was correct but much slower.
+#if defined(LLMK_SM120_ATTN_BLOCK)
+#ifndef LLMK_SM120_ATTN_FWD_BLOCK
+#define LLMK_SM120_ATTN_FWD_BLOCK LLMK_SM120_ATTN_BLOCK
+#endif
+#ifndef LLMK_SM120_ATTN_BWD_BLOCK
+#define LLMK_SM120_ATTN_BWD_BLOCK LLMK_SM120_ATTN_BLOCK
+#endif
+#endif
+#ifndef LLMK_SM120_ATTN_FWD_BLOCK
+#define LLMK_SM120_ATTN_FWD_BLOCK 32
+#endif
+#ifndef LLMK_SM120_ATTN_BWD_BLOCK
+#define LLMK_SM120_ATTN_BWD_BLOCK 16
+#endif
+constexpr int FWD_BLOCK = LLMK_SM120_ATTN_FWD_BLOCK;
+constexpr int Q_BLOCK = LLMK_SM120_ATTN_BWD_BLOCK;
+constexpr int K_BLOCK = LLMK_SM120_ATTN_BWD_BLOCK;
+static_assert(FWD_BLOCK == 16 || FWD_BLOCK == 32 || FWD_BLOCK == 64,
+              "sm120 attention forward block must be 16, 32, or 64");
+static_assert(Q_BLOCK == 16 || Q_BLOCK == 32 || Q_BLOCK == 64,
+              "sm120 attention backward block must be 16, 32, or 64");
 
 // Sequence granularity: T must be divisible by 16 so each (batch, head)
 // has an integer number of Q/K blocks. GPT-2 with T=1024 satisfies this.
-inline constexpr int fwd_sequence_granularity() { return Q_BLOCK; }
+inline constexpr int fwd_sequence_granularity() { return FWD_BLOCK; }
 inline constexpr int bwd_sequence_granularity() { return K_BLOCK; }
 
 template <int D>
 struct fwd_globals {
-    using q_tile     = st_bf<Q_BLOCK, D>;
-    using kv_tile    = st_bf<K_BLOCK, D>;
-    using o_tile     = st_bf<Q_BLOCK, D>;
-    using lse_vec    = sv<float, Q_BLOCK>;
+    using q_tile     = st_bf<FWD_BLOCK, D>;
+    using kv_tile    = st_bf<FWD_BLOCK, D>;
+    using o_tile     = st_bf<FWD_BLOCK, D>;
+    using lse_vec    = sv<float, FWD_BLOCK>;
 
     using q_gl  = gl<bf16,  -1, -1, -1, -1, q_tile>;
     using k_gl  = gl<bf16,  -1, -1, -1, -1, kv_tile>;
@@ -62,7 +77,7 @@ struct fwd_globals {
     l_gl l;
 };
 
-template <int D>
+template <int D, bool OUTPUT_BTC, bool PACKED_QKV>
 __global__ void fwd_kernel(const __grid_constant__ fwd_globals<D> g)
 {
     static_assert(D == 64 || D == 128, "sm120 attention forward: HS must be 64 or 128");
@@ -71,18 +86,22 @@ __global__ void fwd_kernel(const __grid_constant__ fwd_globals<D> g)
     const int q_head_idx  = blockIdx.y;
     const int q_block_idx = blockIdx.x;
 
-    using q_rt    = rt_bf<Q_BLOCK, D,       ducks::rt_layout::row>;
-    using k_rt    = rt_bf<K_BLOCK, D,       ducks::rt_layout::row>;
-    using v_rt    = rt_bf<K_BLOCK, D,       ducks::rt_layout::row>;
-    using s_rt    = rt_fl<Q_BLOCK, K_BLOCK, ducks::rt_layout::row>;
-    using p_rt    = rt_bf<Q_BLOCK, K_BLOCK, ducks::rt_layout::row>;
-    using o_rt    = rt_fl<Q_BLOCK, D,       ducks::rt_layout::row>;
-    using row_cv  = typename s_rt::col_vec;  // 16 fp32 entries, one per query row
+    using q_rt    = rt_bf<FWD_BLOCK, D,       ducks::rt_layout::row>;
+    using k_rt    = rt_bf<FWD_BLOCK, D,       ducks::rt_layout::row>;
+    using v_rt    = rt_bf<FWD_BLOCK, D,       ducks::rt_layout::row>;
+    using s_rt    = rt_fl<FWD_BLOCK, FWD_BLOCK, ducks::rt_layout::row>;
+    using p_rt    = rt_bf<FWD_BLOCK, FWD_BLOCK, ducks::rt_layout::row>;
+    using o_rt    = rt_fl<FWD_BLOCK, D,       ducks::rt_layout::row>;
+    using row_cv  = typename s_rt::col_vec;
     using o_cv    = typename o_rt::col_vec;
 
     // Load Q for this q_block (stays in registers for the whole K/V sweep).
     q_rt Q;
-    ::kittens::warp::load(Q, g.q, {batch_idx, q_head_idx, q_block_idx, 0});
+    if constexpr (PACKED_QKV) {
+        ::kittens::warp::load(Q, g.q, {batch_idx, 0, q_block_idx, q_head_idx});
+    } else {
+        ::kittens::warp::load(Q, g.q, {batch_idx, q_head_idx, q_block_idx, 0});
+    }
 
     // Init online softmax state.
     o_rt O;
@@ -99,8 +118,14 @@ __global__ void fwd_kernel(const __grid_constant__ fwd_globals<D> g)
     for (int kb = 0; kb <= q_block_idx; ++kb) {
         k_rt K;
         v_rt V;
-        ::kittens::warp::load(K, g.k, {batch_idx, q_head_idx, kb, 0});
-        ::kittens::warp::load(V, g.v, {batch_idx, q_head_idx, kb, 0});
+        if constexpr (PACKED_QKV) {
+            const int num_heads = gridDim.y;
+            ::kittens::warp::load(K, g.k, {batch_idx, 0, kb, num_heads + q_head_idx});
+            ::kittens::warp::load(V, g.v, {batch_idx, 0, kb, 2 * num_heads + q_head_idx});
+        } else {
+            ::kittens::warp::load(K, g.k, {batch_idx, q_head_idx, kb, 0});
+            ::kittens::warp::load(V, g.v, {batch_idx, q_head_idx, kb, 0});
+        }
 
         // S = Q · K^T  (16×16 fp32)
         s_rt S;
@@ -158,7 +183,11 @@ __global__ void fwd_kernel(const __grid_constant__ fwd_globals<D> g)
     ::kittens::warp::log(lse, l_acc);
     ::kittens::warp::add(lse, lse, m);
 
-    ::kittens::warp::store(g.o, O, {batch_idx, q_head_idx, q_block_idx, 0});
+    if constexpr (OUTPUT_BTC) {
+        ::kittens::warp::store(g.o, O, {batch_idx, 0, q_block_idx, q_head_idx});
+    } else {
+        ::kittens::warp::store(g.o, O, {batch_idx, q_head_idx, q_block_idx, 0});
+    }
     ::kittens::warp::store(g.l, lse, {batch_idx, q_head_idx, 0, q_block_idx});
 }
 
@@ -185,7 +214,6 @@ template <int D>
 struct bwd_globals {
     using q_tile   = st_bf<Q_BLOCK, D>;
     using kv_tile  = st_bf<K_BLOCK, D>;
-    using qkv_fl_tile = st_fl<Q_BLOCK, D>;  // for dQ/dK/dV fp32 accumulators
     using vec16    = sv<float, Q_BLOCK>;
 
     using q_gl  = gl<bf16,  -1, -1, -1, -1, q_tile>;
@@ -195,7 +223,13 @@ struct bwd_globals {
     using og_gl = gl<bf16,  -1, -1, -1, -1, q_tile>;
     using l_gl  = gl<float, -1, -1, -1, -1, vec16>;
     using d_gl  = gl<float, -1, -1, -1, -1, vec16>;
-    using grad_gl = gl<float, -1, -1, -1, -1, qkv_fl_tile>;
+#if defined(LLMK_SM120_ATOMIC_DQ)
+    using qg_tile = st_fl<Q_BLOCK, D>;
+    using qg_gl = gl<float, -1, -1, -1, -1, qg_tile>;
+    using grad_gl = gl<bf16, -1, -1, -1, -1, q_tile>;
+#else
+    using grad_gl = gl<bf16, -1, -1, -1, -1, q_tile>;
+#endif
 
     q_gl    q;
     k_gl    k;
@@ -204,7 +238,11 @@ struct bwd_globals {
     og_gl   og;
     l_gl    l;
     d_gl    d;
+#if defined(LLMK_SM120_ATOMIC_DQ)
+    qg_gl   qg;
+#else
     grad_gl qg;
+#endif
     grad_gl kg;
     grad_gl vg;
 
@@ -295,7 +333,7 @@ __device__ static inline void warp_atomic_add(const GL& dst, const RT& src, cons
 // dQ kernel — a good trade because atomic contention dominates step time
 // before any of those recomputed matmuls.
 
-template <int D>
+template <int D, bool PACKED_GRADS, bool PACKED_QKV>
 __global__ void bwd_main_kernel(const __grid_constant__ bwd_globals<D> g)
 {
     static_assert(D == 64, "sm120 attention bwd: v1 supports HS==64 only "
@@ -312,6 +350,7 @@ __global__ void bwd_main_kernel(const __grid_constant__ bwd_globals<D> g)
     using o_fl_rt = rt_fl<K_BLOCK, D, ducks::rt_layout::row>;  // dK / dV accumulators
     using s_rt    = rt_fl<Q_BLOCK, K_BLOCK, ducks::rt_layout::row>;
     using p_rt    = rt_bf<Q_BLOCK, K_BLOCK, ducks::rt_layout::row>;
+    using dq_rt   = rt_fl<Q_BLOCK, D, ducks::rt_layout::row>;
     using row_cv  = typename s_rt::col_vec;
 
     const float scale = 1.0f / sqrtf((float)D);
@@ -319,8 +358,14 @@ __global__ void bwd_main_kernel(const __grid_constant__ bwd_globals<D> g)
     // Load K, V once and keep in registers for the whole Q-loop.
     k_rt K;
     v_rt V;
-    ::kittens::warp::load(K, g.k, {batch_idx, q_head_idx, k_block_idx, 0});
-    ::kittens::warp::load(V, g.v, {batch_idx, q_head_idx, k_block_idx, 0});
+    const int num_heads = gridDim.y;
+    if constexpr (PACKED_QKV) {
+        ::kittens::warp::load(K, g.k, {batch_idx, 0, k_block_idx, num_heads + q_head_idx});
+        ::kittens::warp::load(V, g.v, {batch_idx, 0, k_block_idx, 2 * num_heads + q_head_idx});
+    } else {
+        ::kittens::warp::load(K, g.k, {batch_idx, q_head_idx, k_block_idx, 0});
+        ::kittens::warp::load(V, g.v, {batch_idx, q_head_idx, k_block_idx, 0});
+    }
 
     o_fl_rt dK, dV;
     ::kittens::warp::zero(dK);
@@ -329,7 +374,11 @@ __global__ void bwd_main_kernel(const __grid_constant__ bwd_globals<D> g)
     #pragma unroll 1
     for (int qb = k_block_idx; qb < num_q_blocks; ++qb) {
         q_rt Q, dO;
-        ::kittens::warp::load(Q,  g.q,  {batch_idx, q_head_idx, qb, 0});
+        if constexpr (PACKED_QKV) {
+            ::kittens::warp::load(Q, g.q, {batch_idx, 0, qb, q_head_idx});
+        } else {
+            ::kittens::warp::load(Q, g.q, {batch_idx, q_head_idx, qb, 0});
+        }
         ::kittens::warp::load(dO, g.og, {batch_idx, q_head_idx, qb, 0});
 
         row_cv lse_vec, d_vec;
@@ -370,14 +419,29 @@ __global__ void bwd_main_kernel(const __grid_constant__ bwd_globals<D> g)
         ::kittens::warp::mul(dS, dS, scale);
         p_rt dS_bf;
         ::kittens::warp::copy(dS_bf, dS);
+#if defined(LLMK_SM120_ATOMIC_DQ)
+        dq_rt dQ_partial;
+        ::kittens::warp::zero(dQ_partial);
+        k_rt K_dq;
+        ::kittens::warp::copy(K_dq, K);
+        auto& K_col = ::kittens::warp::swap_layout_inplace(K_dq);
+        ::kittens::warp::mma_AB(dQ_partial, dS_bf, K_col, dQ_partial);
+        coord<typename bwd_globals<D>::qg_tile> qg_idx = {batch_idx, q_head_idx, qb, 0};
+        warp_atomic_add(g.qg, dQ_partial, qg_idx);
+#endif
         auto& dS_col = ::kittens::warp::swap_layout_inplace(dS_bf);
         auto& Q_col  = ::kittens::warp::swap_layout_inplace(Q);
         ::kittens::warp::mma_AtB(dK, dS_col, Q_col, dK);
     }
 
     // dK, dV warp-private — single store, no atomics.
-    ::kittens::warp::store(g.kg, dK, {batch_idx, q_head_idx, k_block_idx, 0});
-    ::kittens::warp::store(g.vg, dV, {batch_idx, q_head_idx, k_block_idx, 0});
+    if constexpr (PACKED_GRADS) {
+        ::kittens::warp::store(g.kg, dK, {batch_idx, 0, k_block_idx, num_heads + q_head_idx});
+        ::kittens::warp::store(g.vg, dV, {batch_idx, 0, k_block_idx, 2 * num_heads + q_head_idx});
+    } else {
+        ::kittens::warp::store(g.kg, dK, {batch_idx, q_head_idx, k_block_idx, 0});
+        ::kittens::warp::store(g.vg, dV, {batch_idx, q_head_idx, k_block_idx, 0});
+    }
 }
 
 // ---- dQ kernel: Q-owned, no atomics ---------------------------------------
@@ -387,7 +451,7 @@ __global__ void bwd_main_kernel(const __grid_constant__ bwd_globals<D> g)
 // from (Q, K_kb, V_kb, LSE_q, D_q), and accumulates dQ += scale · dS · K_kb.
 // Final dQ is written with a plain warp::store — zero contention.
 
-template <int D>
+template <int D, bool PACKED_GRADS, bool PACKED_QKV>
 __global__ void bwd_dq_kernel(const __grid_constant__ bwd_globals<D> g)
 {
     static_assert(D == 64, "sm120 attention bwd_dq: v1 supports HS==64 only");
@@ -409,7 +473,11 @@ __global__ void bwd_dq_kernel(const __grid_constant__ bwd_globals<D> g)
     // Q-owned constants for the whole K loop.
     q_rt   Q, dO;
     row_cv lse_vec, d_vec;
-    ::kittens::warp::load(Q,       g.q,  {batch_idx, q_head_idx, qb, 0});
+    if constexpr (PACKED_QKV) {
+        ::kittens::warp::load(Q, g.q, {batch_idx, 0, qb, q_head_idx});
+    } else {
+        ::kittens::warp::load(Q, g.q, {batch_idx, q_head_idx, qb, 0});
+    }
     ::kittens::warp::load(dO,      g.og, {batch_idx, q_head_idx, qb, 0});
     ::kittens::warp::load(lse_vec, g.l,  {batch_idx, q_head_idx, 0,  qb});
     ::kittens::warp::load(d_vec,   g.d,  {batch_idx, q_head_idx, 0,  qb});
@@ -421,8 +489,14 @@ __global__ void bwd_dq_kernel(const __grid_constant__ bwd_globals<D> g)
     for (int kb = 0; kb <= qb; ++kb) {
         k_rt K;
         v_rt V;
-        ::kittens::warp::load(K, g.k, {batch_idx, q_head_idx, kb, 0});
-        ::kittens::warp::load(V, g.v, {batch_idx, q_head_idx, kb, 0});
+        if constexpr (PACKED_QKV) {
+            const int num_heads = gridDim.y;
+            ::kittens::warp::load(K, g.k, {batch_idx, 0, kb, num_heads + q_head_idx});
+            ::kittens::warp::load(V, g.v, {batch_idx, 0, kb, 2 * num_heads + q_head_idx});
+        } else {
+            ::kittens::warp::load(K, g.k, {batch_idx, q_head_idx, kb, 0});
+            ::kittens::warp::load(V, g.v, {batch_idx, q_head_idx, kb, 0});
+        }
 
         // S = (Q · K^T) * scale ; causal mask on the diagonal block.
         s_rt S;
@@ -459,7 +533,11 @@ __global__ void bwd_dq_kernel(const __grid_constant__ bwd_globals<D> g)
     }
 
     // dQ warp-private — single plain store, no atomicAdds anywhere.
-    ::kittens::warp::store(g.qg, dQ, {batch_idx, q_head_idx, qb, 0});
+    if constexpr (PACKED_GRADS) {
+        ::kittens::warp::store(g.qg, dQ, {batch_idx, 0, qb, q_head_idx});
+    } else {
+        ::kittens::warp::store(g.qg, dQ, {batch_idx, q_head_idx, qb, 0});
+    }
 }
 
 } // namespace sm120_detail
@@ -496,8 +574,62 @@ inline void launch_forward_causal(bf16* q, bf16* k, bf16* v, float* l, bf16* o,
 
     globals g{q_arg, k_arg, v_arg, o_arg, l_arg};
 
-    dim3 grid(T / sm120_detail::Q_BLOCK, NH, B);
-    sm120_detail::fwd_kernel<D><<<grid, ::kittens::WARP_THREADS, 0, stream>>>(g);
+    dim3 grid(T / sm120_detail::FWD_BLOCK, NH, B);
+    sm120_detail::fwd_kernel<D, false, false><<<grid, ::kittens::WARP_THREADS, 0, stream>>>(g);
+}
+
+template <int D>
+inline void launch_forward_causal_btc(bf16* q, bf16* k, bf16* v, float* l, bf16* o,
+                                      int B, int NH, int T, cudaStream_t stream)
+{
+    static_assert(D == 64 || D == 128, "sm120 attention forward: HS must be 64 or 128");
+    assert(T % sm120_detail::fwd_sequence_granularity() == 0 &&
+           "sm120 attention: T must be a multiple of the forward tile");
+
+    using globals = sm120_detail::fwd_globals<D>;
+
+    typename globals::q_gl q_arg{q, static_cast<unsigned int>(B), static_cast<unsigned int>(NH),
+                                 static_cast<unsigned int>(T),  static_cast<unsigned int>(D)};
+    typename globals::k_gl k_arg{k, static_cast<unsigned int>(B), static_cast<unsigned int>(NH),
+                                 static_cast<unsigned int>(T),  static_cast<unsigned int>(D)};
+    typename globals::v_gl v_arg{v, static_cast<unsigned int>(B), static_cast<unsigned int>(NH),
+                                 static_cast<unsigned int>(T),  static_cast<unsigned int>(D)};
+    typename globals::o_gl o_arg{o, static_cast<unsigned int>(B), 1U,
+                                 static_cast<unsigned int>(T),  static_cast<unsigned int>(NH * D)};
+    typename globals::l_gl l_arg{l, static_cast<unsigned int>(B), static_cast<unsigned int>(NH),
+                                 1U, static_cast<unsigned int>(T)};
+
+    globals g{q_arg, k_arg, v_arg, o_arg, l_arg};
+
+    dim3 grid(T / sm120_detail::FWD_BLOCK, NH, B);
+    sm120_detail::fwd_kernel<D, true, false><<<grid, ::kittens::WARP_THREADS, 0, stream>>>(g);
+}
+
+template <int D>
+inline void launch_forward_causal_packed_qkv_btc(bf16* qkv, float* l, bf16* o,
+                                                 int B, int NH, int T, cudaStream_t stream)
+{
+    static_assert(D == 64 || D == 128, "sm120 attention forward: HS must be 64 or 128");
+    assert(T % sm120_detail::fwd_sequence_granularity() == 0 &&
+           "sm120 attention: T must be a multiple of the forward tile");
+
+    using globals = sm120_detail::fwd_globals<D>;
+
+    typename globals::q_gl q_arg{qkv, static_cast<unsigned int>(B), 1U,
+                                 static_cast<unsigned int>(T), static_cast<unsigned int>(3 * NH * D)};
+    typename globals::k_gl k_arg{qkv, static_cast<unsigned int>(B), 1U,
+                                 static_cast<unsigned int>(T), static_cast<unsigned int>(3 * NH * D)};
+    typename globals::v_gl v_arg{qkv, static_cast<unsigned int>(B), 1U,
+                                 static_cast<unsigned int>(T), static_cast<unsigned int>(3 * NH * D)};
+    typename globals::o_gl o_arg{o, static_cast<unsigned int>(B), 1U,
+                                 static_cast<unsigned int>(T), static_cast<unsigned int>(NH * D)};
+    typename globals::l_gl l_arg{l, static_cast<unsigned int>(B), static_cast<unsigned int>(NH),
+                                 1U, static_cast<unsigned int>(T)};
+
+    globals g{q_arg, k_arg, v_arg, o_arg, l_arg};
+
+    dim3 grid(T / sm120_detail::FWD_BLOCK, NH, B);
+    sm120_detail::fwd_kernel<D, true, true><<<grid, ::kittens::WARP_THREADS, 0, stream>>>(g);
 }
 
 inline void launch_forward_causal(bf16* q, bf16* k, bf16* v, float* l, bf16* o,
@@ -512,6 +644,32 @@ inline void launch_forward_causal(bf16* q, bf16* k, bf16* v, float* l, bf16* o,
     }
 }
 
+inline void launch_forward_causal_btc(bf16* q, bf16* k, bf16* v, float* l, bf16* o,
+                                      int B, int NH, int T, int HS, cudaStream_t stream) {
+    if (HS == 64) {
+        launch_forward_causal_btc<64>(q, k, v, l, o, B, NH, T, stream);
+    } else if (HS == 128) {
+        launch_forward_causal_btc<128>(q, k, v, l, o, B, NH, T, stream);
+    } else {
+        fprintf(stderr, "attention_forward: sm120 TK MHA supports head_dim 64 or 128 (got %d)\n", HS);
+        exit(EXIT_FAILURE);
+    }
+}
+
+inline void launch_forward_causal_packed_qkv_btc(bf16* qkv, float* l, bf16* o,
+                                                 int B, int NH, int T, int HS,
+                                                 cudaStream_t stream) {
+    if (HS == 64) {
+        launch_forward_causal_packed_qkv_btc<64>(qkv, l, o, B, NH, T, stream);
+    } else if (HS == 128) {
+        launch_forward_causal_packed_qkv_btc<128>(qkv, l, o, B, NH, T, stream);
+    } else {
+        fprintf(stderr, "attention_forward: sm120 packed-QKV TK MHA supports "
+                        "head_dim 64 or 128 (got %d)\n", HS);
+        exit(EXIT_FAILURE);
+    }
+}
+
 // ---- backward launcher ----------------------------------------------------
 //
 // Signature matches attention_h100.cuh's launch_backward_causal so the host
@@ -520,8 +678,15 @@ inline void launch_forward_causal(bf16* q, bf16* k, bf16* v, float* l, bf16* o,
 template <int D>
 inline void launch_backward_causal(bf16* q, bf16* k, bf16* v, bf16* o,
                                    float* l, bf16* og,
-                                   float* d, float* qg, float* kg, float* vg,
-                                   int B, int NH, int T, cudaStream_t stream)
+                                   float* d,
+#if defined(LLMK_SM120_ATOMIC_DQ)
+                                   float* qg,
+#else
+                                   bf16* qg,
+#endif
+                                   bf16* kg, bf16* vg,
+                                   int B, int NH, int T, cudaStream_t stream,
+                                   bool d_precomputed = false)
 {
     static_assert(D == 64, "sm120 attention bwd: v1 supports HS==64 only");
     assert(T % sm120_detail::bwd_sequence_granularity() == 0 &&
@@ -540,7 +705,11 @@ inline void launch_backward_causal(bf16* q, bf16* k, bf16* v, bf16* o,
     typename globals::og_gl   og_arg {og, Bu, NHu, Tu, Du};
     typename globals::l_gl    l_arg  {l,  Bu, NHu, 1U, Tu};
     typename globals::d_gl    d_arg  {d,  Bu, NHu, 1U, Tu};
+#if defined(LLMK_SM120_ATOMIC_DQ)
+    typename globals::qg_gl   qg_arg {qg, Bu, NHu, Tu, Du};
+#else
     typename globals::grad_gl qg_arg {qg, Bu, NHu, Tu, Du};
+#endif
     typename globals::grad_gl kg_arg {kg, Bu, NHu, Tu, Du};
     typename globals::grad_gl vg_arg {vg, Bu, NHu, Tu, Du};
 
@@ -551,17 +720,141 @@ inline void launch_backward_causal(bf16* q, bf16* k, bf16* v, bf16* o,
     //   prep  → compute  D = rowsum(dO ⊙ O) per Q-row.
     //   main  → K-owned: each warp produces dK_kb, dV_kb (no atomics).
     //   dq    → Q-owned: each warp produces dQ_qb  (no atomics).
-    sm120_detail::bwd_prep_kernel<D><<<grid, ::kittens::WARP_THREADS, 0, stream>>>(g);
-    sm120_detail::bwd_main_kernel<D><<<grid, ::kittens::WARP_THREADS, 0, stream>>>(g);
-    sm120_detail::bwd_dq_kernel  <D><<<grid, ::kittens::WARP_THREADS, 0, stream>>>(g);
+    if (!d_precomputed) {
+        sm120_detail::bwd_prep_kernel<D><<<grid, ::kittens::WARP_THREADS, 0, stream>>>(g);
+    }
+    sm120_detail::bwd_main_kernel<D, false, false><<<grid, ::kittens::WARP_THREADS, 0, stream>>>(g);
+#if !defined(LLMK_SM120_ATOMIC_DQ)
+    sm120_detail::bwd_dq_kernel  <D, false, false><<<grid, ::kittens::WARP_THREADS, 0, stream>>>(g);
+#endif
 }
+
+#if !defined(LLMK_SM120_ATOMIC_DQ)
+template <int D>
+inline void launch_backward_causal_packed_grads(bf16* q, bf16* k, bf16* v, bf16* o,
+                                                float* l, bf16* og,
+                                                float* d, bf16* packed_grad,
+                                                int B, int NH, int T, cudaStream_t stream,
+                                                bool d_precomputed = false)
+{
+    static_assert(D == 64, "sm120 attention bwd: v1 supports HS==64 only");
+    assert(T % sm120_detail::bwd_sequence_granularity() == 0 &&
+           "sm120 attention bwd: T must be a multiple of the backward tile");
+
+    using globals = sm120_detail::bwd_globals<D>;
+    const unsigned int Bu  = static_cast<unsigned int>(B);
+    const unsigned int NHu = static_cast<unsigned int>(NH);
+    const unsigned int Tu  = static_cast<unsigned int>(T);
+    const unsigned int Du  = static_cast<unsigned int>(D);
+
+    typename globals::q_gl    q_arg  {q,  Bu, NHu, Tu, Du};
+    typename globals::k_gl    k_arg  {k,  Bu, NHu, Tu, Du};
+    typename globals::v_gl    v_arg  {v,  Bu, NHu, Tu, Du};
+    typename globals::o_gl    o_arg  {o,  Bu, NHu, Tu, Du};
+    typename globals::og_gl   og_arg {og, Bu, NHu, Tu, Du};
+    typename globals::l_gl    l_arg  {l,  Bu, NHu, 1U, Tu};
+    typename globals::d_gl    d_arg  {d,  Bu, NHu, 1U, Tu};
+    typename globals::grad_gl qg_arg {packed_grad, Bu, 1U, Tu, static_cast<unsigned int>(3 * NH * D)};
+    typename globals::grad_gl kg_arg {packed_grad, Bu, 1U, Tu, static_cast<unsigned int>(3 * NH * D)};
+    typename globals::grad_gl vg_arg {packed_grad, Bu, 1U, Tu, static_cast<unsigned int>(3 * NH * D)};
+
+    globals g{q_arg, k_arg, v_arg, o_arg, og_arg, l_arg, d_arg, qg_arg, kg_arg, vg_arg, T};
+
+    dim3 grid(T / sm120_detail::Q_BLOCK, NH, B);
+    if (!d_precomputed) {
+        sm120_detail::bwd_prep_kernel<D><<<grid, ::kittens::WARP_THREADS, 0, stream>>>(g);
+    }
+    sm120_detail::bwd_main_kernel<D, true, false><<<grid, ::kittens::WARP_THREADS, 0, stream>>>(g);
+    sm120_detail::bwd_dq_kernel<D, true, false><<<grid, ::kittens::WARP_THREADS, 0, stream>>>(g);
+}
+
+template <int D>
+inline void launch_backward_causal_packed_qkv_packed_grads(bf16* qkv, bf16* o,
+                                                           float* l, bf16* og,
+                                                           float* d, bf16* packed_grad,
+                                                           int B, int NH, int T,
+                                                           cudaStream_t stream,
+                                                           bool d_precomputed = false)
+{
+    static_assert(D == 64, "sm120 attention bwd: v1 supports HS==64 only");
+    assert(T % sm120_detail::bwd_sequence_granularity() == 0 &&
+           "sm120 attention bwd: T must be a multiple of the backward tile");
+
+    using globals = sm120_detail::bwd_globals<D>;
+    const unsigned int Bu  = static_cast<unsigned int>(B);
+    const unsigned int NHu = static_cast<unsigned int>(NH);
+    const unsigned int Tu  = static_cast<unsigned int>(T);
+    const unsigned int Du  = static_cast<unsigned int>(D);
+    const unsigned int packed_cols = static_cast<unsigned int>(3 * NH * D);
+
+    typename globals::q_gl    q_arg  {qkv, Bu, 1U,  Tu, packed_cols};
+    typename globals::k_gl    k_arg  {qkv, Bu, 1U,  Tu, packed_cols};
+    typename globals::v_gl    v_arg  {qkv, Bu, 1U,  Tu, packed_cols};
+    typename globals::o_gl    o_arg  {o,   Bu, NHu, Tu, Du};
+    typename globals::og_gl   og_arg {og,  Bu, NHu, Tu, Du};
+    typename globals::l_gl    l_arg  {l,   Bu, NHu, 1U, Tu};
+    typename globals::d_gl    d_arg  {d,   Bu, NHu, 1U, Tu};
+    typename globals::grad_gl qg_arg {packed_grad, Bu, 1U, Tu, packed_cols};
+    typename globals::grad_gl kg_arg {packed_grad, Bu, 1U, Tu, packed_cols};
+    typename globals::grad_gl vg_arg {packed_grad, Bu, 1U, Tu, packed_cols};
+
+    globals g{q_arg, k_arg, v_arg, o_arg, og_arg, l_arg, d_arg, qg_arg, kg_arg, vg_arg, T};
+
+    dim3 grid(T / sm120_detail::Q_BLOCK, NH, B);
+    if (!d_precomputed) {
+        sm120_detail::bwd_prep_kernel<D><<<grid, ::kittens::WARP_THREADS, 0, stream>>>(g);
+    }
+    sm120_detail::bwd_main_kernel<D, true, true><<<grid, ::kittens::WARP_THREADS, 0, stream>>>(g);
+    sm120_detail::bwd_dq_kernel<D, true, true><<<grid, ::kittens::WARP_THREADS, 0, stream>>>(g);
+}
+
+inline void launch_backward_causal_packed_grads(bf16* q, bf16* k, bf16* v, bf16* o,
+                                                float* l, bf16* og,
+                                                float* d, bf16* packed_grad,
+                                                int B, int NH, int T, int HS,
+                                                cudaStream_t stream,
+                                                bool d_precomputed = false) {
+    if (HS == 64) {
+        launch_backward_causal_packed_grads<64>(
+            q, k, v, o, l, og, d, packed_grad, B, NH, T, stream, d_precomputed);
+    } else {
+        fprintf(stderr, "attention_backward: sm120 packed-gradient TK MHA backward supports "
+                        "head_dim 64 only (got %d).\n", HS);
+        exit(EXIT_FAILURE);
+    }
+}
+
+inline void launch_backward_causal_packed_qkv_packed_grads(bf16* qkv, bf16* o,
+                                                           float* l, bf16* og,
+                                                           float* d, bf16* packed_grad,
+                                                           int B, int NH, int T, int HS,
+                                                           cudaStream_t stream,
+                                                           bool d_precomputed = false) {
+    if (HS == 64) {
+        launch_backward_causal_packed_qkv_packed_grads<64>(
+            qkv, o, l, og, d, packed_grad, B, NH, T, stream, d_precomputed);
+    } else {
+        fprintf(stderr, "attention_backward: sm120 packed-QKV packed-gradient TK MHA backward "
+                        "supports head_dim 64 only (got %d).\n", HS);
+        exit(EXIT_FAILURE);
+    }
+}
+#endif
 
 inline void launch_backward_causal(bf16* q, bf16* k, bf16* v, bf16* o,
                                    float* l, bf16* og,
-                                   float* d, float* qg, float* kg, float* vg,
-                                   int B, int NH, int T, int HS, cudaStream_t stream) {
+                                   float* d,
+#if defined(LLMK_SM120_ATOMIC_DQ)
+                                   float* qg,
+#else
+                                   bf16* qg,
+#endif
+                                   bf16* kg, bf16* vg,
+                                   int B, int NH, int T, int HS, cudaStream_t stream,
+                                   bool d_precomputed = false) {
     if (HS == 64) {
-        launch_backward_causal<64>(q, k, v, o, l, og, d, qg, kg, vg, B, NH, T, stream);
+        launch_backward_causal<64>(q, k, v, o, l, og, d, qg, kg, vg, B, NH, T, stream,
+                                   d_precomputed);
     } else {
         // HS == 128 backward is a follow-up (register pressure exceeds 256/thread
         // without shared-memory staging for an accumulator). For now the caller

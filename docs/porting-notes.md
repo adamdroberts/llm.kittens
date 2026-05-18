@@ -37,7 +37,7 @@ companion to those.
 | Build | nvcc + cuBLAS + cuBLASLt + (optional) cuDNN | nvcc + TK headers, single binary |
 | Toolchain | `c++17`, `sm_80` and up | `c++20`, `sm_90a` only (WGMMA + TMA require it) |
 | Precision | BF16 / FP16 / FP32 | BF16 only |
-| Matmul | cuBLASLt with bias + GELU epilogue fusion | TK GEMM; default bias / GELU are separate passes; GPT-2 MLP up-projection has an opt-in finish-path bias+GELU epilogue behind `-ge 1`; forward uses `A*B^T` to match `(OC, C)` weight files |
+| Matmul | cuBLASLt with bias + GELU epilogue fusion | TK GEMM; default bias / GELU are separate passes except on SM120, where GPT-2 defaults to `-ge 1` after RTX 5090 smoke timing; GPT-2 MLP up-projection has a finish-path bias+GELU epilogue behind `-ge 1`, and pure-SM120 MLP backward fuses dGELU into the `fcproj` dInput GEMM by default with SM120-specific register-swap/dGELU approximations; forward uses `A*B^T` to match `(OC, C)` weight files |
 | Attention fwd | cuDNN flash-attn (default) or fallback CUDA | TK MHA fwd (head_dim ∈ {64, 128}) |
 | Attention bwd | cuDNN flash-attn-bwd | TK MHA bwd |
 | LayerNorm fwd | hand-written CUDA | TK layernorm (forked, dropout removed, `D` re-templated, stream param added) |
@@ -105,9 +105,10 @@ precisions is v2 work. See [precision.md](precision.md).
 Symptom: looking for the bias / GELU fusion that used to live in
 `matmul_forward_cublaslt`. The default v1 path still keeps this explicit: apply
 bias via `add_bias_kernel` in [`llmc/matmul.cuh`](../llmc/matmul.cuh), then apply
-GELU via [`llmc/gelu.cuh`](../llmc/gelu.cuh). The only compile-wired fused path
-today is `matmul_forward_gelu`, used by GPT-2's MLP up-projection when `-ge 1`
-is set. Keep it opt-in until H100 numerical validation and `ncu` profiling pass.
+GELU via [`llmc/gelu.cuh`](../llmc/gelu.cuh). The compile-wired fused forward
+path is `matmul_forward_gelu`, used by GPT-2's MLP up-projection when `-ge 1`
+is set. Non-SM120 builds keep it opt-in until H100 numerical validation and
+`ncu` profiling pass; SM120 defaults to it based on RTX 5090 smoke timing.
 
 ## Source pointers (most-cited llm.c lines)
 

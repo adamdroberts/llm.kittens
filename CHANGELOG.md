@@ -6,6 +6,329 @@ milestone. Adds within a milestone are listed in chronological order.
 The canonical "what is done / what is left" is [`goal.md`](goal.md). The
 changelog is the diary; `goal.md` is the plan.
 
+## 2026-05-17 — SM120 RTX 5090 GEMM fallback and pure-TK tuning
+
+- Added an SM120 cuBLASLt GEMM fallback path for GPT-2 matmul forward,
+  backward dInput/dWeight, and fused backward-GELU where available. The
+  fallback is the default for `DEVICE_ARCH=SM120`; pure TK remains available
+  with `SM120_USE_CUBLASLT_GEMM=0`.
+- Added `bench_sm120_matmul`, a focused RTX 5090 benchmark comparing pure TK
+  GEMM shapes against the SM120 cuBLASLt fallback for GPT-2 qkv, attention
+  projection, MLP, LM-head forward, dInput, and dWeight paths.
+- Tuned the pure SM120 TK path with fused bias and bias+GELU epilogues,
+  separate K=64 backward GEMM traits, concurrent split-K dWeight, and
+  shape-aware qkv split-K. Added explicit dInput and optional fused dGELU
+  smoke coverage; this exposed the 8-warp wide NN tile as incorrect for plain
+  dInput, so plain dInput now stays on the correct 128x64 path while the
+  experimental pure dGELU epilogue remains disabled by default.
+- Swept pure-TK dWeight split-K values on RTX 5090. QKV still prefers 16-way
+  split-K and most non-QKV shapes prefer the existing 8-way cap. A 4-way square
+  dWeight split was faster in the benchmark but failed the dWeight smoke
+  tolerance, so it is not enabled.
+- Tuned the existing CUDA bias-gradient reduction launch for SM120. RTX 5090
+  prefers a 512-thread block for this reduction over the old H100-derived
+  768-thread choice; `LLMK_SM120_BIAS_BLOCK_SIZE` remains available for
+  follow-up sweeps.
+- Tuned SM120 TK attention tile sizes independently for forward and backward.
+  The default is now a 32-row forward tile and a 16-row backward tile; full
+  32-row attention was faster than the old 16-row default, but 64-row tiles
+  were correct and much slower from register pressure. CUDA fallback attention
+  backward was pathologically slow for the 3-step GPT-2 shape and was not kept.
+- Added an SM120 GPT-2 packed-QKV attention fast path. The trainer now stores
+  the QKV projection directly in the saved `(B, T, 3, NH, HS)` activation slot,
+  SM120 TK attention loads Q/K/V from that packed layout, and SM120 TK backward
+  writes packed dQ/dK/dV directly to the QKV input-gradient buffer. This removes
+  the forward QKV permute, forward attention unpermute, and final backward
+  QKV-gradient permute for the default RTX 5090 path; fallback and atomic-dQ
+  builds keep the original permuted layout.
+- Validation on RTX 5090 with the TinyStories 3-step command plus `-x 3`:
+  default SM120 cuBLASLt fallback averaged `2662.30 ms`; corrected pure TK
+  averaged `3729.76 ms`; the optimized attention split averaged `2630.40 ms`
+  best / `2633.44 ms` on a clean rerun; direct attention output plus direct
+  backward gradients averaged `2580.96 ms`; the packed-QKV attention path
+  averaged `2547.84 ms` with steps `2544.99`, `2544.00`, and `2551.67 ms`;
+  and the SM120 512-thread bias-gradient reduction averaged `2547.22 ms`
+  steady-state with steps `2569.93`, `2543.22`, and `2551.23 ms`.
+  `test_matmul` and `test_attention` pass, including the SM120 packed-QKV
+  attention smoke case. cuBLASLt plan caching
+  (`2663.15 ms`, `2731.19 ms` with the attention split), heuristic index
+  selection (`2687.10 ms` / `2744.01 ms`), min/max-wave selection
+  (`2691.49 ms` / `3495.77 ms`), 256 MiB workspace (`2635.88 ms`), and
+  8-warp dprep (`2630.79 ms`) did not beat the default fallback plus the
+  optimized attention split. `-maxrregcount=128` (`2815.44 ms`) and a
+  vectorized dprep helper (`2638.18 ms`) were also slower and are not enabled.
+- Extended `bench_sm120_matmul` to include the real MLP up-projection
+  bias+GELU/pre-GELU forward path, and later made it report both the fused
+  TK epilogue and the pure-TK trainer default of matmul plus explicit CUDA
+  GELU. A current pure-TK no-extra-flags rebaseline with the same TinyStories
+  3-step command averaged `5028.57 ms`, so it remains far behind the
+  cuBLASLt-backed SM120 default. Follow-up pure-TK candidates were rejected:
+  `LLMK_SM120_K_TILE=64` averaged `4946.25 ms`, and
+  `LLMK_SM120_DWEIGHT_SPLIT_K=32` averaged `4864.60 ms`. The restored default
+  SM120 cuBLASLt-backed build averaged `2548.46 ms` with steps `2563.11`,
+  `2545.60`, and `2551.31 ms`.
+- Changed the automatic GPT-2 `-ge` default so SM120 cuBLASLt builds keep
+  fused GELU (`gelu_fusion=1`) while pure SM120 TK builds default to explicit
+  CUDA GELU (`gelu_fusion=0`). With no extra macros, the patched pure-TK
+  3-step run averaged `3578.03 ms`, versus `5028.57 ms` for the previous
+  pure-TK default. `LLMK_SM120_FORCE_DEFAULT_TILE` failed the matmul smoke
+  test, and `LLMK_SM120_DWEIGHT_SPLIT_K=32` did not improve the corrected
+  pure-TK setup (`3571.30 ms`).
+- Verified the SM120 cuBLASLt default should keep fused GELU: the same
+  restored default binary with `-ge 0` averaged `2619.29 ms`, slower than the
+  fused default.
+- Additional pure-TK SM120 sweeps were rejected after benchmark plus smoke or
+  3-step validation. Forward-only huge-N thresholds `768` and `2048` did not
+  beat the default threshold mix. dWeight `SUPER_M` values `1`, `2`, and `8`
+  did not close the dWeight gap, and disabling concurrent split-K streams was a
+  large regression. GELU backward blocks `512` and `64` passed `test_gelu` but
+  regressed 3-step pure-TK training to `4716.63 ms` and `5342.83 ms`.
+  Disabling the SM120 forward wide tile looked fast in the benchmark but failed
+  `test_matmul` on the GPT-2 MLP-up and bias+GELU forward cases; huge-N
+  `K_TILE=32` nearly matched cuBLASLt for LM-head forward but failed the
+  LM-head smoke, `K_TILE=96` was slower, and `K_TILE=128` exceeded SM120 shared
+  memory. `LLMK_SM120_GRAD_K_TILE=32` passed `test_matmul` but regressed
+  3-step pure-TK training to `4847.39 ms`; a dInput-only split of that idea
+  also passed `test_matmul` but regressed to `5350.23 ms`, so it was not kept.
+- Final restored SM120 default validation on RTX 5090: `test_matmul` passed
+  `8/8`, `test_attention` passed all three smoke shapes including packed-QKV,
+  and the TinyStories command with `-x 3` averaged `2536.44 ms` with steps
+  `2534.52`, `2533.96`, and `2538.93 ms` (`206.7k`-`206.9k` tok/s). The final
+  `bench_sm120_matmul` pass still shows pure TK behind cuBLASLt on every safe
+  GPT-2 GEMM shape; the largest remaining gap is attention-projection dWeight
+  at `1.74x` slower.
+- Additional rejected SM120 pure-TK follow-ups: stricter `cp.async.wait_group 1`
+  passed the smoke test but slowed every benchmarked GEMM shape; launch-bounds
+  `minBlocks=2` made some direct forward timings look competitive but failed
+  the pure-TK MLP-up and bias+GELU smoke cases, while NN-only launch bounds
+  passed smoke and regressed 3-step training to `4994.76 ms`. A 512-thread
+  split-K dWeight reduction passed smoke but regressed training to `5115.35 ms`,
+  pure `-ge 1` regressed to `4897.44 ms`, and shared-memory carveout hints
+  worsened the benchmark. Huge-N `K_TILE=32` plus global `wait_group 1` was
+  correct but regressed training to `5442.61 ms`; restricting the wait change
+  to huge-N failed the pure LM-head smoke. `SUPER_M` values `4` and `16`,
+  `DINP_SUPER_M` values `2` and `4`, and re-enabling the wide plain-dInput tile
+  also failed to close the cuBLASLt gap. The ThunderKittens B200 BF16 GEMM
+  source is not a portable SM120 replacement: ptxas rejects its `tcgen05` and
+  `.cta_group::2` instructions for `sm_120a`.
+- After removing those rejected hooks, restored the default SM120 cuBLASLt build
+  and revalidated on RTX 5090: `test_matmul` passed `8/8`, `test_attention`
+  passed all three smoke shapes, `bench_sm120_matmul` still showed pure TK
+  behind cuBLASLt on every GPT-2 GEMM row, and the TinyStories command capped
+  with `-x 3` averaged `2556.74 ms` with steps `2598.45`, `2548.75`, and
+  `2564.74 ms` (`201.8k`-`205.7k` tok/s).
+- Rejected an SM120 pure-TK dWeight atomic split-K experiment. Direct BF16
+  `atomicAdd` compiled and the all-shape and square-only variants passed
+  `test_matmul`, but `bench_sm120_matmul` showed worse or mixed dWeight ratios
+  than the restored scratch-plus-reduce path, so the atomic launcher and wrapper
+  were removed.
+- Rejected two more dWeight-focused TK candidates: `LLMK_SM120_GRAD_K_TILE=128`
+  exceeded SM120 shared-memory limits in the wide backward kernels, and a
+  128x128 dWeight tile passed `test_matmul` but made every benchmarked dWeight
+  row slower than the restored 256x64 path.
+- Rejected full K-loop unrolling in the SM120 TK GEMM kernels. The unrolled
+  build passed `test_matmul`, but benchmark timings were mixed and all rows
+  still trailed cuBLASLt, with most forward and dInput absolute timings worse
+  than the restored default.
+- Rejected a compile-time-specialized split-K partial reducer for the common
+  8- and 16-part dWeight cases. It passed `test_matmul`, but the focused
+  benchmark only slightly helped qkv dWeight while regressing several other
+  dWeight rows, including attention projection and LM-head.
+- Final restored-default cleanup validation on RTX 5090: `test_matmul` passed
+  `8/8`, `test_attention` passed all three smoke shapes including packed-QKV,
+  and the TinyStories command capped with `-x 3` averaged `2525.99 ms` with
+  steps `2529.42`, `2529.39`, and `2522.60 ms` (`207.3k`-`207.6k` tok/s).
+  The final `bench_sm120_matmul` pass still showed direct pure-TK GEMM behind
+  cuBLASLt on every GPT-2 row; the worst ratio was attention-projection dWeight
+  at `1.77x` slower.
+- Rejected a TK dWeight in-place register-layout-swap variant. A global version
+  passed `test_matmul` but was mixed in the direct benchmark, and a guarded
+  qkv/attention/MLP-up dWeight-only version still regressed pure-TK TinyStories
+  3-step training to `5904.20 ms`, so the hook was removed.
+- Rebaselined the restored pure-TK SM120 path after that rejection:
+  `test_matmul` passed `7/7` in the no-cuBLASLt build, default explicit GELU
+  averaged `5743.60 ms`, and `-ge 1` averaged `5416.18 ms`. The GPT-2 trainer
+  now defaults SM120 builds to `gelu_fusion=1`; this improves the current
+  pure-TK path but still does not close the cuBLASLt gap.
+- Rejected enabling the pure-TK SM120 fused dGELU epilogue by default. It
+  passes `test_matmul` (`8/8`) with `LLMK_SM120_FUSE_DGELU=1`, but default-source
+  TinyStories 3-step reruns averaged `5412.11 ms` and `5358.96 ms`, while an
+  apples-to-apples disabled-dGELU build averaged `5056.27 ms`. The source
+  default was restored to disabled, passed `test_matmul` (`7/7`), and averaged
+  `5236.04 ms` on a final pure-TK 3-step run. The hook remains available for
+  A/B testing and disabled by default.
+- Restored the default cuBLASLt-backed SM120 build after the fused-dGELU A/B:
+  `test_matmul` passed `8/8`, `test_attention` passed all three smoke shapes,
+  `bench_sm120_matmul` still showed pure TK behind cuBLASLt on every GPT-2 GEMM
+  row, and the TinyStories command capped with `-x 3` averaged `2540.58 ms`
+  before the extra rejected tuning sweeps and `2544.26 ms` after the final
+  rebuild/revert.
+- Rejected additional SM120 GEMM tuning variants after direct benchmarks or
+  smoke tests: lowering `LLMK_SM120_HUGE_N_THRESHOLD` to `768` regressed
+  dInput/dWeight heavily, `LLMK_SM120_DWEIGHT_SUPER_M=16` and `=3` did not
+  improve the dWeight rows enough to offset regressions, and raising
+  `__launch_bounds__` occupancy for NT forward made the MLP-up and fused
+  bias+GELU smoke cases numerically incorrect.
+- Rejected a dWeight-only force-default-tile variant. The correctly scoped
+  `LLMK_SM120_DWEIGHT_FORCE_DEFAULT_TILE` A/B passed `test_matmul` and improved
+  some direct dWeight benchmark rows, but pure-TK TinyStories 3-step training
+  regressed to `5671.51 ms`, so the default 256x64 TN tile remains in place.
+- Rejected a 128x192 huge-N tile for the LM-head path. It passed `test_matmul`
+  and improved direct LM-head forward timing, but pure-TK TinyStories 3-step
+  training regressed to `5995.44 ms`; the huge-N aliases remain on 128x128.
+- Rebuilt the restored default cuBLASLt-backed SM120 path after those rejected
+  experiments: `test_matmul` passed `8/8`, `test_attention` passed all three
+  smoke shapes, the focused GEMM benchmark still had pure TK behind every
+  cuBLASLt row, and the TinyStories command capped with `-x 3` averaged
+  `2538.98 ms`.
+- Rejected allowing 16-way split-K for every dWeight shape. The A/B passed
+  `test_matmul`, but the direct benchmark was mixed and pure-TK TinyStories
+  3-step training regressed to `6643.29 ms`; non-QKV dWeight remains capped at
+  8-way split-K.
+- Rejected overlapping pure-TK backward dInput and dWeight GEMMs with a side
+  stream. The event-ordered variant passed `test_matmul`, but TinyStories
+  3-step training regressed to `6439.10 ms`, so `matmul_backward` stays
+  serial within the caller stream.
+- Rebuilt the restored default cuBLASLt-backed SM120 path after the split-K and
+  overlap rejections: `test_matmul` passed `8/8`, `test_attention` passed all
+  three smoke shapes, the focused GEMM benchmark still showed every pure-TK row
+  behind cuBLASLt, and the TinyStories command capped with `-x 3` averaged
+  `2594.86 ms`.
+- Rejected disabling dWeight split-K with `LLMK_SM120_DWEIGHT_SPLIT_K=1`. The
+  smoke test passed, but the focused benchmark made dWeight rows much slower,
+  including attention-projection dWeight at `6.16x` slower than cuBLASLt.
+- Rejected a dWeight-only `K_TILE=128` experiment for SM120. The scoped build
+  passed `test_matmul`, but `bench_sm120_matmul` made every dWeight row slower
+  than the restored default, including LM-head dWeight at `1.70x` slower than
+  cuBLASLt. The temporary dWeight K-tile hook was removed.
+- Added a `train_gpt2cu` source guard so SM120 training cannot be built with
+  TK attention disabled. The standalone attention smoke can still exercise the
+  CUDA fallback path, but the trainer now refuses that fallback configuration
+  instead of entering the path that spun outside the intended GPU kernel route.
+- Rebuilt the restored default SM120 path with cuBLASLt GEMMs and TK attention
+  after the guard: `test_matmul` passed `8/8`, `test_attention` passed all
+  three smoke shapes, `bench_sm120_matmul` still showed pure-TK GEMM rows
+  behind cuBLASLt, and the TinyStories command capped with `-x 3` averaged
+  `2565.60 ms`. An explicit
+  `EXTRA_NVCC_FLAGS='-DLLMK_DISABLE_TK_MHA'` trainer build now fails at the
+  source guard as intended.
+- Rejected another SM120 pure-TK GEMM sweep after focused benchmark runs:
+  a compact 64x64 forward wide tile passed `test_matmul` and helped
+  attention/fcproj forward, but left dInput/dWeight behind cuBLASLt; shared
+  carveout hints were mixed or slower; direct column loads for dInput and
+  dWeight were mixed, including A-only, B-only, and non-square-gated dWeight
+  forms that still left the best dWeight rows at least `1.07x` slower than
+  cuBLASLt and attention-projection dWeight above `1.5x`. A probe that tried
+  to compile the existing Hopper WGMMA GEMM header for SM120 failed because the
+  SM120 TK warpgroup surface does not expose the Hopper
+  `warpgroup::mma_async_wait` API. The rejected hooks and probe file were
+  removed. After cleanup, the default SM120 cuBLASLt-backed build passed
+  `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes), the
+  focused benchmark still showed pure-TK GEMM behind cuBLASLt with
+  attention-projection dWeight at `1.59x`, and the TinyStories command capped
+  with `-x 3` averaged `2619.90 ms` across the three step lines
+  (`2572.54`, `2652.46`, `2634.70 ms`; trainer-reported total average
+  `2643.58 ms`).
+- Rejected a single-launch split-K dWeight prototype that mapped split parts to
+  `grid.y` instead of launching one TN kernel per part on side streams. It
+  passed `test_matmul`, but the focused benchmark still left every dWeight row
+  slower than cuBLASLt; requested split counts `4`, default `16`/`8`, and `32`
+  were all behind. A second Hopper-wrapper probe forced the `KITTENS_SM90` API
+  while compiling for `sm_120a`; ptxas rejected `wgmma.fence`,
+  `wgmma.mma_async`, `wgmma.commit_group`, and `wgmma.wait_group`, confirming
+  the H100 WGMMA path is not portable to SM120. The temporary split-K launcher
+  and probe file were removed.
+- Pruned SM120 trainer-side synchronizations. Forward no longer hard-syncs at
+  the end, training/validation input and target copies are stream-ordered,
+  residual/loss/optimizer memsets are asynchronous, non-final micro-steps no
+  longer device-synchronize after backward, and the update path now relies on
+  the training-loop end event for timing synchronization. The final restored
+  3-step cuBLASLt-backed rerun averaged `2550.94 ms`, with the same TinyStories
+  loss/norm trace as the earlier validated runs. An async grad-norm scalar copy
+  was tested and rejected after it regressed the 3-step average to
+  `2586.19 ms`.
+- Added a pure SM120 TK 128x96 forward tile for GPT-2 projection widths
+  divisible by 96 (`LLMK_SM120_FORWARD_N96=1` by default). The pure-TK matmul
+  smoke passed `7/7`, and the TinyStories 3-step pure-TK run improved to
+  `2956.35 ms` with steps `2938.72`, `2955.41`, and `2957.30 ms`. It is still
+  slower than the cuBLASLt-backed SM120 default and the user's llm.c baseline,
+  so the goal remains open for the remaining GEMM gaps.
+- Re-tested pure SM120 TK fused dGELU after the N96 forward tile. The
+  `LLMK_SM120_FUSE_DGELU=1` build passed `test_matmul` (`8/8`) and improved
+  the 3-step pure-TK average to `2940.72 ms`, so fused dGELU is now enabled by
+  default for pure SM120 builds when the trainer uses `-ge 1`.
+- Lowered the pure SM120 dWeight split-K default from 16 to 8 after the current
+  N96+dGELU trainer favored fewer qkv part launches. The split-K=8 A/B passed
+  `test_matmul` (`8/8`) and averaged `2936.47 ms` on its first 3-step
+  TinyStories run; the no-extra-flags source rerun averaged `2928.99 ms` with
+  steps `2926.24`, `2925.07`, and `2932.91 ms`. Rejected follow-ups:
+  96-column backward tiles made every direct dInput and dWeight benchmark row
+  worse; forcing the LM-head through N96 by raising
+  `LLMK_SM120_HUGE_N_THRESHOLD` failed the MLP-up and LM-head smoke rows;
+  split-K=4 failed smoke; split-K=32, `LLMK_SM120_DWEIGHT_SUPER_M=6`,
+  `LLMK_SM120_K_TILE=64`, and attention backward block 32 were correct but
+  slower or mixed; `LLMK_SM120_DINP_SUPER_M=16` and
+  `LLMK_SM120_HUGE_N_K_TILE=32` failed smoke.
+- Restored and revalidated the normal cuBLASLt-backed SM120 build after the
+  pure-TK changes. `test_matmul` passed `8/8`, `test_attention` passed all
+  three smoke shapes, `bench_sm120_matmul` still showed pure TK behind cuBLASLt
+  on the remaining GEMM rows, and the TinyStories command capped with `-x 3`
+  averaged `2540.53 ms` with steps `2548.52`, `2538.77`, and `2542.29 ms`.
+- Continued pure SM120 TK tuning on RTX 5090. In-place register-layout swaps,
+  the cosh-free fast dGELU derivative, the dGELU-only approximate tanh path
+  (`LLMK_SM120_APPROX_DGELU_TANH=1`), and `LLMK_SM120_DWEIGHT_SUPER_M=2` are
+  now the source defaults after `test_matmul` passed `8/8` and the best
+  TinyStories 3-step pure-TK run improved to `2845.57 ms`
+  (`log124M/5090_puretk_dwsuperm2_x3`). The source-default rerun averaged
+  `2851.49 ms` (`2843.22`, `2850.45`, `2852.54 ms`), still slower than the
+  user's llm.c baseline average of `2818.23 ms`.
+- Rejected the latest pure-TK follow-ups after smoke, benchmark, compile, or
+  3-step validation: approximate tanh in forward GELU failed the MLP-up smoke
+  row; the huge-N wide forward route regressed 3-step training to `2891.99 ms`;
+  `LLMK_SM120_DWEIGHT_SPLIT_K_STREAMS=0` made dWeight rows much slower;
+  `LLMK_SM120_DWEIGHT_SPLIT_K=2` failed smoke and `=16` regressed to
+  `2870.05 ms`; `LLMK_SM120_DINP_SUPER_M=4` was mixed and `=12` failed smoke;
+  `LLMK_SM120_ATTN_BWD_BLOCK=8` is not a valid kernel tile and
+  `LLMK_SM120_ATTN_FWD_BLOCK=16` regressed to `2939.27 ms`;
+  `LLMK_SM120_DWEIGHT_SUPER_M=1` failed smoke and `=3` regressed to
+  `2874.43 ms`; exact dGELU (`LLMK_SM120_APPROX_DGELU_TANH=0`) was slower than
+  the approximate default at `2857.50 ms`. Pure TK therefore remains short of
+  the llm.c baseline and still behind cuBLASLt on the focused GEMM benchmark.
+- Rebuilt and revalidated the normal cuBLASLt-backed SM120 default after the
+  latest pure-TK default changes. `test_matmul` passed `8/8`, `test_attention`
+  passed all three smoke shapes including packed-QKV, and
+  `bench_sm120_matmul` still showed pure TK behind cuBLASLt on most GEMM rows
+  even though attention-projection dInput and fcproj forward were faster than
+  cuBLASLt in this run. The TinyStories command capped with `-x 3` averaged
+  `2602.73 ms` by the trainer report, with step lines `2579.31`, `2571.45`,
+  and `2634.01 ms`; this remains faster than the supplied llm.c baseline but
+  does not satisfy the pure-TK kernel-outperformance goal.
+- Rejected three more dWeight-focused pure-TK candidates. A direct-first-part
+  split-K reducer, which wrote split 0 directly to `dweight` and reduced only
+  the remaining scratch partials, passed `test_matmul` but regressed 3-step
+  pure-TK training to `5024.85 ms` and shifted the norm trace. Streaming-cache
+  loads for split-K partial reduction passed smoke but regressed key benchmark
+  rows, including attention-projection and LM-head dWeight. A 256x128 TN
+  dWeight tile compiled but made the unrelated GPT-2 MLP-up forward smoke row
+  fail reproducibly, so all three hooks were removed.
+- Rejected more SM120 pure-TK micro-kernel A/Bs. Disabling the SM120 warp-id
+  remap was smoke-correct but worsened or mixed the focused GEMM benchmark, so
+  it was removed without a 3-step run. A plain-dInput-only
+  `LLMK_SM120_DINP_K_TILE=128` variant compiled after excluding the 128x96
+  alias but made every dInput benchmark row worse, with LM-head dInput at
+  `1.35x` slower than cuBLASLt. An rsqrt-based dGELU tanh approximation failed
+  the fused-dGELU smoke row, and an unclamped rational dGELU tanh approximation
+  passed smoke but regressed 3-step pure-TK training to `5299.34 ms` and shifted
+  the norm trace. These hooks were removed.
+- Rejected additional macro-only SM120 sweeps. `LLMK_SM120_K_TILE=16` failed
+  the first square matmul smoke with an illegal memory access. Narrowing the
+  huge-N forward K tile to `LLMK_SM120_HUGE_N_K_TILE=48` kept other rows correct
+  but failed the GPT-2 LM-head smoke with max diff `10.5781`. Disabling fused
+  bias (`LLMK_SM120_FUSE_BIAS=0`) passed smoke but badly regressed forward
+  benchmark rows, including qkv and attention projection at `1.48x` and `1.47x`
+  slower than cuBLASLt. `LLMK_SM120_SUPER_M=6` failed the plain dInput smoke
+  row, so the current defaults remain in place.
+
 ## 2026-05-09 — Blackwell build support
 
 - Added Makefile `DEVICE_ARCH=SM100` and `DEVICE_ARCH=SM103` targets alongside

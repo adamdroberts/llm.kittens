@@ -10,8 +10,9 @@ Element-wise / gather-scatter / 1D-reduction kernels are kept verbatim from
 
 Hopper (`SM90`) uses the optimized TK H100 wrappers listed below. Blackwell
 (`SM100`, `SM103`, `SM120`) is build-supported through ThunderKittens 2.0; the
-Hopper-only GEMM/MHA/GQA/RoPE wrappers use plain CUDA correctness fallbacks
-until dedicated B200/GB200 kernels are ported.
+Hopper-only GQA/RoPE wrappers use plain CUDA correctness fallbacks until
+dedicated B200/GB200 kernels are ported. SM120 additionally has a cuBLASLt GEMM
+fallback for GPT-2 and a custom warp-scope GPT MHA path.
 
 ## Mapping table
 
@@ -25,7 +26,7 @@ until dedicated B200/GB200 kernels are ported.
 | Bias+GELU epilogue (opt-in GPT-2 MLP up-projection) | `llmc/matmul.cuh::matmul_forward_gelu` | [`llmc/tk/gemm_h100.cuh`](../llmc/tk/gemm_h100.cuh) | parallels llm.c's fused GELU aux path | 🟡 compile-wired behind `-ge 1`; H100 runtime pending |
 | Attention forward (MHA) | [`llmc/attention.cuh`](../llmc/attention.cuh) | [`llmc/tk/attention_h100.cuh`](../llmc/tk/attention_h100.cuh) | `llm.c/llmc/attention.cuh:195` | ✅ M2 compile-wired — TK fast path for `T % 192 == 0`; padded TK path for other lengths |
 | Attention backward (MHA) | [`llmc/attention.cuh`](../llmc/attention.cuh) | [`llmc/tk/attention_h100.cuh`](../llmc/tk/attention_h100.cuh) | `llm.c/llmc/attention.cuh:239` | ✅ M3 compile-wired — TK `bwd_attend_prep_ker` / `bwd_attend_ker` fast path; slow CUDA fallback for unsupported shapes; runtime parity pending |
-| QKV permute / unpermute | [`llmc/attention.cuh`](../llmc/attention.cuh) | — | verbatim from `llm.c/llmc/attention.cuh:14-83` | ✅ verbatim |
+| QKV permute / unpermute | [`llmc/attention.cuh`](../llmc/attention.cuh) | — | verbatim from `llm.c/llmc/attention.cuh:14-83` | ✅ verbatim; bypassed by SM120 packed-QKV fast path |
 | Attention forward (GQA + RoPE, Llama-3) | [`llmc/attention_gqa.cuh`](../llmc/attention_gqa.cuh) | [`llmc/tk/attention_gqa_h100.cuh`](../llmc/tk/attention_gqa_h100.cuh) | none — new kernel | 🟡 M6 — TK causal forward for supported H100 shapes; Q/K tile-load RoPE for supported shapes; CUDA fallback |
 | Attention backward (GQA + RoPE, Llama-3) | [`llmc/attention_gqa.cuh`](../llmc/attention_gqa.cuh) | [`llmc/tk/attention_gqa_h100.cuh`](../llmc/tk/attention_gqa_h100.cuh) | none — new kernel | 🟡 M6 — TK supported-shape backward compile-wired with tile-load RoPE; CUDA fallback; runtime pending |
 | LayerNorm forward | [`llmc/layernorm.cuh`](../llmc/layernorm.cuh) | [`llmc/tk/layernorm_tk.cuh`](../llmc/tk/layernorm_tk.cuh) | `llm.c/llmc/layernorm.cuh:433` | ✅ M2 compile-wired; `test_layernorm` compile-ready — TK fork for supported widths, CUDA fallback retained |
@@ -98,7 +99,13 @@ The default path keeps bias and GELU separate: bias is added in
 MLP up-projection can opt into `matmul_forward_gelu(out, pre_gelu, ...)`, which
 uses the TK finish path to apply bias, store the pre-GELU buffer, and write GELU
 output. The trainer exposes this behind `-ge 1`, but the default remains `-ge 0`
-until H100 numerical validation and profiling are done.
+on non-SM120 builds until H100 numerical validation and profiling are done.
+SM120 builds default to `-ge 1` after RTX 5090 3-step validation showed it
+faster than explicit CUDA GELU on the current pure-TK path.
+The SM120 pure-TK forward dispatcher also enables `LLMK_SM120_FORWARD_N96=1`
+by default so GPT-2 widths divisible by 96 use the 128x96 tile instead of the
+older 256x64/128x64 choices; `LLMK_SM120_FORWARD_N96=0` remains an A/B escape
+hatch.
 
 ### Backward signature (M3)
 
@@ -115,20 +122,32 @@ inline void matmul_backward(floatX* dinp, floatX* dweight, floatX* dbias,
 Current status:
 
 1. `dinp (B*T, C) = dout (B*T, OC) · weight(OC, C)` — wired through the existing TK `A*B` GEMM.
-2. `dweight (OC, C) = doutᵀ (OC, B*T) · inp (B*T, C)` — wired through TK `A^T*B`. For accumulated micro-steps, the product lands in the caller-provided aligned scratch buffer and a small add kernel applies `dweight += scratch`.
-3. `dbias (OC) = column-sum of dout over B*T` — `matmul_backward_bias_kernel9` followed by `reduce_add_sum_kernel` when `dbias_buffer` is available. Both kernels are verbatim from llm.c.
+   On SM120 pure-TK builds, `LLMK_SM120_FUSE_DGELU=1` is now the default when
+   the trainer uses `-ge 1`, fusing the MLP GELU backward into the `fcproj`
+   dInput GEMM. The fused SM120 path uses in-place register-layout swaps and
+   an approximate dGELU tanh (`LLMK_SM120_APPROX_DGELU_TANH=1`) by default
+   after RTX 5090 smoke and 3-step validation; both knobs remain explicit A/B
+   fallbacks.
+2. `dweight (OC, C) = doutᵀ (OC, B*T) · inp (B*T, C)` — wired through TK `A^T*B`. For accumulated micro-steps, the product lands in the caller-provided aligned scratch buffer and a small add kernel applies `dweight += scratch`. SM120 pure-TK defaults to 8-way split-K (`LLMK_SM120_DWEIGHT_SPLIT_K=8`) after the current N96+dGELU trainer rerun favored fewer qkv part launches.
+   The SM120 TN swizzle now defaults to `LLMK_SM120_DWEIGHT_SUPER_M=2`; `1`
+   fails smoke, while `3`, `4`, and higher tested values were slower or mixed
+   in 3-step validation.
+3. `dbias (OC) = column-sum of dout over B*T` — `matmul_backward_bias_kernel9` followed by `reduce_add_sum_kernel` when `dbias_buffer` is available. Both kernels are verbatim from llm.c. SM120 keeps the same kernels but uses a 512-thread launch block by default (`LLMK_SM120_BIAS_BLOCK_SIZE`) after RTX 5090 timing showed it faster than the H100-derived 768-thread choice.
 
 The slow CUDA dWeight kernel remains only as a fallback for unsupported TK shapes
 or missing scratch capacity.
 
-## TK MHA (`llmc/attention.cuh`, `llmc/tk/attention_h100.cuh`) — M2/M3
+## TK MHA (`llmc/attention.cuh`, `llmc/tk/attention_h100.cuh`, `llmc/tk/attention_sm120.cuh`) — M2/M3
 
 Wrap `fwd_attend_ker`, `bwd_attend_prep_ker`, and `bwd_attend_ker` from
-`ThunderKittens/kernels/attention/mha_h100/mha_h100.cu`.
+`ThunderKittens/kernels/attention/mha_h100/mha_h100.cu` on H100. SM120 uses
+the local warp-scope FlashAttention-2 style implementation in
+`llmc/tk/attention_sm120.cuh`.
 
-On Blackwell builds these Hopper attention kernels are not instantiated; the
-wrapper uses the existing recompute CUDA correctness baseline for forward and
-backward.
+On Blackwell builds the Hopper WGMMA/TMA attention kernels are not
+instantiated. GPT-style SM120 attention dispatches to the custom warp-scope TK
+forward path for `HS ∈ {64, 128}` and the custom TK backward path for `HS=64`;
+unsupported backward shapes fall back to the existing recompute CUDA baseline.
 
 ### Constraints
 
@@ -140,13 +159,26 @@ backward.
 - The copied TK backward launch covers sequence lengths divisible by
   `4 * 16 * 4 = 256`. GPT-2 `T=1024` is covered. Other backward shapes fall
   back to the slow CUDA recompute baseline until padded backward dispatch lands.
+- The SM120 path uses independently tuned tile sizes: 32 rows for forward and
+  16 rows for backward by default. `LLMK_SM120_ATTN_FWD_BLOCK`,
+  `LLMK_SM120_ATTN_BWD_BLOCK`, or the shorthand `LLMK_SM120_ATTN_BLOCK` can be
+  used for controlled experiments; 64-row tiles are correct but slower on RTX
+  5090 GPT-2 training.
 - BF16 only (same as the rest of v1).
 
 ### Layout glue
 
-llm.c's `permute_kernel` and `unpermute_kernel` (`llm.c/llmc/attention.cuh:14-83`)
-reshape between the QKV layout `(B, T, 3, NH, HS)` produced by the QKV matmul
-and the `(B, NH, T, HS)` layout the TK MHA kernel expects. Port verbatim.
+Generic and H100 GPT attention keep llm.c's `permute_kernel` and
+`unpermute_kernel` (`llm.c/llmc/attention.cuh:14-83`) to reshape between the
+QKV layout `(B, T, 3, NH, HS)` produced by the QKV matmul and the
+`(B, NH, T, HS)` layout the TK MHA kernel expects. The SM120 GPT-2 trainer fast
+path instead stores the QKV projection directly in the saved packed-QKV
+activation slot and calls `attention_forward_packed_qkv` /
+`attention_backward_packed_qkv`. That path loads packed Q/K/V directly, writes
+the forward output as `(B, T, C)`, and writes packed dQ/dK/dV directly into the
+QKV input-gradient buffer. Builds that disable SM120 TK backward or enable the
+atomic-dQ experiment fall back to the generic permuted layout so the forward
+and backward saved layouts stay consistent.
 
 ### Signatures
 
@@ -160,21 +192,39 @@ inline void attention_backward(floatX* dinp, floatX* dqkvr,
                                const floatX* dout, const floatX* qkvr, const floatX* att,
                                int B, int T, int C, int NH,
                                cudaStream_t stream);
+inline void attention_forward_packed_qkv(floatX* out, floatX* att,
+                                         const floatX* qkv_packed,
+                                         int B, int T, int C, int NH,
+                                         cudaStream_t stream);
+inline void attention_backward_packed_qkv(floatX* dinp, floatX* datt,
+                                          const floatX* scratch, const floatX* dout,
+                                          const floatX* qkv_packed, const floatX* att,
+                                          int B, int T, int C, int NH,
+                                          cudaStream_t stream);
 ```
 
-Match `llm.c/llmc/attention.cuh:195,239`.
+`attention_forward` and `attention_backward` match
+`llm.c/llmc/attention.cuh:195,239`. The packed-QKV signatures are SM120-only
+GPT-2 trainer fast paths.
 
 The M3 backward fast path reads the forward-saved LSE from `att`, permutes the
 saved forward output from `scratch`, permutes `dout`, calls TK
 `bwd_attend_prep_ker` and `bwd_attend_ker`, converts float Q/K/V gradients back
-to bf16, then reuses the verbatim `permute_kernel_backward` glue. Unsupported
-head dimensions or sequence lengths use the slow recompute baseline.
+to bf16, then reuses the verbatim `permute_kernel_backward` glue. On SM120 the
+forward-output/dout permutation and `D = rowsum(dO * O)` prep are fused into a
+small CUDA helper before the TK backward launch. The default SM120 path also
+uses the packed-QKV backward launcher, so the TK kernel reads packed Q/K/V and
+writes packed bf16 gradients directly without the final
+`permute_kernel_backward` glue. Unsupported head dimensions, sequence lengths,
+or fallback build modes use the slow recompute baseline or the generic permuted
+TK path.
 
 Validation plan: [`dev/cuda/test_attention.cu`](../dev/cuda/test_attention.cu)
 compile-wires an independent CPU-reference smoke harness. It covers direct TK
 forward plus fallback backward at `T=192`, and padded TK forward plus
-supported-shape TK backward at `T=256`. Runtime numerical validation still
-needs a compatible H100 driver/runtime.
+supported-shape TK backward at `T=256`, plus an SM120-only packed-QKV forward
+and backward case at `T=256`. Runtime numerical validation still needs a
+compatible H100 driver/runtime for the Hopper wrappers.
 
 ## TK LayerNorm (`llmc/layernorm.cuh`, `llmc/tk/layernorm_tk.cuh`) — M2/M3
 
