@@ -904,6 +904,10 @@ changelog is the diary; `goal.md` is the plan.
   attention implementation explicitly supports only 16, 32, or 64 rows, and
   ThunderKittens register/shared tile types also require dimensions divisible
   by the tile granularity.
+- Rejected compiling pure SM120 TK with `-Xptxas -maxrregcount=160`. The
+  candidate repeatedly failed the `test_matmul` GPT-2 MLP-up forward case
+  (`6.5625` then `6.8750` max diff versus `0.50` tolerance), so it was not
+  benchmarked or validated with TinyStories training.
 
 ## 2026-05-09 — Blackwell build support
 
