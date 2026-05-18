@@ -363,6 +363,13 @@ changelog is the diary; `goal.md` is the plan.
   for forward/dInput kernels, but the enabled build still failed `test_matmul`
   on the GPT-2 MLP-up forward row with max diff `6.1250`, so it was removed
   before benchmark or training.
+- Rejected a macro-only `LLMK_SM120_DWEIGHT_SUPER_M=5` sweep. It passed
+  `test_matmul` (`8/8`) and slightly improved some direct dWeight rows, but
+  `bench_sm120_matmul` still had all dWeight rows behind cuBLASLt, with
+  attention-projection dWeight at `1.68x` slower and attention-projection
+  dInput at `1.11x` slower. The required 3-step validation was terminated
+  before initial validation output when the trainer sat at about `99.6%` CPU,
+  so the source default remains `LLMK_SM120_DWEIGHT_SUPER_M=2`.
 
 ## 2026-05-09 — Blackwell build support
 
