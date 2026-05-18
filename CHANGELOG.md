@@ -766,6 +766,17 @@ changelog is the diary; `goal.md` is the plan.
   cuBLASLt, and TinyStories 3-step validation averaged `3608.77 ms` with steps
   `3597.74`, `3599.97`, and `3617.57 ms`. The dWeight swizzle remains at the
   source default `2`.
+- Rejected allowing 16-way split-K for large-row dWeight shapes while keeping
+  smaller non-QKV rows capped at 8-way split-K. The first hook exposed an
+  invalid-resource-handle bug because the side-stream/event arrays were still
+  sized for the default 8 parts; after sizing those arrays for the larger test
+  split count, the first `test_matmul` run hit the recurring unrelated MLP-up
+  forward transient, the immediate rerun passed `8/8`, and `test_attention`
+  passed all three smoke shapes. The focused benchmark worsened LM-head
+  dWeight to `26333.16 us` versus cuBLASLt `21187.70 us`, and TinyStories
+  3-step validation regressed to `4933.50 ms` with steps `4982.97`,
+  `4955.35`, and `4911.65 ms`. The temporary large-row split-K hook was
+  removed.
 
 ## 2026-05-09 — Blackwell build support
 
