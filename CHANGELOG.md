@@ -6,6 +6,19 @@ milestone. Adds within a milestone are listed in chronological order.
 The canonical "what is done / what is left" is [`goal.md`](goal.md). The
 changelog is the diary; `goal.md` is the plan.
 
+## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
+
+- Rejected `LLMK_SM120_DWEIGHT_SPLIT_K_STREAMS=0`. The stream-disabled dWeight
+  split-K build passed `test_attention`, and `test_matmul` passed on rerun after
+  one transient GPT-2 MLP-up forward diff. The focused benchmark showed the
+  change made dWeight far worse instead of closing the cuBLASLt gap: qkv dWeight
+  `2541.68 us` vs cuBLASLt `1096.44 us`, attention-projection dWeight
+  `2501.69 us` vs `367.10 us`, MLP dWeight `2519.91 us` vs `1512.63 us`,
+  projection dWeight `2544.79 us` vs `1445.37 us`, and LM-head dWeight
+  `26062.91 us` vs `23978.24 us`. The required TinyStories 3-step validation
+  averaged `28770.46 ms` with steps `28484.18`, `28753.35`, and `28787.57 ms`,
+  so the default concurrent split-K streams remain in place.
+
 ## 2026-05-17 — SM120 RTX 5090 GEMM fallback and pure-TK tuning
 
 - Added an SM120 cuBLASLt GEMM fallback path for GPT-2 matmul forward,
