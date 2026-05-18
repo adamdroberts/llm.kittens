@@ -8,6 +8,13 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Rebaselined the clean pure SM120 TK source at `b27867f` after the latest
+  rejection-only rounds. A no-extra-macro trainer build completed, and the
+  TinyStories 3-step validation averaged `2901.62 ms` with steps `2892.39`,
+  `2902.08`, and `2910.39 ms` (`2906.23 ms` excluding the first-step warmup in
+  the trainer's total-average line). The run remained finite but still slower
+  than the supplied llm.c baseline and the SM120 cuBLASLt fallback, so the
+  optimisation goal remains open.
 - Rejected macro-only `LLMK_SM120_BACKWARD_N96=1` at the smoke gate. The build
   completed for `test_matmul`, `test_attention`, `bench_sm120_matmul`, and
   `train_gpt2cu`, but `test_matmul` failed accumulated dWeight with max diff
