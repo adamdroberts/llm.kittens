@@ -717,6 +717,13 @@ changelog is the diary; `goal.md` is the plan.
   `326.88 us`, worsened LM-head dWeight to `25951.42 us`, and the required
   TinyStories 3-step validation averaged `3585.04 ms` with steps `3597.60`,
   `3575.07`, and `3595.01 ms`. The temporary wide-N96 TN hook was removed.
+- Rejected a temporary dWeight-only 192x64 TN tile for LM-head-style rows that
+  are divisible by 192 but not 256. The first `test_matmul` pass again hit the
+  unrelated transient MLP-up forward failure; an immediate rerun passed `8/8`
+  and `test_attention` passed all three smoke shapes. The focused benchmark
+  regressed LM-head dWeight to `29134.49 us` versus cuBLASLt `21018.38 us`,
+  and TinyStories 3-step validation averaged `3618.86 ms` with steps
+  `3612.57`, `3618.87`, and `3618.85 ms`. The temporary M192 hook was removed.
 
 ## 2026-05-09 — Blackwell build support
 
