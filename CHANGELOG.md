@@ -112,6 +112,15 @@ changelog is the diary; `goal.md` is the plan.
   averaged `26467.81 ms` with steps `26369.23`, `28045.54`, and `24890.08 ms`,
   so accumulated dWeight remains a target but does not alone explain the full
   pure-TK trainer slowdown.
+- Added an opt-in `LLMK_SM120_PROFILE_TRAIN_STEP` trainer section profiler to
+  identify the current pure-TK runtime sink without changing normal builds. The
+  profiled build passed `test_matmul` (`8/8`) and `test_attention` (all three
+  shapes). The required TinyStories 3-step validation averaged `19530.94 ms`
+  with steps `20203.22`, `19179.90`, and `19881.97 ms`; the largest buckets
+  were forward (`~4.8-5.2 s/step`), LM-head backward (`~5.1-5.2 s/step`), and
+  packed attention backward (`~3.9-4.4 s/step`), while grad norm and update were
+  negligible. This shifts the next optimization focus toward LM-head and
+  packed-attention runtime paths.
 
 ## 2026-05-17 — SM120 RTX 5090 GEMM fallback and pure-TK tuning
 

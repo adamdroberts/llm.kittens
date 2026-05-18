@@ -87,6 +87,92 @@ cudaStream_t main_stream;
 // buffer size to use for device <-> disk io
 constexpr const size_t IO_BUF_SIZE = 32 * 1024 * 1024;
 
+#if defined(LLMK_SM120_PROFILE_TRAIN_STEP)
+enum LlmkProfileSlot {
+    LLMK_PROFILE_FWD = 0,
+    LLMK_PROFILE_BWD_ZERO,
+    LLMK_PROFILE_BWD_CLASSIFIER,
+    LLMK_PROFILE_BWD_LMHEAD,
+    LLMK_PROFILE_BWD_LNF,
+    LLMK_PROFILE_BWD_FCPROJ,
+    LLMK_PROFILE_BWD_FC,
+    LLMK_PROFILE_BWD_LN2,
+    LLMK_PROFILE_BWD_ATTPROJ,
+    LLMK_PROFILE_BWD_ATTENTION,
+    LLMK_PROFILE_BWD_QKV,
+    LLMK_PROFILE_BWD_LN1,
+    LLMK_PROFILE_BWD_ENCODER,
+    LLMK_PROFILE_NORM,
+    LLMK_PROFILE_UPDATE,
+    LLMK_PROFILE_COUNT
+};
+
+static float llmk_profile_ms[LLMK_PROFILE_COUNT];
+static int llmk_profile_count[LLMK_PROFILE_COUNT];
+static const char* llmk_profile_names[LLMK_PROFILE_COUNT] = {
+    "forward",
+    "bwd_zero",
+    "bwd_classifier",
+    "bwd_lmhead",
+    "bwd_lnf",
+    "bwd_fcproj",
+    "bwd_fc",
+    "bwd_ln2",
+    "bwd_attproj",
+    "bwd_attention",
+    "bwd_qkv",
+    "bwd_ln1",
+    "bwd_encoder",
+    "grad_norm",
+    "update"
+};
+
+static void llmk_profile_reset() {
+    for (int i = 0; i < LLMK_PROFILE_COUNT; ++i) {
+        llmk_profile_ms[i] = 0.0f;
+        llmk_profile_count[i] = 0;
+    }
+}
+
+static void llmk_profile_print(int step) {
+    printf0("SM120 profile step %d\n", step);
+    for (int i = 0; i < LLMK_PROFILE_COUNT; ++i) {
+        if (llmk_profile_count[i] == 0) continue;
+        printf0("  %-14s %10.3f ms  count %d\n",
+                llmk_profile_names[i], llmk_profile_ms[i], llmk_profile_count[i]);
+    }
+}
+
+struct LlmkProfileScope {
+    LlmkProfileSlot slot;
+    cudaEvent_t start;
+    cudaEvent_t stop;
+
+    explicit LlmkProfileScope(LlmkProfileSlot slot_) : slot(slot_) {
+        cudaCheck(cudaEventCreate(&start));
+        cudaCheck(cudaEventCreate(&stop));
+        cudaCheck(cudaEventRecord(start, main_stream));
+    }
+
+    ~LlmkProfileScope() {
+        cudaCheck(cudaEventRecord(stop, main_stream));
+        cudaCheck(cudaEventSynchronize(stop));
+        float elapsed_ms = 0.0f;
+        cudaCheck(cudaEventElapsedTime(&elapsed_ms, start, stop));
+        llmk_profile_ms[slot] += elapsed_ms;
+        llmk_profile_count[slot] += 1;
+        cudaCheck(cudaEventDestroy(stop));
+        cudaCheck(cudaEventDestroy(start));
+    }
+};
+
+#define LLMK_PROFILE_JOIN2(a, b) a##b
+#define LLMK_PROFILE_JOIN(a, b) LLMK_PROFILE_JOIN2(a, b)
+#define LLMK_PROFILE_SCOPE(slot) LlmkProfileScope LLMK_PROFILE_JOIN(llmk_profile_scope_, __LINE__)(slot)
+#else
+#define LLMK_PROFILE_SCOPE(slot) do {} while (0)
+#endif
+
 // ----------------------------------------------------------------------------
 // GPT-2 model definition
 
@@ -940,6 +1026,7 @@ void gpt2_backward_and_reduce(GPT2 *model, int* inputs, const int* targets, int 
     bool last_step = micro_step == grad_accum_steps - 1;
     // on the first micro-step zero the gradients, as we're about to += accumulate into them
     if (micro_step == 0) {
+        LLMK_PROFILE_SCOPE(LLMK_PROFILE_BWD_ZERO);
         // there are currently two state vars during the gradient accumulation inner loop:
         // 1) the losses accumulate += into acts.losses, reset here
         // 2) the gradients accumulate += into grads_memory, reset here
@@ -964,9 +1051,12 @@ void gpt2_backward_and_reduce(GPT2 *model, int* inputs, const int* targets, int 
     NvtxRange classifier_and_loss_range("classifier_and_loss");
     const float dloss = 1.0f / (float)(B * T * grad_accum_steps); // results in the uniform average loss over all elements
     const bool dweight_accumulate = micro_step != 0;
-    cudaCheck(cudaMemcpyAsync(model->targets, targets, B * T * sizeof(int), cudaMemcpyHostToDevice, main_stream));
-    tokenCheck(targets, B*T, V);
-    fused_classifier(acts.output, acts.losses, dloss, model->targets, B, T, V, Vp, True, main_stream);
+    {
+        LLMK_PROFILE_SCOPE(LLMK_PROFILE_BWD_CLASSIFIER);
+        cudaCheck(cudaMemcpyAsync(model->targets, targets, B * T * sizeof(int), cudaMemcpyHostToDevice, main_stream));
+        tokenCheck(targets, B*T, V);
+        fused_classifier(acts.output, acts.losses, dloss, model->targets, B, T, V, Vp, True, main_stream);
+    }
 
     // backward pass: go in the reverse order of the forward pass, and call backward() functions
 
@@ -985,10 +1075,16 @@ void gpt2_backward_and_reduce(GPT2 *model, int* inputs, const int* targets, int 
     // technically that is a small, inline backward() pass of calculating
     // total, final loss as the mean over all losses over all (B,T) positions in the batch
     // next: backward the classifier matmul
-    matmul_backward(model->acts.scratch_bt4c, grads.wte, NULL, acts.output, acts.lnf, params.wte, NULL, B, T, C, Vp, main_stream, dweight_accumulate, matmul_scratch, matmul_scratch_elements);
+    {
+        LLMK_PROFILE_SCOPE(LLMK_PROFILE_BWD_LMHEAD);
+        matmul_backward(model->acts.scratch_bt4c, grads.wte, NULL, acts.output, acts.lnf, params.wte, NULL, B, T, C, Vp, main_stream, dweight_accumulate, matmul_scratch, matmul_scratch_elements);
+    }
     // backward the final layernorm
     floatX* residual = acts.residual3 + (L-1) * B * T * C; // last residual is in residual3
-    layernorm_backward(dresidual, grads.lnfw, grads.lnfb, scratchF, model->acts.scratch_bt4c, residual, params.lnfw, acts.lnf_mean, acts.lnf_rstd, B, T, C, main_stream);
+    {
+        LLMK_PROFILE_SCOPE(LLMK_PROFILE_BWD_LNF);
+        layernorm_backward(dresidual, grads.lnfw, grads.lnfb, scratchF, model->acts.scratch_bt4c, residual, params.lnfw, acts.lnf_mean, acts.lnf_rstd, B, T, C, main_stream);
+    }
 
     // from this point on, we no longer need the values stored in the last residual, so we can reuse that memory as generic
     // scratch for backward computations
@@ -1041,45 +1137,69 @@ void gpt2_backward_and_reduce(GPT2 *model, int* inputs, const int* targets, int 
         floatX* dl_bt4c = (floatX*)model->acts.scratch_bt4c;
 
         // start the backward pass for this layer
-        if(model->recompute >= 1) {
-            // recompute >= 1 means we recompute gelu. in this case,
-            // l_fch_gelu is just a buffer, so re-compute the gelu from l_fch here
-            gelu_forward(l_fch_gelu, l_fch_pre_gelu, B*T*4*C, main_stream);
-        }
-        bool fused_gelu_backward = model->gelu_fusion >= 1 && matmul_backward_gelu_fusion_supported();
-        matmul_backward(dl_bt4c, dl_fcprojw, dl_fcprojb, dresidual, l_fch_gelu, l_fcprojw,
-                        scratchF, B, T, 4*C, C, main_stream, dweight_accumulate,
-                        matmul_scratch, matmul_scratch_elements,
-                        fused_gelu_backward ? l_fch_pre_gelu : nullptr,
-                        fused_gelu_backward);
-        if (!fused_gelu_backward) {
-            gelu_backward_inplace(dl_bt4c, l_fch_pre_gelu, B*T*4*C, main_stream);
+        {
+            LLMK_PROFILE_SCOPE(LLMK_PROFILE_BWD_FCPROJ);
+            if(model->recompute >= 1) {
+                // recompute >= 1 means we recompute gelu. in this case,
+                // l_fch_gelu is just a buffer, so re-compute the gelu from l_fch here
+                gelu_forward(l_fch_gelu, l_fch_pre_gelu, B*T*4*C, main_stream);
+            }
+            bool fused_gelu_backward = model->gelu_fusion >= 1 && matmul_backward_gelu_fusion_supported();
+            matmul_backward(dl_bt4c, dl_fcprojw, dl_fcprojb, dresidual, l_fch_gelu, l_fcprojw,
+                            scratchF, B, T, 4*C, C, main_stream, dweight_accumulate,
+                            matmul_scratch, matmul_scratch_elements,
+                            fused_gelu_backward ? l_fch_pre_gelu : nullptr,
+                            fused_gelu_backward);
+            if (!fused_gelu_backward) {
+                gelu_backward_inplace(dl_bt4c, l_fch_pre_gelu, B*T*4*C, main_stream);
+            }
         }
         if(model->recompute >= 2) {
             // same as gelu above, l_ln1 and l_ln2 are just buffers if recompute >= 2, recompute them here on demand
             layernorm_forward(l_ln2, l_ln2_mean, l_ln2_rstd, l_residual2, l_ln2w, l_ln2b, B, T, C, main_stream);
         }
-        matmul_backward(dl_btc, dl_fcw, dl_fcb, dl_bt4c, l_ln2, l_fcw, scratchF, B, T, C, 4 * C, main_stream, dweight_accumulate, matmul_scratch, matmul_scratch_elements);
+        {
+            LLMK_PROFILE_SCOPE(LLMK_PROFILE_BWD_FC);
+            matmul_backward(dl_btc, dl_fcw, dl_fcb, dl_bt4c, l_ln2, l_fcw, scratchF, B, T, C, 4 * C, main_stream, dweight_accumulate, matmul_scratch, matmul_scratch_elements);
+        }
         // layernorm backward does += to the dresidual, so it correctly accumulates grad from the MLP block above
-        layernorm_backward(dresidual, dl_ln2w, dl_ln2b, scratchF, dl_btc, l_residual2, l_ln2w, l_ln2_mean, l_ln2_rstd, B, T, C, main_stream);
-        matmul_backward(dl_btc, dl_attprojw, dl_attprojb, dresidual, l_atty, l_attprojw, scratchF, B, T, C, C, main_stream, dweight_accumulate, matmul_scratch, matmul_scratch_elements);
+        {
+            LLMK_PROFILE_SCOPE(LLMK_PROFILE_BWD_LN2);
+            layernorm_backward(dresidual, dl_ln2w, dl_ln2b, scratchF, dl_btc, l_residual2, l_ln2w, l_ln2_mean, l_ln2_rstd, B, T, C, main_stream);
+        }
+        {
+            LLMK_PROFILE_SCOPE(LLMK_PROFILE_BWD_ATTPROJ);
+            matmul_backward(dl_btc, dl_attprojw, dl_attprojb, dresidual, l_atty, l_attprojw, scratchF, B, T, C, C, main_stream, dweight_accumulate, matmul_scratch, matmul_scratch_elements);
+        }
 
         floatX* l_att = acts.att + 2 * l * B * NH * T;
         // we need B x T x (4)C buffers. l_atty and l_fch aren't needed anymore at this point, so reuse their memory
         floatX* buffer_a = l_atty;
 #if LLMK_GPT2_USE_SM120_PACKED_QKV_ATTENTION
-        attention_backward_packed_qkv(dl_bt4c, scratchX, buffer_a, dl_btc, l_qkvr, l_att, B, T, C, NH, main_stream);
+        {
+            LLMK_PROFILE_SCOPE(LLMK_PROFILE_BWD_ATTENTION);
+            attention_backward_packed_qkv(dl_bt4c, scratchX, buffer_a, dl_btc, l_qkvr, l_att, B, T, C, NH, main_stream);
+        }
 #else
         floatX* buffer_b = l_fch_pre_gelu;        // this is B x T x 4C, so even larger than what we need
-        attention_backward(dl_bt4c, buffer_b, scratchX, buffer_a, dl_btc, l_qkvr, l_att, B, T, C, NH, main_stream);
+        {
+            LLMK_PROFILE_SCOPE(LLMK_PROFILE_BWD_ATTENTION);
+            attention_backward(dl_bt4c, buffer_b, scratchX, buffer_a, dl_btc, l_qkvr, l_att, B, T, C, NH, main_stream);
+        }
 #endif
         if(model->recompute >= 2) {
             layernorm_forward(l_ln1, l_ln1_mean, l_ln1_rstd, residual, l_ln1w, l_ln1b, B, T, C, main_stream);
         }
         // QKV parameter gradients
-        matmul_backward(dl_btc, dl_qkvw, dl_qkvb, dl_bt4c, l_ln1, l_qkvw, scratchF, B, T, C, 3 * C, main_stream, dweight_accumulate, matmul_scratch, matmul_scratch_elements);
+        {
+            LLMK_PROFILE_SCOPE(LLMK_PROFILE_BWD_QKV);
+            matmul_backward(dl_btc, dl_qkvw, dl_qkvb, dl_bt4c, l_ln1, l_qkvw, scratchF, B, T, C, 3 * C, main_stream, dweight_accumulate, matmul_scratch, matmul_scratch_elements);
+        }
         // layernorm backward does += to dresidual, so it correctly accumulates gradient for the Attention block above
-        layernorm_backward(dresidual, dl_ln1w, dl_ln1b, scratchF, dl_btc, residual, l_ln1w, l_ln1_mean, l_ln1_rstd, B, T, C, main_stream);
+        {
+            LLMK_PROFILE_SCOPE(LLMK_PROFILE_BWD_LN1);
+            layernorm_backward(dresidual, dl_ln1w, dl_ln1b, scratchF, dl_btc, residual, l_ln1w, l_ln1_mean, l_ln1_rstd, B, T, C, main_stream);
+        }
 
         // Accumulate gradients from this layer in a background stream.
         if(last_step) {
@@ -1102,8 +1222,11 @@ void gpt2_backward_and_reduce(GPT2 *model, int* inputs, const int* targets, int 
             multi_gpu_async_reduce_gradient(pointers, nelem, &multi_gpu_config, main_stream);
         }
     }
-    encoder_backward(grads.wte, grads.wpe, scratchX, model->workload_indices, model->bucket_info,
-                     dresidual, model->inputs, inputs, B, T, C, random_u32(&model->rng_state), main_stream);
+    {
+        LLMK_PROFILE_SCOPE(LLMK_PROFILE_BWD_ENCODER);
+        encoder_backward(grads.wte, grads.wpe, scratchX, model->workload_indices, model->bucket_info,
+                         dresidual, model->inputs, inputs, B, T, C, random_u32(&model->rng_state), main_stream);
+    }
 
     // Aggregate all gradients that are not part of the transformer blocks
     if(last_step) {
@@ -2114,13 +2237,19 @@ int main(int argc, char *argv[]) {
             dataloader_reset(&train_loader);
         }
         // do one training step, doing forward/backward/update on total_batch_size tokens
+#if defined(LLMK_SM120_PROFILE_TRAIN_STEP)
+        llmk_profile_reset();
+#endif
         cudaCheck(cudaEventRecord(start));
         // gradient and loss accumulation loop over micro-batches
         for (int micro_step = 0; micro_step < grad_accum_steps; micro_step++) {
             // fetch the next data batch
             dataloader_next_batch(&train_loader);
             // forward pass. note that we pass in grad_accum_steps, which scales down the loss
-            gpt2_forward(&model, train_loader.inputs, B, T);
+            {
+                LLMK_PROFILE_SCOPE(LLMK_PROFILE_FWD);
+                gpt2_forward(&model, train_loader.inputs, B, T);
+            }
             // backward pass. all model params accumulate gradients with += inside this inner loop
             gpt2_backward_and_reduce(&model, train_loader.inputs, train_loader.targets, grad_accum_steps, micro_step);
         }
@@ -2128,7 +2257,11 @@ int main(int argc, char *argv[]) {
         // fetch the next learning rate
         float step_learning_rate = get_learning_rate(&lr_scheduler, step);
         // calculate the gradient norm and how much we wish to scale the gradient
-        float grad_norm = gpt2_calculate_grad_norm(&model, &multi_gpu_config);
+        float grad_norm;
+        {
+            LLMK_PROFILE_SCOPE(LLMK_PROFILE_NORM);
+            grad_norm = gpt2_calculate_grad_norm(&model, &multi_gpu_config);
+        }
         float zgrad = (float)(update_detector(&grad_norm_outlier_detector, (double)grad_norm)); // grad z-score
         // update the model parameters
         if (isfinite(zloss) && skip_update_lossz != 0.0f && zloss > skip_update_lossz) {
@@ -2139,7 +2272,10 @@ int main(int argc, char *argv[]) {
             // clip the gradient norm to a maximum value
             float grad_clip = 1.0f;
             float grad_scale = (grad_norm > grad_clip) ? grad_clip / grad_norm : 1.0f;
-            gpt2_update(&model, step_learning_rate, 0.9f, 0.95f, 1e-8f, weight_decay, grad_scale, step+1, &multi_gpu_config);
+            {
+                LLMK_PROFILE_SCOPE(LLMK_PROFILE_UPDATE);
+                gpt2_update(&model, step_learning_rate, 0.9f, 0.95f, 1e-8f, weight_decay, grad_scale, step+1, &multi_gpu_config);
+            }
         }
         cudaCheck(cudaEventRecord(end));
         cudaCheck(cudaEventSynchronize(end)); // wait for the end event to finish to get correct timings
@@ -2162,6 +2298,9 @@ int main(int argc, char *argv[]) {
         printf0("step %4d/%d | loss %7.6f (%+.2fz)| norm %6.4f (%+.2fz)| lr %.2e | %.2f ms | %.1f%% bf16 MFU | %.0f tok/s\n",
                 step + 1, train_num_batches, model.mean_loss, zloss, grad_norm, zgrad, step_learning_rate,
                 time_elapsed_ms, 100*mfu, bias_corrected_ema_tokens_per_second);
+#if defined(LLMK_SM120_PROFILE_TRAIN_STEP)
+        llmk_profile_print(step + 1);
+#endif
         if(log_gpu_every > 0 && (step + 1) % log_gpu_every == 0) {
             GPUUtilInfo gpu_info = get_gpu_utilization_info();
             printf0("                  compute %2.1f%% | memory: %2.1f%% | fan: %2d%% | %4d MHz / %4d MHz | %3d W / %3d W | %d°C / %d°C | %s\n",
