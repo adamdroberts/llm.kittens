@@ -1183,6 +1183,13 @@ changelog is the diary; `goal.md` is the plan.
   `25678.11 us`) and TinyStories 3-step validation slowed to `2836.51 ms` with
   steps `2829.63`, `2833.90`, and `2839.13 ms`. The dWeight N128 route remains
   enabled.
+- Rejected the missing adjacent dWeight swizzle retest
+  `LLMK_SM120_DWEIGHT_SUPER_M=3` on the current K-tile 16/dInput stack. The
+  macro build passed `test_matmul` (`8/8`) and `test_attention` (all three
+  smoke shapes), but the focused benchmark stayed behind cuBLASLt on every
+  dWeight row and worsened the qkv row to `1178.73 us`. TinyStories 3-step
+  validation regressed to `2749.03 ms` with steps `2741.59`, `2745.81`, and
+  `2752.25 ms`, so the source default remains `LLMK_SM120_DWEIGHT_SUPER_M=2`.
 
 ## 2026-05-09 — Blackwell build support
 
