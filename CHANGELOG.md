@@ -8,6 +8,14 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Re-profiled the current pure SM120 TK overlap stack with
+  `LLMK_SM120_PROFILE_TRAIN_STEP`. The profiled TinyStories 3-step run averaged
+  `2917.04 ms` with expected profiler overhead. The dominant buckets remain
+  GEMM-heavy: forward `~871 ms/step`, LM-head backward `~429 ms/step`,
+  FC/FCProj backward `~710 ms/step` combined, attention backward
+  `~299 ms/step`, and QKV backward `~264 ms/step`; grad norm and update remain
+  negligible. The next optimisation focus therefore stays on dense GEMM,
+  especially LM-head and FC/FCProj backward.
 - Rejected retesting `LLMK_SM120_LARGE_DWEIGHT_SPLIT_K=2` on top of the new
   dWeight overlap stack at the smoke gate. The macro build completed, but
   `test_matmul` failed the GPT-2 MLP-up forward row twice with max diffs
