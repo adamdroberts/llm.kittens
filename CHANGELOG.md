@@ -748,6 +748,12 @@ changelog is the diary; `goal.md` is the plan.
   `21165.43 us`, and TinyStories 3-step validation averaged `3621.02 ms` with
   steps `3619.64`, `3620.27`, and `3621.77 ms`. The non-wide dWeight TN path
   remains on the 4-warp 128x64 tile.
+- Rejected a 128-thread launch for the SM120 split-K dWeight BF16 partial
+  reducer. It passed `test_matmul` (`8/8`) and `test_attention` (all three
+  smoke shapes), but the focused benchmark did not improve the dWeight rows
+  and TinyStories 3-step validation averaged `3588.50 ms` with steps
+  `3589.03`, `3602.48`, and `3574.52 ms`. The reducer remains at the
+  256-thread launch.
 
 ## 2026-05-09 — Blackwell build support
 
