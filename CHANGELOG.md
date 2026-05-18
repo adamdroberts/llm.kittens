@@ -790,6 +790,10 @@ changelog is the diary; `goal.md` is the plan.
   compiled, but `test_matmul` failed the plain dInput row on two consecutive
   runs (`6.4219` and `6.8789` max diff versus `0.50` tolerance), so it was not
   benchmarked or validated with TinyStories training.
+- Rejected the adjacent global `LLMK_SM120_SUPER_M=11` swizzle for the same
+  reason. The candidate compiled, but `test_matmul` failed the plain dInput row
+  on two consecutive runs (`5.7344` and `5.3125` max diff versus `0.50`
+  tolerance), so it was not benchmarked or validated with TinyStories training.
 
 ## 2026-05-09 — Blackwell build support
 
