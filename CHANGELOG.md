@@ -692,6 +692,11 @@ changelog is the diary; `goal.md` is the plan.
   ptxas reported the generated 512x64x64 huge-N kernel also used `0x24000`
   bytes of shared data, above the SM120 `0x18c00` limit. The huge-N tile
   remains 256x128x64.
+- Rejected a 512x64x32 huge-N forward tile for pure SM120 TK. Lowering
+  `LLMK_SM120_HUGE_N_K_TILE` to `32` let the candidate compile, but
+  `test_matmul` aborted in ThunderKittens tensor-map setup because
+  `st<bf16,512,32>` violates the `smem_shape[1] <= 256` assertion. The huge-N
+  tile remains 256x128x64.
 
 ## 2026-05-09 — Blackwell build support
 
