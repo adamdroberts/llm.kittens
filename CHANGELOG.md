@@ -473,6 +473,12 @@ changelog is the diary; `goal.md` is the plan.
   capped with `-x 3 -ge 0` regressed to `3659.73 ms` average with steps
   `3634.56`, `3652.68`, and `3666.78 ms`, so fused GELU remains the SM120
   default.
+- Rejected a temporary huge-N `256x128` tile selector for the pure SM120 TK
+  LM-head forward path. It passed `test_matmul` (`8/8`) and `test_attention`
+  (all three smoke shapes) and improved direct LM-head forward to `24571.88 us`
+  (`1.12x` slower than cuBLASLt), but the required TinyStories 3-step
+  validation still regressed to `3545.80 ms` average with steps `3507.21`,
+  `3532.32`, and `3559.29 ms`. The selector hook was removed.
 
 ## 2026-05-09 — Blackwell build support
 
