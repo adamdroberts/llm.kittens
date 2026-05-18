@@ -42,6 +42,15 @@ changelog is the diary; `goal.md` is the plan.
   `2979.29`, `3052.08`, and `3026.51 ms` (`3039.30 ms` total average). The
   direct B-column route continues to inherit the accepted
   `LLMK_SM120_DINP_SUPER_M=8` default.
+- Rejected deferring the SM120 attention-projection dWeight split-K finish
+  across attention backward. The candidate avoided the obvious `l_atty` data
+  race by moving attention scratch to the already-dead MLP activation buffer,
+  and passed `test_matmul` (`9/9`) plus `test_attention` (all three smoke
+  shapes), but TinyStories 3-step validation raised memory use to
+  `30977 MiB`, shifted the early loss/norm trace, and regressed to
+  `2862.76 ms` with steps `2795.79`, `2848.28`, and `2944.22 ms`
+  (`2896.25 ms` total average). The attproj backward path keeps the existing
+  immediate dWeight finish before `l_atty` is reused by attention backward.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
