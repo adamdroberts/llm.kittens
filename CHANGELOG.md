@@ -724,6 +724,12 @@ changelog is the diary; `goal.md` is the plan.
   regressed LM-head dWeight to `29134.49 us` versus cuBLASLt `21018.38 us`,
   and TinyStories 3-step validation averaged `3618.86 ms` with steps
   `3612.57`, `3618.87`, and `3618.85 ms`. The temporary M192 hook was removed.
+- Rejected a huge-N-only `SUPER_M=16` hook for the pure SM120 TK LM-head
+  forward route. It passed `test_matmul` (`8/8`) and `test_attention` (all
+  three smoke shapes), but the focused benchmark left LM-head forward unchanged
+  at `24630.40 us` versus cuBLASLt `21826.90 us` and TinyStories 3-step
+  validation averaged `3589.66 ms` with steps `3584.64`, `3608.17`, and
+  `3571.15 ms`. The temporary huge-N `SUPER_M` hook was removed.
 
 ## 2026-05-09 — Blackwell build support
 
