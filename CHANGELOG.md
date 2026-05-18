@@ -555,6 +555,12 @@ changelog is the diary; `goal.md` is the plan.
   command capped with `-x 3` averaged `3621.93 ms` with steps `3614.90`,
   `3618.94`, and `3624.92 ms`, so the current pure-TK path is slower than the
   earlier no-master rebaseline and remains behind the supplied llm.c baseline.
+- Rebaselined the current cuBLASLt-backed SM120 default under the same
+  no-master runtime. `test_matmul` passed `8/8`, `test_attention` passed all
+  three smoke shapes, and the TinyStories command capped with `-x 3` averaged
+  `2482.82 ms` with steps `2486.47`, `2482.03`, and `2483.60 ms`. This remains
+  significantly faster than the supplied llm.c baseline, confirming the
+  current slowdown is specific to the pure-TK GEMM path.
 
 ## 2026-05-09 — Blackwell build support
 
