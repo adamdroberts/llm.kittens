@@ -759,6 +759,13 @@ changelog is the diary; `goal.md` is the plan.
   focused benchmark did not close the GEMM gap and TinyStories 3-step
   validation averaged `3591.41 ms` with steps `3608.48`, `3581.24`, and
   `3601.58 ms`. Pure SM120 TK builds keep the normal ptxas cache mode.
+- Rejected pure SM120 TK `LLMK_SM120_DWEIGHT_SUPER_M=12`. The first
+  `test_matmul` run hit the recurring unrelated MLP-up forward transient; an
+  immediate rerun passed `8/8`, and `test_attention` passed all three smoke
+  shapes. The focused benchmark still left all material dWeight rows behind
+  cuBLASLt, and TinyStories 3-step validation averaged `3608.77 ms` with steps
+  `3597.74`, `3599.97`, and `3617.57 ms`. The dWeight swizzle remains at the
+  source default `2`.
 
 ## 2026-05-09 — Blackwell build support
 
