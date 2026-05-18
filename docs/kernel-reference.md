@@ -60,8 +60,9 @@ namespace llmk::gemm {
 
 The SM120-specific wrapper uses the same template surface but tunes its
 Blackwell cp.async kernels separately: the shared `LLMK_SM120_SUPER_M` swizzle
-defaults to `9` after RTX 5090 3-step validation, while dWeight keeps its
-separate `LLMK_SM120_DWEIGHT_SUPER_M=2` default.
+defaults to `9` after RTX 5090 3-step validation. dInput uses a separate
+`LLMK_SM120_DINP_SUPER_M=10` default, while dWeight keeps its separate
+`LLMK_SM120_DWEIGHT_SUPER_M=2` default.
 
 `matmul_template<M_BLOCK, N_BLOCK, SUPER_M, A_TRANSPOSED, B_TRANSPOSED,
 APPLY_BIAS, APPLY_GELU, STORE_PRE_GELU>` is ported from
@@ -132,6 +133,8 @@ inline void matmul_backward(floatX* dinp, floatX* dweight, floatX* dbias,
 Current status:
 
 1. `dinp (B*T, C) = dout (B*T, OC) · weight(OC, C)` — wired through the existing TK `A*B` GEMM.
+   SM120 dInput uses `LLMK_SM120_DINP_SUPER_M=10` after a focused A/B on top
+   of the shared `LLMK_SM120_SUPER_M=9` default improved current 3-step timing.
    On SM120 pure-TK builds, `LLMK_SM120_FUSE_DGELU=1` is now the default when
    the trainer uses `-ge 1`, fusing the MLP GELU backward into the `fcproj`
    dInput GEMM. The fused SM120 path uses in-place register-layout swaps and

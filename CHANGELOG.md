@@ -803,6 +803,14 @@ changelog is the diary; `goal.md` is the plan.
   `2829.26 ms` with steps `2825.09`, `2826.07`, and `2832.45 ms`. Pure TK
   remains just above the supplied llm.c baseline and still behind cuBLASLt on
   the material dWeight rows.
+- Split the SM120 dInput swizzle back out from the shared forward/huge-N
+  swizzle by setting `LLMK_SM120_DINP_SUPER_M=10`. On top of the shared
+  `LLMK_SM120_SUPER_M=9` default, the candidate passed `test_matmul` (`8/8`)
+  and `test_attention` (all three smoke shapes). The focused benchmark was
+  mixed but improved some dInput rows, and TinyStories 3-step validation
+  averaged `2828.29 ms` with steps `2825.12`, `2826.14`, and `2830.43 ms`.
+  The no-override source-default rebuild passed the same smokes and averaged
+  `2829.00 ms` with steps `2823.58`, `2826.84`, and `2831.16 ms`.
 
 ## 2026-05-09 — Blackwell build support
 
