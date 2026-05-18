@@ -402,6 +402,10 @@ changelog is the diary; `goal.md` is the plan.
   `3245.60 ms` by the trainer report. The source diff since the prior tuning
   commit was changelog-only, so this rebaseline records current runtime state
   rather than a source regression.
+- Re-ran the restored tracked `train_gpt2cu` binary without rebuilding to
+  separate build/codegen effects from runtime state. It produced the same
+  finite TinyStories trace and averaged `3235.36 ms`, confirming the current
+  slowdown is not caused by the latest rebuild flags or rejected source hooks.
 
 ## 2026-05-09 — Blackwell build support
 
