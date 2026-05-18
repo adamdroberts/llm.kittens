@@ -1470,6 +1470,13 @@ changelog is the diary; `goal.md` is the plan.
   tile dimensions. No smoke, benchmark, or TinyStories 3-step validation was
   run for this invalid tile, and the N128 dWeight route again uses the shared
   `LLMK_SM120_HUGE_N_K_TILE=16` trait.
+- Rejected a temporary small-M 64x128 dWeight N128 route. The
+  `LLMK_SM120_DWEIGHT_N128_M64=1` build passed `test_matmul` (`8/8`) and
+  `test_attention` (all three smoke shapes), but the focused benchmark worsened
+  the targeted attention-projection and fcproj dWeight rows (`524.02 us` and
+  `1658.01 us`) versus the current 128x128 route. TinyStories 3-step validation
+  averaged `2836.84 ms` with steps `2816.75`, `2827.87`, and `2845.82 ms`, so
+  the temporary hook was removed.
 
 ## 2026-05-09 — Blackwell build support
 
