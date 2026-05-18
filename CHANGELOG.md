@@ -8,6 +8,12 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Rejected the `-maxrregcount=128` build after a compiler occupancy retest. The
+  first `test_matmul` run failed the accumulated dWeight row with max diff
+  `1.5625` versus `0.50`, though two immediate reruns passed `8/8`. The
+  TinyStories 3-step timing then regressed sharply from the current
+  `2837.54 ms` source average to `3064.78 ms` with steps `3047.24`,
+  `3061.16`, and `3085.94 ms` (`3073.55 ms` excluding first-step warmup).
 - Rejected `LLMK_SM120_OVERLAP_DIRECT_DWEIGHT=0` after retesting whether the
   direct dWeight side-stream overlap still pays off. The macro build passed
   `test_matmul` (`8/8`), but TinyStories 3-step validation regressed from the
