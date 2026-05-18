@@ -58,6 +58,13 @@ changelog is the diary; `goal.md` is the plan.
   `351.03 us`. TinyStories 3-step validation regressed to `3784.68 ms` with
   steps `3739.25`, `3787.55`, and `3781.81 ms`, so the threshold remains
   `8192`.
+- Rejected pure SM120 TK codegen with `-Xptxas -maxrregcount=224`. The build
+  passed `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes),
+  but the focused benchmark still left every dWeight row behind cuBLASLt and
+  only made attention-projection dInput faster (`402.32 us` versus
+  `412.07 us`). TinyStories 3-step validation regressed badly to
+  `21369.02 ms` with steps `21483.15`, `21252.05`, and `21485.99 ms`, so pure
+  SM120 TK builds remain uncapped.
 
 ## 2026-05-17 — SM120 RTX 5090 GEMM fallback and pure-TK tuning
 
