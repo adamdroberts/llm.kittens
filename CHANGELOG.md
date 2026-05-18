@@ -675,6 +675,13 @@ changelog is the diary; `goal.md` is the plan.
   `21837.13 us`, and the required TinyStories 3-step validation averaged
   `3616.94 ms` with steps `3655.38`, `3628.57`, and `3605.31 ms`. The promoted
   256x128 huge-N tile remains the default.
+- Rejected a rational-tanh approximation for the pure SM120 TK forward GELU
+  epilogue. The temporary `LLMK_SM120_FORWARD_APPROX_GELU_TANH=1` hook passed
+  `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes), but the
+  focused benchmark worsened the fused FC forward row and the required
+  TinyStories 3-step validation regressed to `3610.64 ms` with steps
+  `3631.91`, `3613.16`, and `3608.12 ms` while shifting validation loss. The
+  forward GELU epilogue keeps exact `tanhf`.
 
 ## 2026-05-09 — Blackwell build support
 
