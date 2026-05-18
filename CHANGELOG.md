@@ -1371,6 +1371,10 @@ changelog is the diary; `goal.md` is the plan.
   the 256x64 / 8-warp grad kernels for excessive shared memory (`0x1e000`
   bytes versus the SM120 limit `0x18c00`), so no smoke, benchmark, or
   TinyStories validation was run.
+- Rejected `LLMK_SM120_GRAD_K_TILE=16`. The macro build completed, but
+  `test_matmul` deterministically hit an illegal memory access on the fused
+  dGELU dInput smoke row; an immediate rerun failed at the same row. No
+  focused benchmark or TinyStories validation was run.
 
 ## 2026-05-09 — Blackwell build support
 
