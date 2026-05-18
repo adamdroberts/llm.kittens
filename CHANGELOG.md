@@ -343,6 +343,14 @@ changelog is the diary; `goal.md` is the plan.
   `bench_sm120_matmul` regressed every dInput row, including LM-head dInput to
   `1.32x` slower than cuBLASLt. The required TinyStories 3-step pure-TK
   validation then averaged `6849.22 ms`, so the hook was removed.
+- Rejected a sigmoid-approximate forward GELU hook for the pure SM120 TK path.
+  The `LLMK_SM120_FORWARD_GELU_SIGMOID=1` build passed `test_matmul` (`8/8`)
+  and improved the direct fused MLP-up benchmark row to `1537.74 us`, but that
+  was still slower than the cuBLASLt row at `1479.52 us` and most backward GEMM
+  rows remained behind. The required TinyStories 3-step pure-TK validation made
+  no step progress and was terminated as CPU-bound after roughly two minutes
+  before initial validation loss, with the trainer process at about `99.7%`
+  CPU, so the hook was removed.
 
 ## 2026-05-09 — Blackwell build support
 
