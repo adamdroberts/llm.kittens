@@ -18,6 +18,15 @@ changelog is the diary; `goal.md` is the plan.
   `26062.91 us` vs `23978.24 us`. The required TinyStories 3-step validation
   averaged `28770.46 ms` with steps `28484.18`, `28753.35`, and `28787.57 ms`,
   so the default concurrent split-K streams remain in place.
+- Rejected macro-only `LLMK_SM120_DWEIGHT_SUPER_M=17`. The build passed
+  `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes), but the
+  focused benchmark still left every dWeight row behind cuBLASLt: qkv dWeight
+  `1298.92 us` versus `1074.27 us`, attention-projection dWeight `518.16 us`
+  versus `346.52 us`, MLP dWeight `1765.66 us` versus `1414.57 us`, projection
+  dWeight `1711.69 us` versus `1395.84 us`, and LM-head dWeight `25320.46 us`
+  versus `23626.61 us`. TinyStories 3-step validation regressed to
+  `37568.93 ms` with steps `36552.55`, `38345.41`, and `36792.45 ms`, so the
+  source default remains `LLMK_SM120_DWEIGHT_SUPER_M=2`.
 
 ## 2026-05-17 — SM120 RTX 5090 GEMM fallback and pure-TK tuning
 
