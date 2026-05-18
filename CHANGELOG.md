@@ -1217,6 +1217,13 @@ changelog is the diary; `goal.md` is the plan.
   `1338.20 us` and LM-head dWeight `25744.22 us`. TinyStories 3-step
   validation slowed to `2897.79 ms` with steps `2861.16`, `2900.22`, and
   `2895.35 ms`, so the source edit was reverted.
+- Rejected isolating the stricter cp.async wait policy to the SM120 dWeight TN
+  kernel only. Changing `kernel_tn` from `load_async_wait<2>` to
+  `load_async_wait<1>` passed `test_matmul` (`8/8`) and `test_attention` (all
+  three smoke shapes), but the focused benchmark regressed every dWeight row
+  badly (qkv `1585.53 us`, attproj `590.76 us`, lmhead `27897.90 us`) and
+  TinyStories 3-step validation slowed to `2947.35 ms` with steps `2949.62`,
+  `2947.36`, and `2947.33 ms`. The temporary source edit was reverted.
 
 ## 2026-05-09 — Blackwell build support
 
