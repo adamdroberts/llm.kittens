@@ -8,6 +8,14 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Re-profiled the current `LLMK_SM120_SUPER_M=7` pure-TK source with
+  `LLMK_SM120_PROFILE_TRAIN_STEP`. The profiled TinyStories 3-step run averaged
+  `2879.36 ms` with expected profiler overhead. The dominant buckets remain
+  dense-GEMM heavy: forward `~859 ms/step`, FC/FCProj backward `~704 ms/step`
+  combined, attention backward `~297 ms/step`, QKV backward `~262 ms/step`,
+  LM-head backward `~242 ms/step`, and final-LayerNorm overlap/wait
+  `~170 ms/step`. The next optimisation focus therefore stays on the SM120 TK
+  GEMM kernels rather than 1D reduction or optimizer paths.
 - Rejected `LLMK_SM120_SUPER_M=6` after the adjacent swizzle retest. The
   macro build passed `test_matmul` (`8/8`) and `test_attention` (all three
   smoke shapes), but TinyStories 3-step validation regressed from the current
