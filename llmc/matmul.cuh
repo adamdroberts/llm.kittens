@@ -964,7 +964,7 @@ inline bool matmul_dispatch_tk_atb_splitk(floatX* out, const floatX* a, const fl
                                           size_t partial_elements) {
 #if LLMK_USE_TK_GEMM && defined(KITTENS_SM120)
 #ifndef LLMK_SM120_DWEIGHT_SPLIT_K
-#define LLMK_SM120_DWEIGHT_SPLIT_K 16
+#define LLMK_SM120_DWEIGHT_SPLIT_K 8
 #endif
 #ifndef LLMK_SM120_DWEIGHT_SPLIT_K_STREAMS
 #define LLMK_SM120_DWEIGHT_SPLIT_K_STREAMS 1

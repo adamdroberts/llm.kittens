@@ -152,6 +152,13 @@ changelog is the diary; `goal.md` is the plan.
   forward is `~0.87 s/step`, LM-head backward `~0.43 s/step`, FC/FCProj
   backward `~0.74 s/step` combined, and QKV backward `~0.28 s/step`; packed
   attention backward is faster than the profiled fallback at `~0.30 s/step`.
+- Promoted `LLMK_SM120_DWEIGHT_SPLIT_K=8` for the current reduced-scratch
+  pure-TK path. The first source-default `test_matmul` hit the recurring
+  accumulated dWeight transient, the immediate rerun passed `8/8`, and
+  `test_attention` passed all three shapes. The required TinyStories 3-step
+  validation averaged `2907.14 ms` with steps `2898.32`, `2905.02`, and
+  `2909.25 ms`, improving the committed pure-TK default but still trailing the
+  supplied llm.c baseline and the SM120 cuBLASLt fallback.
 
 ## 2026-05-17 — SM120 RTX 5090 GEMM fallback and pure-TK tuning
 

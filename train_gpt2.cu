@@ -384,7 +384,7 @@ void fill_in_activation_sizes(const ActivationTensors* data, TensorSpec (&tensor
     tensors[20] = TENSOR_SPEC(data->scratch_btc, B * T * C);
 #if defined(KITTENS_SM120) && !defined(LLMK_SM120_USE_CUBLASLT_GEMM)
 #ifndef LLMK_SM120_DWEIGHT_SPLIT_K
-#define LLMK_SM120_DWEIGHT_SPLIT_K 16
+#define LLMK_SM120_DWEIGHT_SPLIT_K 8
 #endif
 #ifndef LLMK_SM120_LARGE_DWEIGHT_SPLIT_K
 #define LLMK_SM120_LARGE_DWEIGHT_SPLIT_K 1
