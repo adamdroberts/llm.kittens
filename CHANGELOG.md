@@ -1293,6 +1293,11 @@ changelog is the diary; `goal.md` is the plan.
   `test_attention` (all three smoke shapes), but TinyStories 3-step validation
   slowed to `3015.93 ms` with steps `3031.65`, `3007.17`, and `3024.69 ms`.
   The SM120 bias-gradient block size remains `512`.
+- Rejected `LLMK_SM120_DINP_SUPER_M=11` on the current K-tile 16/dWeight
+  stack. The macro build compiled, but `test_matmul` failed the plain dInput
+  row with max diff `5.2188` versus the `0.50` tolerance, so no focused
+  benchmark or TinyStories validation was run. The dInput swizzle remains the
+  source default `8`.
 
 ## 2026-05-09 — Blackwell build support
 
