@@ -8,6 +8,14 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Rejected a current-source retest of the temporary small-M dWeight swizzle
+  split, `LLMK_SM120_DWEIGHT_SMALL_M_SUPER_M=3`. The hook routed TN dWeight
+  rows with `M <= 1024` and `N % 128 == 0` through a separate 128x128 alias.
+  The macro build passed `test_matmul` (`8/8`) and `test_attention` (all three
+  smoke shapes), but TinyStories 3-step validation regressed to `2852.82 ms`
+  with steps `2842.05`, `2854.78`, and `2861.64 ms` (`2858.21 ms` excluding
+  first-step warmup), slower than the best accepted `LLMK_SM120_SUPER_M=7`
+  run. The temporary hook was removed.
 - Rejected a current-source forward-only `LLMK_SM120_FORWARD_SUPER_M=8` hook
   after a macro pass failed to reproduce as a promoted default. The macro build
   passed `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes),
