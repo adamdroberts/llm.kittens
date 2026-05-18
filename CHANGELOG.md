@@ -1344,6 +1344,14 @@ changelog is the diary; `goal.md` is the plan.
   `348.77 us`). TinyStories 3-step validation regressed to `3048.72 ms` with
   steps `3051.72`, `3044.99`, and `3052.46 ms`, so the source default remains
   `LLMK_SM120_DWEIGHT_SUPER_M=2`.
+- Rejected a temporary dWeight-specific N128 K-tile hook. The
+  `LLMK_SM120_DWEIGHT_N128_K_TILE=32` build passed `test_matmul` (`8/8`) and
+  `test_attention` (all three smoke shapes), but the focused benchmark still
+  trailed cuBLASLt on every dWeight row and worsened qkv dWeight to
+  `1270.48 us` versus cuBLASLt `1055.14 us`. TinyStories 3-step validation
+  regressed to `3055.98 ms` with steps `3045.03`, `3049.89`, and
+  `3062.08 ms`, so the temporary hook was removed and the N128 dWeight route
+  again uses `LLMK_SM120_HUGE_N_K_TILE=16`.
 
 ## 2026-05-09 — Blackwell build support
 
