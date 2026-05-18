@@ -1038,6 +1038,16 @@ changelog is the diary; `goal.md` is the plan.
   dWeight improvement (qkv `1177.66 us`, attproj `497.04 us`, fcproj
   `1507.44 us`, lmhead `22761.23 us`), and averaged `2745.01 ms` with steps
   `2739.79`, `2742.41`, and `2747.62 ms`.
+- Promoted `LLMK_SM120_DWEIGHT_SUPER_M=2` on top of the K-tile 16 route. The
+  macro A/B build passed `test_matmul` (`8/8`) and `test_attention` (all three
+  smoke shapes), kept dWeight rows close to the K-tile 16 default (qkv
+  `1176.31 us`, attproj `496.01 us`, fcproj `1504.80 us`, lmhead
+  `22917.54 us`), and averaged `2742.78 ms` on TinyStories with steps
+  `2740.98`, `2741.63`, and `2743.93 ms`. The no-override source-default
+  rebuild passed the same smokes, benchmarked qkv/attproj/lmhead dWeight at
+  `1173.46`, `484.78`, and `22678.40 us`, and averaged `2744.85 ms` with
+  steps `2740.57`, `2742.70`, and `2747.01 ms`, narrowly ahead of the prior
+  K-tile 16 source default.
 
 ## 2026-05-09 — Blackwell build support
 
