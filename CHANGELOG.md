@@ -1128,6 +1128,11 @@ changelog is the diary; `goal.md` is the plan.
   shapes), but TinyStories 3-step validation averaged `2744.14 ms` with steps
   `2739.37`, `2742.82`, and `2745.46 ms`, slower than the committed
   `LLMK_SM120_DPREP_WARPS=3` default.
+- Rejected increasing SM120 attention forward tiling to
+  `LLMK_SM120_ATTN_FWD_BLOCK=64`. The macro build passed `test_matmul` (`8/8`)
+  and `test_attention` (all three smoke shapes), but TinyStories 3-step
+  validation regressed sharply to `3104.70 ms` with steps `3104.32`, `3099.08`,
+  and `3110.32 ms`. The forward attention tile remains `32`.
 
 ## 2026-05-09 — Blackwell build support
 
