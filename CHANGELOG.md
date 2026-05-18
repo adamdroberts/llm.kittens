@@ -1318,6 +1318,14 @@ changelog is the diary; `goal.md` is the plan.
   and worsened fcproj dWeight to `1673.40 us`. TinyStories 3-step validation
   regressed badly to `5340.61 ms` with steps `6528.14`, `5362.80`, and
   `5318.43 ms`, so the huge-N threshold remains `8192`.
+- Rejected lowering the current qkv dWeight split-K route to
+  `LLMK_SM120_DWEIGHT_SPLIT_K=8` on top of the K-tile 16/dInput stack. The
+  macro build passed `test_matmul` (`8/8`) and `test_attention` (all three
+  smoke shapes), but the focused benchmark worsened qkv dWeight to
+  `1282.88 us` versus cuBLASLt `1031.05 us`, and TinyStories 3-step validation
+  regressed to `4873.73 ms` with steps `4677.12`, `5353.01`, and `4394.45 ms`.
+  The source default remains 16-way split-K for qkv and the wrapper's 8-way cap
+  for non-QKV dWeight shapes.
 
 ## 2026-05-09 — Blackwell build support
 
