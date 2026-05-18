@@ -856,6 +856,10 @@ changelog is the diary; `goal.md` is the plan.
   with steps `2818.46`, `2820.37`, and `2823.49 ms`; however, the no-override
   source-default confirmation regressed to `2824.64 ms` with steps `2821.18`,
   `2822.14`, and `2827.14 ms`, so the source default stays at `512`.
+- Rejected `LLMK_SM120_BIAS_BLOCK_SIZE=640` for the same CUDA bias-gradient
+  reduction path. The build passed `test_matmul` (`8/8`) and `test_attention`
+  (all three smoke shapes), but TinyStories 3-step validation regressed to
+  `2827.01 ms` with steps `2819.71`, `2825.94`, and `2828.09 ms`.
 
 ## 2026-05-09 — Blackwell build support
 
