@@ -1311,6 +1311,13 @@ changelog is the diary; `goal.md` is the plan.
   `1872.37 us`. TinyStories 3-step validation regressed sharply to
   `3491.02 ms` with steps `3503.58`, `3421.97`, and `3560.07 ms`, so the
   source default remains `LLMK_SM120_DWEIGHT_SUPER_M=2`.
+- Rejected lowering `LLMK_SM120_HUGE_N_THRESHOLD` to `3072`. This avoided the
+  qkv forward route hit by the rejected `2048` threshold and passed
+  `test_matmul` (`8/8`) plus `test_attention` (all three smoke shapes), but
+  the focused benchmark still trailed cuBLASLt on the material projection rows
+  and worsened fcproj dWeight to `1673.40 us`. TinyStories 3-step validation
+  regressed badly to `5340.61 ms` with steps `6528.14`, `5362.80`, and
+  `5318.43 ms`, so the huge-N threshold remains `8192`.
 
 ## 2026-05-09 — Blackwell build support
 
