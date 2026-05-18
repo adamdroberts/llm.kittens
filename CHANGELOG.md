@@ -697,6 +697,11 @@ changelog is the diary; `goal.md` is the plan.
   `test_matmul` aborted in ThunderKittens tensor-map setup because
   `st<bf16,512,32>` violates the `smem_shape[1] <= 256` assertion. The huge-N
   tile remains 256x128x64.
+- Rejected a temporary 256x96x64 huge-N forward tile for pure SM120 TK. The
+  `LLMK_SM120_HUGE_N_N96=1` build compiled, but `test_matmul` failed the
+  LM-head forward row on the first run and failed both MLP-up and LM-head
+  forward rows on the immediate rerun, so no benchmark or training validation
+  was run. The huge-N tile remains 256x128x64.
 
 ## 2026-05-09 — Blackwell build support
 
