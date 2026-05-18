@@ -494,6 +494,12 @@ changelog is the diary; `goal.md` is the plan.
   3-step validation averaged `2480.25 ms` with steps `2485.15`, `2477.94`, and
   `2482.55 ms`. This is only a noise-level improvement over the accepted
   no-master default, so plan caching remains opt-in.
+- Re-tested pure SM120 TK `LLMK_SM120_DWEIGHT_SPLIT_K=16` under the no-master
+  default. It passed `test_matmul` (`8/8`) and `test_attention` (all three smoke
+  shapes), and improved the current 3-step pure-TK average only slightly to
+  `3329.02 ms` with steps `3338.76`, `3328.02`, and `3330.01 ms`. The focused
+  benchmark remained mixed and all key pure-TK dWeight rows still trailed
+  cuBLASLt, so split-K stays at the source default of `8`.
 
 ## 2026-05-09 — Blackwell build support
 
