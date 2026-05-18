@@ -1399,6 +1399,13 @@ changelog is the diary; `goal.md` is the plan.
   `3035.16`, and `3051.13 ms`. The hook also changed the early validation-loss
   path, so it was removed and the fused forward epilogue continues to use the
   exact `tanhf` expression.
+- Rejected global forward swizzle `LLMK_SM120_SUPER_M=5`. The macro build
+  passed `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes),
+  and the focused benchmark improved only qkv forward (`1073.88 us` versus
+  cuBLASLt `1101.44 us`) while still trailing the material dInput, dWeight,
+  MLP, projection, and LM-head rows. TinyStories 3-step validation regressed to
+  `3052.94 ms` with steps `3036.98`, `3040.83`, and `3065.06 ms`, so the
+  global SM120 swizzle remains `9`.
 
 ## 2026-05-09 — Blackwell build support
 
