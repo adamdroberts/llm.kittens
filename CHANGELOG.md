@@ -535,6 +535,11 @@ changelog is the diary; `goal.md` is the plan.
   slower and the required TinyStories 3-step validation averaged
   `3624.98 ms` with steps `3627.30`, `3616.67`, and `3633.29 ms`. The hook was
   removed and the wide dWeight route remains on the current 256x64 tile.
+- Rejected a temporary dWeight-only 128x32 TN tile for the wide dWeight route
+  before benchmarking. The build compiled, but `test_matmul` failed the GPT-2
+  MLP-up forward smoke row with max diff `5.5156` versus the `0.50` tolerance,
+  so no focused benchmark or TinyStories 3-step validation was run and the hook
+  was removed.
 
 ## 2026-05-09 — Blackwell build support
 
