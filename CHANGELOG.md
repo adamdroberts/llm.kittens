@@ -440,6 +440,10 @@ changelog is the diary; `goal.md` is the plan.
   still aborted because the dWeight reduction dimension is not divisible by
   `48` for the covered shapes. The hook was removed and no 3-step TinyStories
   validation was run.
+- Rejected `LLMK_SM120_GRAD_K_TILE=16`. It compiled, but `test_matmul` failed
+  the GPT-2 MLP-up and LM-head forward smoke rows and then hit an illegal memory
+  access in the fused dGELU dInput smoke. No benchmark or 3-step TinyStories
+  validation was run for this incorrect build.
 
 ## 2026-05-09 — Blackwell build support
 
