@@ -961,6 +961,12 @@ changelog is the diary; `goal.md` is the plan.
   the larger non-QKV dWeight rows and TinyStories 3-step validation regressed
   to `2822.17 ms` with steps `2818.06`, `2820.82`, and `2823.52 ms`. The
   temporary split-cap knob was removed.
+- Rejected lowering the qkv dWeight split-K default to
+  `LLMK_SM120_DWEIGHT_SPLIT_K=8` under the current 128x128 TN route. The build
+  passed `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes),
+  but qkv dWeight regressed to `1535.27 us` in the focused benchmark and
+  TinyStories 3-step validation slowed to `2820.86 ms` with steps `2814.07`,
+  `2817.38`, and `2824.34 ms`.
 
 ## 2026-05-09 — Blackwell build support
 
