@@ -986,6 +986,12 @@ changelog is the diary; `goal.md` is the plan.
   rebuild passed `test_matmul` on rerun after the known MLP-up transient,
   passed `test_attention`, and confirmed `2813.17 ms` with steps `2807.86`,
   `2810.93`, and `2815.41 ms`.
+- Rejected retesting adjacent `LLMK_SM120_DWEIGHT_SUPER_M=4` after promoting
+  `LLMK_SM120_DPREP_WARPS=3`. The build passed `test_matmul` (`8/8`) and
+  `test_attention` (all three smoke shapes), but the focused benchmark stayed
+  mixed and TinyStories 3-step validation averaged `2813.07 ms` with steps
+  `2806.37`, `2812.08`, and `2814.05 ms`, not enough to displace the current
+  `3` default.
 
 ## 2026-05-09 — Blackwell build support
 
