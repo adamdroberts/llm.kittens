@@ -682,6 +682,11 @@ changelog is the diary; `goal.md` is the plan.
   TinyStories 3-step validation regressed to `3610.64 ms` with steps
   `3631.91`, `3613.16`, and `3608.12 ms` while shifting validation loss. The
   forward GELU epilogue keeps exact `tanhf`.
+- Rejected `LLMK_SM120_HUGE_N_K_TILE=96` for the promoted pure SM120 TK
+  256x128 huge-N forward route. The build failed at `test_matmul` compile time:
+  ptxas reported the generated 256x128x96 huge-N kernel used `0x24000` bytes
+  of shared data, above the SM120 `0x18c00` limit. The huge-N K tile remains
+  `64`.
 
 ## 2026-05-09 — Blackwell build support
 
