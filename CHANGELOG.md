@@ -794,6 +794,15 @@ changelog is the diary; `goal.md` is the plan.
   reason. The candidate compiled, but `test_matmul` failed the plain dInput row
   on two consecutive runs (`5.7344` and `5.3125` max diff versus `0.50`
   tolerance), so it was not benchmarked or validated with TinyStories training.
+- Promoted `LLMK_SM120_SUPER_M=9` as the shared pure SM120 TK forward/dInput
+  swizzle default. The adjacent lower candidate passed `test_matmul` (`8/8`)
+  and `test_attention` (all three smoke shapes); its focused benchmark was
+  mixed versus `10`, but TinyStories 3-step validation improved slightly to
+  `2826.59 ms` with steps `2822.01`, `2825.57`, and `2827.61 ms`. The
+  no-override source-default rebuild passed the same smokes and averaged
+  `2829.26 ms` with steps `2825.09`, `2826.07`, and `2832.45 ms`. Pure TK
+  remains just above the supplied llm.c baseline and still behind cuBLASLt on
+  the material dWeight rows.
 
 ## 2026-05-09 — Blackwell build support
 
