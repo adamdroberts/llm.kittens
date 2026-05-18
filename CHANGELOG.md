@@ -1506,6 +1506,12 @@ changelog is the diary; `goal.md` is the plan.
   cuBLASLt, and TinyStories 3-step validation regressed to `3552.81 ms` with
   steps `3526.77`, `3535.47`, and `3570.15 ms`. Pure SM120 TK builds keep the
   normal ptxas load-cache mode.
+- Rejected pure SM120 TK codegen with `-Xptxas -maxrregcount=192`. The build
+  passed `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes),
+  but the focused benchmark worsened key dWeight rows such as qkv
+  (`1278.28 us` versus cuBLASLt `1032.57 us`) and TinyStories 3-step validation
+  regressed to `3052.12 ms` with steps `3156.48`, `3059.68`, and `3044.56 ms`.
+  Pure SM120 TK builds keep the uncapped register allocation.
 
 ## 2026-05-09 — Blackwell build support
 
