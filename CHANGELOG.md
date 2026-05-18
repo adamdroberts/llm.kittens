@@ -1520,6 +1520,13 @@ changelog is the diary; `goal.md` is the plan.
   `21501.94 us`. TinyStories 3-step validation regressed to `3163.98 ms` with
   steps `3171.29`, `3155.54`, and `3172.43 ms`, so the temporary hook was
   removed.
+- Rejected a dWeight 128x64 K16 route. The temporary
+  `LLMK_SM120_DWEIGHT_N64_K16=1` build passed `test_matmul` (`8/8`) and
+  `test_attention` (all three smoke shapes), and the focused benchmark improved
+  some direct dWeight rows such as attention-projection (`475.47 us`) and qkv
+  (`1162.90 us`), but all dWeight rows still trailed cuBLASLt and TinyStories
+  3-step validation regressed to `3077.65 ms` with steps `3013.40`, `3070.49`,
+  and `3084.81 ms`. The temporary route was removed.
 
 ## 2026-05-09 — Blackwell build support
 
