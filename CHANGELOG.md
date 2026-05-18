@@ -889,6 +889,11 @@ changelog is the diary; `goal.md` is the plan.
   shapes). The focused benchmark improved several plain backward GEMM timings,
   but TinyStories 3-step validation regressed to `2865.33 ms` with steps
   `2857.62`, `2862.82`, and `2867.85 ms`, so the source default remains fused.
+- Rejected lowering the SM120 attention dprep launch to
+  `LLMK_SM120_DPREP_WARPS=2`. The build passed `test_matmul` (`8/8`) and
+  `test_attention` (all three smoke shapes), but TinyStories 3-step validation
+  regressed to `2827.45 ms` with steps `2819.23`, `2827.19`, and `2827.71 ms`.
+  The source default remains the 4-warp dprep launch.
 
 ## 2026-05-09 — Blackwell build support
 
