@@ -203,11 +203,16 @@ static void tk_dweight_accum(floatX* out, const floatX* dout, const floatX* inp,
     if (!matmul_dispatch_tk_atb_splitk(
             out, dout, inp, s.N, s.K, s.M, stream,
             /*accumulate=*/true, scratch, scratch_elements)) {
+#if LLMK_SM120_DWEIGHT_DIRECT_ACCUM
+        matmul_dispatch_tk_atb(out, dout, inp, s.N, s.K, s.M, stream,
+                               /*accumulate=*/true);
+#else
         matmul_dispatch_tk_atb(scratch, dout, inp, s.N, s.K, s.M, stream);
         const size_t elements = (size_t)s.N * s.K;
         matmul_add_inplace_kernel<<<CEIL_DIV(elements, 256), 256, 0, stream>>>(
             out, scratch, elements);
         cudaCheck(cudaGetLastError());
+#endif
     }
 }
 

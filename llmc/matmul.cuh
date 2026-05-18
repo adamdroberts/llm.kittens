@@ -427,6 +427,12 @@ inline void matmul(floatX* d, const floatX* a, const floatX* b, const floatX* bi
 #ifndef LLMK_SM120_HUGE_N_FORWARD_WIDE
 #define LLMK_SM120_HUGE_N_FORWARD_WIDE 0
 #endif
+#ifndef LLMK_SM120_DWEIGHT_N128
+#define LLMK_SM120_DWEIGHT_N128 1
+#endif
+#ifndef LLMK_SM120_DWEIGHT_DIRECT_ACCUM
+#define LLMK_SM120_DWEIGHT_DIRECT_ACCUM 1
+#endif
 inline bool matmul_sm120_use_huge_n_tile(int N) {
     return (N >= LLMK_SM120_HUGE_N_THRESHOLD) && (N % 128 == 0);
 }
@@ -842,9 +848,6 @@ inline void matmul_dispatch_tk_ab(floatX* out, const floatX* a, const floatX* b,
     auto* C = llmk::to_bf16(out);
     auto* P = llmk::to_bf16(const_cast<floatX*>(pre_gelu));
 #if defined(KITTENS_SM120)
-#ifndef LLMK_SM120_DWEIGHT_N128
-#define LLMK_SM120_DWEIGHT_N128 1
-#endif
 #ifdef LLMK_SM120_FORCE_DEFAULT_TILE
     const bool huge_n = false;
     const bool wide   = false;
@@ -904,7 +907,8 @@ inline void matmul_dispatch_tk_ab(floatX* out, const floatX* a, const floatX* b,
 }
 
 inline void matmul_dispatch_tk_atb(floatX* out, const floatX* a, const floatX* b,
-                                   int M, int N, int K, cudaStream_t stream) {
+                                   int M, int N, int K, cudaStream_t stream,
+                                   bool accumulate = false) {
 #if LLMK_USE_TK_GEMM
     auto* A = llmk::to_bf16(const_cast<floatX*>(a));
     auto* B = llmk::to_bf16(const_cast<floatX*>(b));
@@ -923,19 +927,19 @@ inline void matmul_dispatch_tk_atb(floatX* out, const floatX* a, const floatX* b
     const bool n96 = false;
 #endif
     if (huge_n) {
-        llmk::gemm::launch<llmk::gemm::matmul_huge_n_tn>(A, B, C, M, N, K, stream);
+        llmk::gemm::launch<llmk::gemm::matmul_huge_n_tn>(A, B, C, M, N, K, stream, nullptr, nullptr, accumulate);
 #if LLMK_SM120_DWEIGHT_N128
     } else if (N % 128 == 0) {
-        llmk::gemm::launch<llmk::gemm::matmul_n128_tn>(A, B, C, M, N, K, stream);
+        llmk::gemm::launch<llmk::gemm::matmul_n128_tn>(A, B, C, M, N, K, stream, nullptr, nullptr, accumulate);
 #endif
     } else if (n96) {
-        llmk::gemm::launch<llmk::gemm::matmul_n96_tn>(A, B, C, M, N, K, stream);
+        llmk::gemm::launch<llmk::gemm::matmul_n96_tn>(A, B, C, M, N, K, stream, nullptr, nullptr, accumulate);
     } else if (wide) {
-        llmk::gemm::launch<llmk::gemm::matmul_wide_tn>(A, B, C, M, N, K, stream);
+        llmk::gemm::launch<llmk::gemm::matmul_wide_tn>(A, B, C, M, N, K, stream, nullptr, nullptr, accumulate);
     } else if (N % 256 == 0) {
-        llmk::gemm::launch<llmk::gemm::matmul_default_tn>(A, B, C, M, N, K, stream);
+        llmk::gemm::launch<llmk::gemm::matmul_default_tn>(A, B, C, M, N, K, stream, nullptr, nullptr, accumulate);
     } else {
-        llmk::gemm::launch<llmk::gemm::matmul_small_n_tn>(A, B, C, M, N, K, stream);
+        llmk::gemm::launch<llmk::gemm::matmul_small_n_tn>(A, B, C, M, N, K, stream, nullptr, nullptr, accumulate);
     }
 #else
     if (N % 256 == 0) {
@@ -953,6 +957,7 @@ inline void matmul_dispatch_tk_atb(floatX* out, const floatX* a, const floatX* b
     (void)N;
     (void)K;
     (void)stream;
+    (void)accumulate;
     assert(false && "matmul_dispatch_tk_atb called without TK GEMM support");
 #endif
 }
@@ -1199,6 +1204,12 @@ inline void matmul_backward(floatX* dinp, floatX* dweight, floatX* dbias,
                 // split-K path wrote or accumulated dweight directly
             } else if (!dweight_accumulate) {
                 matmul_dispatch_tk_atb(dweight, dout, inp, OC, C, M, stream);
+#if LLMK_SM120_DWEIGHT_DIRECT_ACCUM
+            } else {
+                matmul_dispatch_tk_atb(dweight, dout, inp, OC, C, M, stream,
+                                       /*accumulate=*/true);
+            }
+#else
             } else if (dweight_accum_scratch != nullptr &&
                        dweight_accum_scratch_elements >= dweight_elements) {
                 matmul_dispatch_tk_atb(dweight_accum_scratch, dout, inp, OC, C, M, stream);
@@ -1212,6 +1223,7 @@ inline void matmul_backward(floatX* dinp, floatX* dweight, floatX* dbias,
                     dweight, dout, inp, M, C, OC);
                 cudaCheck(cudaGetLastError());
             }
+#endif
         } else {
             int grid = CEIL_DIV(dweight_elements, block);
             matmul_backward_dweight_kernel<<<grid, block, 0, stream>>>(dweight, dout, inp, M, C, OC);

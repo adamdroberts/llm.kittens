@@ -384,7 +384,7 @@ void kernel_nn(const __grid_constant__ typename T::globals_nn g)
 
 // ---- kernel_tn : C = Aᵀ · B -----------------------------------------------
 
-template <typename T, int SUPER_M>
+template <typename T, int SUPER_M, bool ACCUMULATE>
 __global__ __launch_bounds__(T::NUM_THREADS, 1)
 void kernel_tn(const __grid_constant__ typename T::globals_tn g)
 {
@@ -392,6 +392,7 @@ void kernel_tn(const __grid_constant__ typename T::globals_tn g)
     using a_rt_col = rt_bf<T::K_TILE, T::WARP_M, ducks::rt_layout::col>;
     using b_rt_row = rt_bf<T::K_TILE, T::N_TILE, ducks::rt_layout::row>;
     using b_rt_col = rt_bf<T::K_TILE, T::N_TILE, ducks::rt_layout::col>;
+    using c_rt     = rt_bf<T::WARP_M, T::N_TILE, ducks::rt_layout::row>;
     using d_rt     = rt_fl<T::WARP_M, T::N_TILE, ducks::rt_layout::row>;
 
     // For TN, output is (M, N) where M is the "A^T" rows. C.rows() == M_TILE-blocks.
@@ -446,6 +447,13 @@ void kernel_tn(const __grid_constant__ typename T::globals_tn g)
         ::kittens::warp::mma_AtB(accum, a_reg_col, b_reg_col, accum);
     }
 
+    if constexpr (ACCUMULATE) {
+        c_rt prior_bf;
+        d_rt prior_fl;
+        ::kittens::warp::load(prior_bf, g.C, {0, 0, by * T::NUM_WARPS + w, bx});
+        ::kittens::warp::copy(prior_fl, prior_bf);
+        accum += prior_fl;
+    }
     ::kittens::warp::store(g.C, accum, {0, 0, by * T::NUM_WARPS + w, bx});
 }
 
@@ -530,7 +538,7 @@ using matmul_huge_n_tn               = matmul_template<2, 4, LLMK_SM120_SUPER_M,
 template <typename mmt>
 inline void launch(bf16* d_A, bf16* d_B, bf16* d_C, int M, int N, int K,
                    cudaStream_t stream = 0, bf16* d_pre_gelu = nullptr,
-                   const bf16* d_bias = nullptr) {
+                   const bf16* d_bias = nullptr, bool accumulate = false) {
     using namespace sm120_detail;
     using T = typename mmt::traits;
     assert(M % T::M_TILE == 0 && "gemm_sm120: M must be a multiple of the kernel's M_TILE");
@@ -577,8 +585,13 @@ inline void launch(bf16* d_A, bf16* d_B, bf16* d_C, int M, int N, int K,
         typename T::b_gl_tn Bgl{d_B, nullptr, nullptr, K_, N_};
         typename T::c_gl    Cgl{d_C, nullptr, nullptr, M_, N_};
         typename T::globals_tn g{Agl, Bgl, Cgl};
-        auto kfn = kernel_tn<T, mmt::SUPER_M>;
-        kfn<<<grid, block, 0, stream>>>(g);
+        if (accumulate) {
+            auto kfn = kernel_tn<T, mmt::SUPER_M, true>;
+            kfn<<<grid, block, 0, stream>>>(g);
+        } else {
+            auto kfn = kernel_tn<T, mmt::SUPER_M, false>;
+            kfn<<<grid, block, 0, stream>>>(g);
+        }
     }
 }
 

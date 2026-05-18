@@ -170,6 +170,17 @@ changelog is the diary; `goal.md` is the plan.
   `2911.11 ms` with steps `2898.13`, `2909.78`, and `2912.44 ms`, slightly
   slower than the O2 split-K=8 source default, so the dWeight super-M remains
   `2`.
+- Promoted direct SM120 TK accumulated-dWeight stores for cases where the
+  split-K planner collapses to one part. The TN kernel now optionally loads the
+  existing bf16 output tile and adds it in the float epilogue instead of writing
+  a scratch GEMM followed by a separate add kernel. The build passed
+  `test_matmul` (`8/8`) and `test_attention` (all three shapes). The focused
+  benchmark improved several accumulated dWeight rows, including qkv dW+=
+  `1297.88 us` and attention-projection dW+= `502.24 us`, but they still trail
+  cuBLASLt (`1100.69 us` and `330.56 us`). TinyStories 3-step validation
+  averaged `2895.13 ms` with steps `2892.79`, `2883.09`, and `2907.17 ms`,
+  improving the pure-TK default while still trailing the supplied llm.c
+  baseline and the SM120 cuBLASLt fallback.
 
 ## 2026-05-17 — SM120 RTX 5090 GEMM fallback and pure-TK tuning
 
