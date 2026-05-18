@@ -8,6 +8,12 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Rejected `LLMK_SM120_DWEIGHT_N128=0` after retesting the older TN dWeight
+  tile path. The macro build passed `test_matmul` (`8/8`), but TinyStories
+  3-step validation regressed from the current `2837.54 ms` source average to
+  `2957.47 ms` with steps `2927.65`, `2936.15`, and `3008.62 ms`
+  (`2972.38 ms` excluding first-step warmup). The default keeps the 128x128
+  dWeight tile enabled.
 - Rejected the `-maxrregcount=128` build after a compiler occupancy retest. The
   first `test_matmul` run failed the accumulated dWeight row with max diff
   `1.5625` versus `0.50`, though two immediate reruns passed `8/8`. The
