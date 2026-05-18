@@ -894,6 +894,11 @@ changelog is the diary; `goal.md` is the plan.
   `test_attention` (all three smoke shapes), but TinyStories 3-step validation
   regressed to `2827.45 ms` with steps `2819.23`, `2827.19`, and `2827.71 ms`.
   The source default remains the 4-warp dprep launch.
+- Rejected increasing the SM120 attention backward tile to
+  `LLMK_SM120_ATTN_BWD_BLOCK=32` under the current packed-QKV path. The build
+  passed `test_attention` (all three smoke shapes), but TinyStories 3-step
+  validation regressed to `2835.20 ms` with steps `2828.63`, `2833.57`, and
+  `2836.83 ms`. The source default remains a 16-row backward tile.
 
 ## 2026-05-09 — Blackwell build support
 
