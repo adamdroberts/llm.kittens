@@ -500,6 +500,12 @@ changelog is the diary; `goal.md` is the plan.
   `3329.02 ms` with steps `3338.76`, `3328.02`, and `3330.01 ms`. The focused
   benchmark remained mixed and all key pure-TK dWeight rows still trailed
   cuBLASLt, so split-K stays at the source default of `8`.
+- Rejected pure SM120 TK `LLMK_SM120_DWEIGHT_SUPER_M=7`. It passed
+  `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes), but the
+  focused benchmark remained behind cuBLASLt on all dWeight rows and the
+  required TinyStories 3-step validation averaged `3337.92 ms` with steps
+  `3353.31`, `3333.54`, and `3342.30 ms`, slightly slower than the current
+  pure-TK no-master rebaseline.
 
 ## 2026-05-09 — Blackwell build support
 
