@@ -206,6 +206,12 @@ changelog is the diary; `goal.md` is the plan.
   from `25514 MiB` to `25588 MiB` and TinyStories 3-step validation regressed
   to `2903.92 ms` with steps `2897.04`, `2899.60`, and `2908.24 ms`, so the
   large-dWeight split remains `1`.
+- Rejected a temporary fused-GeLU forward huge-N threshold hook that routed the
+  MLP-up `N=3072` shape through the huge-N tile. The candidate passed
+  `test_matmul` (`8/8`) and `test_attention` (all three shapes), but the
+  focused benchmark did not improve the `fc fwd+GeLU` row and TinyStories
+  3-step validation regressed to `2929.27 ms` with steps `2922.14`, `2929.21`,
+  and `2929.32 ms`, so the hook was removed.
 
 ## 2026-05-17 — SM120 RTX 5090 GEMM fallback and pure-TK tuning
 
