@@ -423,6 +423,14 @@ changelog is the diary; `goal.md` is the plan.
   `2481.12 ms` with steps `2484.93`, `2478.22`, and `2484.03 ms`. This restores
   a significant margin over the supplied llm.c baseline while preserving
   explicit `-w 1` for master-weight runs.
+- Rebaselined the pure SM120 TK path after the no-master default. The
+  `SM120_USE_CUBLASLT_GEMM=0` build passed `test_matmul` (`8/8`) and
+  `test_attention` (all three smoke shapes), but the user's TinyStories command
+  capped with `-x 3` still averaged `3335.85 ms` with steps `3343.69`,
+  `3330.50`, and `3341.21 ms`. The finite loss/norm trace confirms the path is
+  stable, but it remains behind both the supplied llm.c baseline and the
+  cuBLASLt-backed SM120 default, so the pure-TK kernel-outperformance goal is
+  still open.
 
 ## 2026-05-09 — Blackwell build support
 
