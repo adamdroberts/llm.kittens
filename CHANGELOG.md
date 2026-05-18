@@ -654,6 +654,13 @@ changelog is the diary; `goal.md` is the plan.
   side-effect and the required TinyStories 3-step validation regressed to
   `3617.33 ms` with steps `3567.63`, `3630.49`, and `3604.18 ms`. The SM120
   bias-gradient block size remains `512`.
+- Rejected a TN-only `LLMK_SM120_TN_INPLACE_LAYOUT_SWAP=0` hook for the pure
+  SM120 TK dWeight kernel. It passed `test_matmul` (`8/8`) and `test_attention`
+  (all three smoke shapes), and it slightly improved the direct LM-head dWeight
+  row, but it worsened the smaller dWeight rows and the required TinyStories
+  3-step validation regressed to `3616.17 ms` with steps `3586.78`, `3627.89`,
+  and `3604.46 ms`. The dWeight kernel keeps the shared
+  `LLMK_SM120_INPLACE_LAYOUT_SWAP=1` default.
 
 ## 2026-05-09 — Blackwell build support
 
