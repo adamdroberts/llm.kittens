@@ -1084,6 +1084,11 @@ changelog is the diary; `goal.md` is the plan.
   (`5.2812` then `7.9258` max abs diff versus tolerance `0.50`), so no focused
   benchmark or TinyStories training validation was run for this incorrect
   candidate.
+- Rejected `LLMK_SM120_DINP_SUPER_M=7` on top of the current K-tile 16 stack.
+  The macro build compiled, but `test_matmul` failed the plain dInput row twice
+  (`6.8594` then `6.7344` max abs diff versus tolerance `0.50`), so no focused
+  benchmark or TinyStories training validation was run for this incorrect
+  candidate.
 
 ## 2026-05-09 — Blackwell build support
 
