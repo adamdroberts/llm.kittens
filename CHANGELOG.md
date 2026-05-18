@@ -406,6 +406,13 @@ changelog is the diary; `goal.md` is the plan.
   separate build/codegen effects from runtime state. It produced the same
   finite TinyStories trace and averaged `3235.36 ms`, confirming the current
   slowdown is not caused by the latest rebuild flags or rejected source hooks.
+- Captured GPU clocks during another current-default 3-step run. The run
+  averaged `3239.00 ms`, while `nvidia-smi` samples showed normal boost under
+  load (`~2.8 GHz` SM clock, `13.8 GHz` memory clock, `99-100%` utilization,
+  and roughly `500-575 W`), so the current slowdown is not a low-clock or
+  power-limit artifact. A fresh `-ge 0` retest then averaged `3312.72 ms`,
+  confirming the SM120 default should keep GELU fusion enabled even in the
+  current runtime state.
 
 ## 2026-05-09 — Blackwell build support
 
