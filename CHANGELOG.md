@@ -1500,6 +1500,12 @@ changelog is the diary; `goal.md` is the plan.
   `1572.26 us` versus `1419.39 us`. TinyStories 3-step validation averaged
   `2814.59 ms` with steps `2806.56`, `2803.64`, and `2825.53 ms`, so the hook
   was removed.
+- Rejected pure SM120 TK codegen with `-Xptxas -dlcm=cg`. The build passed
+  `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes), but the
+  focused benchmark stayed mixed with material dInput/dWeight rows behind
+  cuBLASLt, and TinyStories 3-step validation regressed to `3552.81 ms` with
+  steps `3526.77`, `3535.47`, and `3570.15 ms`. Pure SM120 TK builds keep the
+  normal ptxas load-cache mode.
 
 ## 2026-05-09 — Blackwell build support
 
