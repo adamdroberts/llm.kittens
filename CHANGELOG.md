@@ -1565,6 +1565,13 @@ changelog is the diary; `goal.md` is the plan.
   attention projection `517.49 us`, MLP-up `1703.62 us`) and TinyStories
   3-step validation regressed to `3391.70 ms` with steps `3499.31`,
   `3391.40`, and `3392.00 ms`, so the hook was removed.
+- Rejected a qkv-forward-only swizzle route with
+  `LLMK_SM120_QKV_FORWARD_SUPER_M=8`. The candidate passed `test_matmul`
+  (`8/8`) and `test_attention` (all three smoke shapes), but the focused
+  benchmark only tied qkv forward (`1147.98 us` versus cuBLASLt `1143.10 us`)
+  while leaving dInput and dWeight behind. TinyStories 3-step validation
+  regressed to `3017.52 ms` with steps `3015.67`, `3004.43`, and `3030.61 ms`,
+  so the wrapper and benchmark hooks were removed.
 
 ## 2026-05-09 — Blackwell build support
 
