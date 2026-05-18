@@ -8,6 +8,12 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Rejected the SM120 LayerNorm fallback comparison with
+  `LLMK_DISABLE_TK_LAYERNORM` at the smoke gate. The macro build completed,
+  but `test_layernorm` failed reproducibly on the backward `dbias` check with
+  max diff `1.510559` versus the `0.120` tolerance, while forward, fused
+  residual, `dinp`, and `dweight` checks passed. No TinyStories 3-step timing
+  was run because the fallback build was numerically unsafe.
 - Rejected the SM120 attention fallback comparison with
   `LLMK_DISABLE_TK_MHA_BWD` at the smoke gate. The macro build completed, but
   `test_attention` failed reproducibly on the `B=1 T=256 NH=2 HS=64` forward
