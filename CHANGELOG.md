@@ -1477,6 +1477,14 @@ changelog is the diary; `goal.md` is the plan.
   `1658.01 us`) versus the current 128x128 route. TinyStories 3-step validation
   averaged `2836.84 ms` with steps `2816.75`, `2827.87`, and `2845.82 ms`, so
   the temporary hook was removed.
+- Rejected a forward-only SM120 swizzle hook. The temporary
+  `LLMK_SM120_FORWARD_SUPER_M=8` route kept dInput and dWeight on the accepted
+  swizzles and passed `test_matmul` (`8/8`) plus `test_attention` (all three
+  smoke shapes). The focused benchmark improved qkv and fcproj forward rows,
+  but attproj forward and the remaining dWeight rows still trailed cuBLASLt;
+  the required TinyStories 3-step validation averaged `2799.31 ms` with steps
+  `2779.75`, `2798.74`, and `2799.88 ms`, slower than the current pure-TK
+  source default, so the hook was removed.
 
 ## 2026-05-09 — Blackwell build support
 
