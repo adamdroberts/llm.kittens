@@ -1335,6 +1335,15 @@ changelog is the diary; `goal.md` is the plan.
   `327.40 us`). TinyStories 3-step validation regressed to `5437.90 ms` with
   steps `6876.11`, `5957.73`, and `4918.08 ms`, so the temporary hook was
   removed and non-QKV shapes remain capped at 8-way split-K.
+- Rejected retesting pure SM120 TK `LLMK_SM120_DWEIGHT_SUPER_M=9` on the
+  current K-tile 16/dInput stack. The first `test_matmul` hit the known
+  transient MLP-up row, the immediate rerun passed `8/8`, and `test_attention`
+  passed all three smoke shapes, but the focused benchmark still trailed
+  cuBLASLt on every dWeight row, including qkv dWeight (`1219.95 us` versus
+  `1025.24 us`) and attention-projection dWeight (`533.90 us` versus
+  `348.77 us`). TinyStories 3-step validation regressed to `3048.72 ms` with
+  steps `3051.72`, `3044.99`, and `3052.46 ms`, so the source default remains
+  `LLMK_SM120_DWEIGHT_SUPER_M=2`.
 
 ## 2026-05-09 — Blackwell build support
 
