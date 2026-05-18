@@ -547,6 +547,14 @@ changelog is the diary; `goal.md` is the plan.
   the required TinyStories 3-step validation regressed to `3616.37 ms` with
   steps `3575.14`, `3607.16`, and `3625.58 ms`. The wrapper default remains
   `8`, with the qkv-only 16-way split left as an explicit A/B macro.
+- Rebaselined the clean current-source pure SM120 TK path after the rejection
+  rounds. The rebuilt `test_matmul` initially had a transient MLP-up forward
+  smoke failure but passed `8/8` on the immediate rerun; `test_attention`
+  passed all three smoke shapes. The focused benchmark still left the material
+  pure-TK GEMM rows behind cuBLASLt except fcproj forward, and the TinyStories
+  command capped with `-x 3` averaged `3621.93 ms` with steps `3614.90`,
+  `3618.94`, and `3624.92 ms`, so the current pure-TK path is slower than the
+  earlier no-master rebaseline and remains behind the supplied llm.c baseline.
 
 ## 2026-05-09 — Blackwell build support
 
