@@ -736,6 +736,12 @@ changelog is the diary; `goal.md` is the plan.
   unchanged and TinyStories 3-step validation averaged `3609.70 ms` with steps
   `3623.49`, `3618.42`, and `3600.99 ms`. The part streams remain normal
   nonblocking CUDA streams.
+- Rejected a four-stream pool for the pure SM120 TK dWeight split-K part
+  launches. It passed `test_matmul` (`8/8`) and `test_attention` (all three
+  smoke shapes), but the focused benchmark worsened qkv and attention-projection
+  dWeight while TinyStories 3-step validation still averaged `3601.50 ms` with
+  steps `3554.16`, `3583.89`, and `3619.11 ms`. The split-K launcher continues
+  to use one nonblocking stream per part.
 
 ## 2026-05-09 — Blackwell build support
 
