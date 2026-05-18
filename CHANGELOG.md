@@ -8,6 +8,12 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Rejected `LLMK_SM120_SUPER_M=6` after the adjacent swizzle retest. The
+  macro build passed `test_matmul` (`8/8`) and `test_attention` (all three
+  smoke shapes), but TinyStories 3-step validation regressed from the current
+  `2837.54 ms` source average to `2847.42 ms` with steps `2841.31`,
+  `2841.54`, and `2859.40 ms` (`2850.47 ms` excluding first-step warmup). The
+  default remains `LLMK_SM120_SUPER_M=7`.
 - Promoted `LLMK_SM120_SUPER_M=7` after the adjacent swizzle retest on the O3
   stack. The macro build passed `test_matmul` (`8/8`) and `test_attention`
   (all three smoke shapes), and TinyStories 3-step validation improved the
