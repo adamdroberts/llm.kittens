@@ -1391,6 +1391,14 @@ changelog is the diary; `goal.md` is the plan.
   rows, and TinyStories 3-step validation regressed to `3090.25 ms` with steps
   `3081.57`, `3081.75`, and `3098.75 ms`, so fused MLP bias+GELU remains
   enabled.
+- Rejected a temporary SM120 fused-GELU epilogue approximation hook. The
+  `LLMK_SM120_FAST_GELU=1` build passed `test_matmul` (`8/8`) and
+  `test_attention` (all three smoke shapes), but the focused benchmark
+  regressed fused FC forward to `1614.05 us` versus cuBLASLt `1498.27 us`, and
+  TinyStories 3-step validation averaged `3043.15 ms` with steps `3047.18`,
+  `3035.16`, and `3051.13 ms`. The hook also changed the early validation-loss
+  path, so it was removed and the fused forward epilogue continues to use the
+  exact `tanhf` expression.
 
 ## 2026-05-09 — Blackwell build support
 
