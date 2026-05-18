@@ -219,6 +219,11 @@ changelog is the diary; `goal.md` is the plan.
   `2899.85 ms` with steps `2895.86`, `2895.82`, and `2903.89 ms`, slightly
   slower than the current source default, so the shared forward swizzle remains
   `9`.
+- Rejected a temporary 512-thread fused-classifier block-size hook for SM120.
+  The `test_fused_classifier` target still skips on sm_120, so the trainer was
+  the runtime validation gate; TinyStories 3-step validation regressed to
+  `2969.23 ms` with steps `2962.71`, `2964.04`, and `2974.43 ms`. The hook was
+  removed and the classifier remains at the existing 256-thread block.
 
 ## 2026-05-17 — SM120 RTX 5090 GEMM fallback and pure-TK tuning
 
