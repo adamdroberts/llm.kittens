@@ -1165,6 +1165,16 @@ changelog is the diary; `goal.md` is the plan.
   TinyStories 3-step validation regressed to `2748.25 ms` with steps
   `2741.36`, `2746.30`, and `2750.21 ms`. The shared SM120 swizzle remains at
   `9`.
+- Rejected a temporary `LLMK_SM120_HUGE_N_SUPER_M` hook that split the LM-head
+  huge-N forward/dInput/dWeight swizzle from the shared SM120 swizzle. The
+  `LLMK_SM120_HUGE_N_SUPER_M=8` build passed `test_matmul` (`8/8`) and
+  `test_attention` (all three smoke shapes), and the focused benchmark slightly
+  improved some forward rows such as fcproj forward (`1420.06 us` versus
+  cuBLASLt `1432.39 us`), but LM-head and the material dInput/dWeight rows
+  still trailed cuBLASLt. TinyStories 3-step validation regressed to
+  `2747.36 ms` with steps `2738.78`, `2745.63`, and `2749.09 ms`, so the
+  temporary hook was removed and huge-N aliases again use the shared
+  `LLMK_SM120_SUPER_M=9`.
 
 ## 2026-05-09 — Blackwell build support
 
