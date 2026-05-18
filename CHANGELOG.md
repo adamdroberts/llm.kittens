@@ -1578,6 +1578,13 @@ changelog is the diary; `goal.md` is the plan.
   benchmark did not improve the remaining pure-TK gaps and TinyStories 3-step
   validation averaged `2568.10 ms` with steps `2563.89`, `2561.70`, and
   `2574.50 ms`, slower than the accepted no-master cuBLASLt default.
+- Rejected the combined pure-TK dWeight macro
+  `LLMK_SM120_DWEIGHT_SPLIT_K=32` with `LLMK_SM120_DWEIGHT_SUPER_M=1`. It
+  passed `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes)
+  and improved qkv dWeight to `1160.91 us`, but it worsened smaller dWeight
+  rows and still trailed cuBLASLt. TinyStories 3-step validation regressed to
+  `3017.20 ms` with steps `3016.19`, `3013.50`, and `3020.89 ms`, so the
+  source defaults remain split-K `16` and dWeight `SUPER_M=2`.
 
 ## 2026-05-09 — Blackwell build support
 
