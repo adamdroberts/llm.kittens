@@ -1585,6 +1585,11 @@ changelog is the diary; `goal.md` is the plan.
   rows and still trailed cuBLASLt. TinyStories 3-step validation regressed to
   `3017.20 ms` with steps `3016.19`, `3013.50`, and `3020.89 ms`, so the
   source defaults remain split-K `16` and dWeight `SUPER_M=2`.
+- Rejected `LLMK_SM120_BIAS_BLOCK_SIZE=128` for the CUDA bias-gradient
+  reduction path. The macro build failed `test_matmul` twice on the GPT-2 MLP
+  up-projection forward row (`7.5078` then `6.8633` max diff versus `0.50`
+  tolerance), so no focused benchmark or TinyStories 3-step validation was run.
+  The SM120 bias-gradient block size remains `512`.
 
 ## 2026-05-09 — Blackwell build support
 
