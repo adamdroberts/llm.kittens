@@ -811,6 +811,12 @@ changelog is the diary; `goal.md` is the plan.
   averaged `2828.29 ms` with steps `2825.12`, `2826.14`, and `2830.43 ms`.
   The no-override source-default rebuild passed the same smokes and averaged
   `2829.00 ms` with steps `2823.58`, `2826.84`, and `2831.16 ms`.
+- Rejected lowering the shared forward/huge-N swizzle to
+  `LLMK_SM120_SUPER_M=7` while keeping dInput at `10`. The build passed
+  `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes), but the
+  focused benchmark worsened the key forward rows and TinyStories 3-step
+  validation regressed to `2829.93 ms` with steps `2827.15`, `2827.97`, and
+  `2831.89 ms`.
 
 ## 2026-05-09 — Blackwell build support
 
