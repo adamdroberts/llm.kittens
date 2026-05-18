@@ -634,6 +634,13 @@ changelog is the diary; `goal.md` is the plan.
   but the focused benchmark regressed every projection forward row and the
   required TinyStories 3-step validation averaged `3644.00 ms` with steps
   `3650.67`, `3644.67`, and `3643.34 ms`. The N96 forward tile stays enabled.
+- Rejected disabling pure SM120 TK fused dGELU (`LLMK_SM120_FUSE_DGELU=0`)
+  after the O2/M256 default changes. The build passed `test_matmul` (`7/7`,
+  with fused dGELU smoke skipped by the macro) and `test_attention` (all three
+  smoke shapes), but the focused benchmark worsened the FC dInput row and the
+  required TinyStories 3-step validation regressed to `3635.67 ms` with steps
+  `3630.61`, `3646.37`, and `3624.97 ms`. Fused dGELU stays enabled by
+  default for pure SM120 TK.
 
 ## 2026-05-09 — Blackwell build support
 
