@@ -383,6 +383,13 @@ changelog is the diary; `goal.md` is the plan.
   default. The required TinyStories 3-step validation made no progress before
   initial validation output and was terminated with the trainer at about
   `99.6%` CPU, so the workspace default stays at `128` MiB.
+- Rejected a dWeight-only K-tile split that kept dInput on
+  `LLMK_SM120_GRAD_K_TILE=64` while testing `LLMK_SM120_DWEIGHT_K_TILE=32` for
+  TN launches. The build passed `test_matmul` (`8/8`) and improved LM-head
+  dWeight in `bench_sm120_matmul` to `1.13x` slower than cuBLASLt, but it
+  regressed the other dWeight rows and the required 3-step validation was
+  terminated before initial validation output with the trainer at about
+  `99.5%` CPU. The temporary dWeight-only trait hook was removed.
 
 ## 2026-05-09 — Blackwell build support
 
