@@ -842,6 +842,9 @@ inline void matmul_dispatch_tk_ab(floatX* out, const floatX* a, const floatX* b,
     auto* C = llmk::to_bf16(out);
     auto* P = llmk::to_bf16(const_cast<floatX*>(pre_gelu));
 #if defined(KITTENS_SM120)
+#ifndef LLMK_SM120_DWEIGHT_N128
+#define LLMK_SM120_DWEIGHT_N128 1
+#endif
 #ifdef LLMK_SM120_FORCE_DEFAULT_TILE
     const bool huge_n = false;
     const bool wide   = false;
@@ -921,6 +924,10 @@ inline void matmul_dispatch_tk_atb(floatX* out, const floatX* a, const floatX* b
 #endif
     if (huge_n) {
         llmk::gemm::launch<llmk::gemm::matmul_huge_n_tn>(A, B, C, M, N, K, stream);
+#if LLMK_SM120_DWEIGHT_N128
+    } else if (N % 128 == 0) {
+        llmk::gemm::launch<llmk::gemm::matmul_n128_tn>(A, B, C, M, N, K, stream);
+#endif
     } else if (n96) {
         llmk::gemm::launch<llmk::gemm::matmul_n96_tn>(A, B, C, M, N, K, stream);
     } else if (wide) {

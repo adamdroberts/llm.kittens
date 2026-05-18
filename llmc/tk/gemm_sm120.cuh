@@ -520,6 +520,7 @@ using matmul_huge_n_dgelu            = matmul_template<2, 4, LLMK_SM120_SUPER_M,
 using matmul_default_tn              = matmul_template<2, 4, LLMK_SM120_DWEIGHT_SUPER_M, true,  false, false, false, false, sm120_detail::traits_grad_128x64>;
 using matmul_small_n_tn              = matmul_template<2, 2, LLMK_SM120_DWEIGHT_SUPER_M, true,  false, false, false, false, sm120_detail::traits_grad_128x64>;
 using matmul_n96_tn                  = matmul_template<2, 4, LLMK_SM120_DWEIGHT_SUPER_M, true,  false, false, false, false, sm120_detail::traits_grad_128x96>;
+using matmul_n128_tn                 = matmul_template<2, 4, LLMK_SM120_DWEIGHT_SUPER_M, true,  false, false, false, false, sm120_detail::traits_128x128>;
 using matmul_wide_tn                 = matmul_template<2, 4, LLMK_SM120_DWEIGHT_SUPER_M, true,  false, false, false, false, sm120_detail::traits_grad_256x64>;
 using matmul_huge_n_tn               = matmul_template<2, 4, LLMK_SM120_SUPER_M, true,  false, false, false, false, sm120_detail::traits_128x128>;
 

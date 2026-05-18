@@ -913,6 +913,17 @@ changelog is the diary; `goal.md` is the plan.
   (all three smoke shapes), but TinyStories 3-step validation regressed to
   `2826.59 ms` with steps `2820.46`, `2825.42`, and `2827.77 ms`. The source
   default remains `512`.
+- Promoted an SM120 pure-TK dWeight TN 128x128 tile route
+  (`LLMK_SM120_DWEIGHT_N128=1`) for supported dWeight shapes. The macro A/B
+  passed `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes),
+  improved several non-QKV dWeight rows in the focused benchmark, and averaged
+  `2815.06 ms` on the TinyStories 3-step validation with steps `2807.96`,
+  `2813.15`, and `2816.97 ms`. The no-override source-default rebuild passed
+  the same smokes, reported qkv dWeight at `1371.03 us` in the focused
+  benchmark, and confirmed `2815.36 ms` with steps `2810.13`, `2813.17`, and
+  `2817.55 ms`. This beats the supplied llm.c 3-step average (`2818.23 ms`),
+  but the kernel-outperformance goal remains open because the focused dWeight
+  rows still trail cuBLASLt.
 
 ## 2026-05-09 — Blackwell build support
 

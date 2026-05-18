@@ -62,7 +62,8 @@ The SM120-specific wrapper uses the same template surface but tunes its
 Blackwell cp.async kernels separately: the shared `LLMK_SM120_SUPER_M` swizzle
 defaults to `9` after RTX 5090 3-step validation. dInput uses a separate
 `LLMK_SM120_DINP_SUPER_M=10` default, while dWeight keeps its separate
-`LLMK_SM120_DWEIGHT_SUPER_M=2` default.
+`LLMK_SM120_DWEIGHT_SUPER_M=2` default and routes supported TN dWeight shapes
+through a 128x128 tile by default (`LLMK_SM120_DWEIGHT_N128=1`).
 
 `matmul_template<M_BLOCK, N_BLOCK, SUPER_M, A_TRANSPOSED, B_TRANSPOSED,
 APPLY_BIAS, APPLY_GELU, STORE_PRE_GELU>` is ported from
@@ -142,9 +143,12 @@ Current status:
    after RTX 5090 smoke and 3-step validation; both knobs remain explicit A/B
    fallbacks.
 2. `dweight (OC, C) = doutᵀ (OC, B*T) · inp (B*T, C)` — wired through TK `A^T*B`. For accumulated micro-steps, the product lands in the caller-provided aligned scratch buffer and a small add kernel applies `dweight += scratch`. SM120 pure-TK defaults to `LLMK_SM120_DWEIGHT_SPLIT_K=16` for the qkv dWeight shape after the current RTX 5090 swizzle stack made the extra qkv parallelism worthwhile; non-QKV dWeight shapes remain capped at 8-way split-K inside the wrapper because larger splits regressed them.
-   The SM120 TN swizzle now defaults to `LLMK_SM120_DWEIGHT_SUPER_M=2`; `1`
-   fails smoke, while `3`, `4`, and higher tested values were slower or mixed
-   in 3-step validation.
+   Supported SM120 TN dWeight shapes now use the 128x128 tile
+   (`LLMK_SM120_DWEIGHT_N128=1`) after the current pure-TK stack improved the
+   TinyStories 3-step run below the supplied llm.c baseline. The SM120 TN
+   swizzle defaults to `LLMK_SM120_DWEIGHT_SUPER_M=2`; `1` fails smoke, while
+   `3`, `4`, and higher tested values were slower or mixed in 3-step
+   validation.
 3. `dbias (OC) = column-sum of dout over B*T` — `matmul_backward_bias_kernel9` followed by `reduce_add_sum_kernel` when `dbias_buffer` is available. Both kernels are verbatim from llm.c. SM120 keeps the same kernels but uses a 512-thread launch block by default (`LLMK_SM120_BIAS_BLOCK_SIZE`) after RTX 5090 timing showed it faster than the H100-derived 768-thread choice.
 
 The slow CUDA dWeight kernel remains only as a fallback for unsupported TK shapes
