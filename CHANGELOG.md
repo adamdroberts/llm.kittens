@@ -444,6 +444,13 @@ changelog is the diary; `goal.md` is the plan.
   the GPT-2 MLP-up and LM-head forward smoke rows and then hit an illegal memory
   access in the fused dGELU dInput smoke. No benchmark or 3-step TinyStories
   validation was run for this incorrect build.
+- Rejected `LLMK_SM120_BACKWARD_N96=1`. It passed `test_matmul` (`8/8`) and
+  `test_attention` (all three smoke shapes), but the focused benchmark made the
+  backward rows worse (`dInp` roughly `1.29x-1.38x` and dWeight roughly
+  `1.32x-1.81x` slower than cuBLASLt). The required TinyStories 3-step
+  validation completed with a finite trace but regressed to `3681.43 ms`
+  average with steps `3659.10`, `3652.39`, and `3710.48 ms`, so backward N96
+  remains disabled.
 
 ## 2026-05-09 — Blackwell build support
 
