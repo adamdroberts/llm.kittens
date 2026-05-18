@@ -540,6 +540,13 @@ changelog is the diary; `goal.md` is the plan.
   MLP-up forward smoke row with max diff `5.5156` versus the `0.50` tolerance,
   so no focused benchmark or TinyStories 3-step validation was run and the hook
   was removed.
+- Rejected promoting `LLMK_SM120_DWEIGHT_SPLIT_K=16` to the source default
+  under the current no-master pure-TK runtime. The source-default candidate
+  passed `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes),
+  but the focused benchmark still left every dWeight row behind cuBLASLt and
+  the required TinyStories 3-step validation regressed to `3616.37 ms` with
+  steps `3575.14`, `3607.16`, and `3625.58 ms`. The wrapper default remains
+  `8`, with the qkv-only 16-way split left as an explicit A/B macro.
 
 ## 2026-05-09 — Blackwell build support
 
