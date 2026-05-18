@@ -1224,6 +1224,13 @@ changelog is the diary; `goal.md` is the plan.
   badly (qkv `1585.53 us`, attproj `590.76 us`, lmhead `27897.90 us`) and
   TinyStories 3-step validation slowed to `2947.35 ms` with steps `2949.62`,
   `2947.36`, and `2947.33 ms`. The temporary source edit was reverted.
+- Rejected retesting the SM120 backward 128x96 tile route
+  (`LLMK_SM120_BACKWARD_N96=1`) on the current K-tile 16/dInput stack. The
+  macro build passed `test_matmul` (`8/8`) and `test_attention` (all three
+  smoke shapes), but the focused benchmark severely regressed dInput rows (qkv
+  `1342.93 us`, attproj `493.00 us`, lmhead `28945.54 us`) and TinyStories
+  3-step validation slowed to `2901.21 ms` with steps `2878.86`, `2896.43`,
+  and `2906.00 ms`. The route remains disabled.
 
 ## 2026-05-09 — Blackwell build support
 
