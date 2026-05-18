@@ -1108,6 +1108,14 @@ changelog is the diary; `goal.md` is the plan.
   repeated `Cols must be divisible by the tile dimension`, `Rows must be
   divisible by the tile dimension`, and zero-sized register tile errors. No
   benchmark or TinyStories validation was run for this invalid tile.
+- Rejected retesting pure SM120 TK `FORCE_NVCC_O=3` on top of the current
+  K-tile 16/dInput stack. The explicit O3 build passed `test_matmul` (`8/8`)
+  and `test_attention` (all three smoke shapes), had mixed focused benchmark
+  results, and averaged `2742.35 ms` on TinyStories with steps `2736.77`,
+  `2741.25`, and `2743.44 ms`. After temporarily changing the Makefile default,
+  the no-override source-default rebuild passed the same smokes but averaged
+  `2743.67 ms` with steps `2737.96`, `2740.97`, and `2746.37 ms`, slower than
+  the committed O2 source default, so pure SM120 TK keeps `FORCE_NVCC_O=2`.
 
 ## 2026-05-09 — Blackwell build support
 
