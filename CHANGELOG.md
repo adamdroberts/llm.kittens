@@ -1210,6 +1210,13 @@ changelog is the diary; `goal.md` is the plan.
   reported max diffs `7.7031` then `7.7188`, and the fused dGELU row reported
   `14.6562` then `14.2344`, all versus the `0.50` tolerance. The temporary
   source edit was reverted and no benchmark or TinyStories validation was run.
+- Rejected isolating that partial unroll to the SM120 dWeight TN kernel only.
+  The `kernel_tn`-only `#pragma unroll 2` edit passed `test_matmul` (`8/8`) and
+  `test_attention` (all three smoke shapes), but the focused benchmark
+  regressed dWeight rows and several unrelated timings, including qkv dWeight
+  `1338.20 us` and LM-head dWeight `25744.22 us`. TinyStories 3-step
+  validation slowed to `2897.79 ms` with steps `2861.16`, `2900.22`, and
+  `2895.35 ms`, so the source edit was reverted.
 
 ## 2026-05-09 — Blackwell build support
 
