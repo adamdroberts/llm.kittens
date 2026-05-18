@@ -395,6 +395,13 @@ changelog is the diary; `goal.md` is the plan.
   validation completed with the expected finite loss/norm trace, but regressed
   to `3244.20 ms` by the trainer report, so the source default remains the
   previously validated `512`-thread block.
+- Rebaselined the current source-default SM120 cuBLASLt-backed build after the
+  rejection-only commits. `test_matmul` passed `8/8`, `test_attention` passed
+  all three smoke shapes, and the TinyStories command capped with `-x 3`
+  completed with the expected finite loss/norm trace, but averaged
+  `3245.60 ms` by the trainer report. The source diff since the prior tuning
+  commit was changelog-only, so this rebaseline records current runtime state
+  rather than a source regression.
 
 ## 2026-05-09 — Blackwell build support
 
