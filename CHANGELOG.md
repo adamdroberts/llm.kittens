@@ -942,6 +942,13 @@ changelog is the diary; `goal.md` is the plan.
   three smoke shapes), but the focused benchmark remained mixed and TinyStories
   3-step validation averaged `2813.80 ms` with steps `2808.95`, `2812.76`, and
   `2814.83 ms`, so the source default stays at `3`.
+- Rejected a temporary 256x128 8-warp TN tile route for supported SM120 dWeight
+  shapes. The build passed `test_matmul` (`8/8`) and `test_attention` (all
+  three smoke shapes), but the focused benchmark only improved the small
+  attention-projection dWeight row while worsening larger dWeight rows, and
+  TinyStories 3-step validation regressed to `2814.69 ms` with steps
+  `2811.81`, `2812.75`, and `2816.63 ms`. The temporary wide-N128 hook was
+  removed.
 
 ## 2026-05-09 — Blackwell build support
 
