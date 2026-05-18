@@ -628,6 +628,12 @@ changelog is the diary; `goal.md` is the plan.
   and the required TinyStories 3-step validation regressed to `3585.48 ms`
   with steps `3578.11`, `3595.51`, and `3575.46 ms`. dInput keeps the global
   `LLMK_SM120_SUPER_M=8` default.
+- Rejected disabling the pure SM120 TK N96 forward tile
+  (`LLMK_SM120_FORWARD_N96=0`) after the O2/M256 default changes. The build
+  passed `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes),
+  but the focused benchmark regressed every projection forward row and the
+  required TinyStories 3-step validation averaged `3644.00 ms` with steps
+  `3650.67`, `3644.67`, and `3643.34 ms`. The N96 forward tile stays enabled.
 
 ## 2026-05-09 — Blackwell build support
 
