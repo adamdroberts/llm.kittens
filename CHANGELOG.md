@@ -1048,6 +1048,13 @@ changelog is the diary; `goal.md` is the plan.
   `1173.46`, `484.78`, and `22678.40 us`, and averaged `2744.85 ms` with
   steps `2740.57`, `2742.70`, and `2747.01 ms`, narrowly ahead of the prior
   K-tile 16 source default.
+- Rejected retesting `LLMK_SM120_DWEIGHT_SUPER_M=1` on top of the K-tile 16
+  route. Unlike earlier stacks it now passed `test_matmul` (`8/8`) and
+  `test_attention` (all three smoke shapes), but focused benchmark rows were
+  mixed (qkv dWeight `1182.84 us`, attproj `491.18 us`, lmhead `22865.17 us`)
+  and TinyStories 3-step validation averaged `2746.08 ms` with steps
+  `2741.13`, `2743.56`, and `2748.60 ms`, slower than the committed
+  `LLMK_SM120_DWEIGHT_SUPER_M=2` default.
 
 ## 2026-05-09 — Blackwell build support
 
