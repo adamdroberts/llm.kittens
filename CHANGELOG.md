@@ -1253,6 +1253,14 @@ changelog is the diary; `goal.md` is the plan.
   (`1298.24 us`) and the MLP-up path. TinyStories 3-step validation slowed to
   `2825.23 ms` with steps `2810.98`, `2817.60`, and `2832.86 ms`, so the
   huge-N threshold remains `8192`.
+- Rejected a temporary forward-only `LLMK_SM120_N96_K_TILE` hook for the
+  128x96 SM120 forward tile. The `LLMK_SM120_N96_K_TILE=64` build passed
+  `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes), but the
+  focused benchmark regressed the qkv/MLP N96 forward rows badly (qkv
+  `1384.48 us`, fused FC `2023.97 us`) and TinyStories 3-step validation
+  slowed to `2926.51 ms` with steps `2898.79`, `2928.46`, and `2924.56 ms`.
+  The temporary hook was removed and the N96 forward tile again uses
+  `LLMK_SM120_K_TILE=32`.
 
 ## 2026-05-09 — Blackwell build support
 
