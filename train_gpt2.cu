@@ -387,7 +387,7 @@ void fill_in_activation_sizes(const ActivationTensors* data, TensorSpec (&tensor
 #define LLMK_SM120_DWEIGHT_SPLIT_K 16
 #endif
 #ifndef LLMK_SM120_LARGE_DWEIGHT_SPLIT_K
-#define LLMK_SM120_LARGE_DWEIGHT_SPLIT_K 8
+#define LLMK_SM120_LARGE_DWEIGHT_SPLIT_K 1
 #endif
     tensors[21] = TENSOR_SPEC(data->matmul_scratch,
                               max((size_t)LLMK_SM120_LARGE_DWEIGHT_SPLIT_K * Vp * C,

@@ -148,7 +148,12 @@ Current status:
 2. `dweight (OC, C) = doutᵀ (OC, B*T) · inp (B*T, C)` — wired through TK `A^T*B`. For accumulated micro-steps, the product lands in the caller-provided aligned scratch buffer and a small add kernel applies `dweight += scratch`. SM120 pure-TK defaults to `LLMK_SM120_DWEIGHT_SPLIT_K=16` for the qkv dWeight shape after the current RTX 5090 swizzle stack made the extra qkv parallelism worthwhile; non-QKV dWeight shapes remain capped at 8-way split-K inside the wrapper because larger splits regressed them.
    Supported SM120 TN dWeight shapes now use the 128x128 tile
    (`LLMK_SM120_DWEIGHT_N128=1`) after the current pure-TK stack improved the
-   TinyStories 3-step run below the supplied llm.c baseline. The SM120 TN
+   TinyStories 3-step run below the supplied llm.c baseline. The trainer keeps
+   qkv split-K scratch at the normal `LLMK_SM120_DWEIGHT_SPLIT_K` depth but
+   defaults LM-head-sized dWeight scratch to one part
+   (`LLMK_SM120_LARGE_DWEIGHT_SPLIT_K=1`); larger LM-head scratch fanout
+   increased activation residency enough to dominate the pure-TK step time.
+   The SM120 TN
    swizzle now defaults to `LLMK_SM120_DWEIGHT_SUPER_M=2` after the K-tile 16
    route made it faster in 3-step validation; `1` fails smoke, while `4` and
    higher tested values were slower or mixed.

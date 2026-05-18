@@ -128,6 +128,16 @@ changelog is the diary; `goal.md` is the plan.
   forward dropped to `~0.80 s/step`, LM-head backward to `~0.38 s/step`, and
   packed attention backward to `~0.56 s/step`, so the pure-TK slowdown is a
   GEMM-path interaction rather than an attention-only kernel issue.
+- Promoted `LLMK_SM120_LARGE_DWEIGHT_SPLIT_K=1` for the pure-TK trainer's
+  LM-head-sized dWeight scratch allocation. Keeping qkv split-K at the source
+  default while reducing only the large-dWeight scratch fanout cuts activation
+  residency from `26030 MiB` to `25514 MiB` and removes the pathological
+  multi-second pure-TK step regression. The source-default rebuild passed
+  `test_matmul` (`8/8`) and `test_attention` (all three shapes), and the
+  required TinyStories 3-step validation averaged `2962.54 ms` with steps
+  `2939.85`, `3011.87`, and `2913.20 ms`. This is still behind the cuBLASLt
+  fallback and the supplied llm.c baseline, so further pure-TK tuning remains
+  required.
 
 ## 2026-05-17 — SM120 RTX 5090 GEMM fallback and pure-TK tuning
 
