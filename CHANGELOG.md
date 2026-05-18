@@ -8,6 +8,12 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Rejected restoring split-K LM-head dWeight via
+  `LLMK_SM120_DEFER_LMHEAD_DWEIGHT=0` plus
+  `LLMK_SM120_LARGE_DWEIGHT_SPLIT_K=8` at the smoke gate. The build completed,
+  but `test_matmul` failed the accumulated dWeight row twice, with max diffs
+  `2.1094` and `1.7188` versus the `0.50` tolerance. No TinyStories 3-step
+  timing was run because the candidate was numerically unsafe.
 - Rejected the historical `FORCE_NVCC_O=2` plus `LLMK_SM120_SUPER_M=9`
   pairing at the matmul smoke gate on the current source. The macro build
   completed, but `test_matmul` failed the accumulated dWeight row first
