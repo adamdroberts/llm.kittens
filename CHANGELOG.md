@@ -827,6 +827,16 @@ changelog is the diary; `goal.md` is the plan.
   focused benchmark still left the dWeight rows behind cuBLASLt and TinyStories
   3-step validation regressed to `2829.81 ms` with steps `2826.25`,
   `2827.27`, and `2832.35 ms`.
+- Promoted `LLMK_SM120_DWEIGHT_SPLIT_K=16` under the current swizzle stack.
+  The wrapper still caps non-QKV dWeight shapes at 8-way split-K, so this
+  primarily restores qkv to 16 parts. The retest passed `test_matmul` (`8/8`)
+  and `test_attention` (all three smoke shapes), improved qkv dWeight in the
+  focused benchmark to `1395.13 us`, and improved TinyStories 3-step
+  validation to `2820.16 ms` with steps `2818.54`, `2817.98`, and
+  `2822.35 ms`. The no-override source-default rebuild passed the same smokes
+  and averaged `2822.76 ms` with steps `2817.86`, `2821.16`, and `2824.36 ms`.
+  Pure TK remains slightly above the supplied llm.c baseline and still behind
+  cuBLASLt on the material dWeight rows.
 
 ## 2026-05-09 — Blackwell build support
 

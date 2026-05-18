@@ -141,7 +141,7 @@ Current status:
    an approximate dGELU tanh (`LLMK_SM120_APPROX_DGELU_TANH=1`) by default
    after RTX 5090 smoke and 3-step validation; both knobs remain explicit A/B
    fallbacks.
-2. `dweight (OC, C) = doutᵀ (OC, B*T) · inp (B*T, C)` — wired through TK `A^T*B`. For accumulated micro-steps, the product lands in the caller-provided aligned scratch buffer and a small add kernel applies `dweight += scratch`. SM120 pure-TK defaults to 8-way split-K (`LLMK_SM120_DWEIGHT_SPLIT_K=8`) after the current N96+dGELU trainer rerun favored fewer qkv part launches.
+2. `dweight (OC, C) = doutᵀ (OC, B*T) · inp (B*T, C)` — wired through TK `A^T*B`. For accumulated micro-steps, the product lands in the caller-provided aligned scratch buffer and a small add kernel applies `dweight += scratch`. SM120 pure-TK defaults to `LLMK_SM120_DWEIGHT_SPLIT_K=16` for the qkv dWeight shape after the current RTX 5090 swizzle stack made the extra qkv parallelism worthwhile; non-QKV dWeight shapes remain capped at 8-way split-K inside the wrapper because larger splits regressed them.
    The SM120 TN swizzle now defaults to `LLMK_SM120_DWEIGHT_SUPER_M=2`; `1`
    fails smoke, while `3`, `4`, and higher tested values were slower or mixed
    in 3-step validation.
