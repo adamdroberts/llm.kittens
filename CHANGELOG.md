@@ -1326,6 +1326,15 @@ changelog is the diary; `goal.md` is the plan.
   regressed to `4873.73 ms` with steps `4677.12`, `5353.01`, and `4394.45 ms`.
   The source default remains 16-way split-K for qkv and the wrapper's 8-way cap
   for non-QKV dWeight shapes.
+- Rejected a temporary `LLMK_SM120_DWEIGHT_NON_QKV_SPLIT_K=4` hook that kept
+  qkv dWeight at the default 16-way split while lowering non-QKV dWeight shapes
+  from the wrapper's 8-way cap to 4-way split-K. The first `test_matmul` hit
+  the known transient MLP-up row, the immediate rerun passed `8/8`, and
+  `test_attention` passed all three smoke shapes, but the focused benchmark
+  made attention-projection dWeight much worse (`718.82 us` versus cuBLASLt
+  `327.40 us`). TinyStories 3-step validation regressed to `5437.90 ms` with
+  steps `6876.11`, `5957.73`, and `4918.08 ms`, so the temporary hook was
+  removed and non-QKV shapes remain capped at 8-way split-K.
 
 ## 2026-05-09 — Blackwell build support
 
