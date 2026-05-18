@@ -8,6 +8,15 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Rejected `LLMK_SM120_FORWARD_N96=0` after retesting the older forward tile
+  route on the current stack. The macro build passed `test_matmul` (`8/8`) and
+  completed the three timed TinyStories steps, but regressed from the current
+  `2837.54 ms` source average to `2897.00 ms` with steps `2892.16`,
+  `2893.89`, and `2904.95 ms`. The run then failed while writing the step-3
+  checkpoint because the generated validation logs had filled the filesystem;
+  old generated 5090 checkpoint payloads were removed and tracked marker files
+  were restored before continuing. The default remains
+  `LLMK_SM120_FORWARD_N96=1`.
 - Rejected `LLMK_SM120_DWEIGHT_SPLIT_K=16` after a qkv-focused split-K
   retest. The macro build passed `test_matmul` (`8/8`), but TinyStories
   3-step validation regressed from the current `2837.54 ms` source average to
