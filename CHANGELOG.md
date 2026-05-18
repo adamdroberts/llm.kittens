@@ -370,6 +370,13 @@ changelog is the diary; `goal.md` is the plan.
   dInput at `1.11x` slower. The required 3-step validation was terminated
   before initial validation output when the trainer sat at about `99.6%` CPU,
   so the source default remains `LLMK_SM120_DWEIGHT_SUPER_M=2`.
+- Rejected a hybrid SM120 default-path experiment that routed only GPT-2
+  fcproj forward (`N=768,K=3072`) through the TK forward+bias kernel while
+  keeping the rest of the cuBLASLt-backed path unchanged. `test_matmul` and
+  `test_attention` passed, but the required TinyStories 3-step validation
+  regressed to `3230.19 ms` by the trainer report, slower than the restored
+  cuBLASLt default and slower than the supplied llm.c baseline, so the hook was
+  removed.
 
 ## 2026-05-09 — Blackwell build support
 
