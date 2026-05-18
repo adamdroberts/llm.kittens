@@ -8,6 +8,17 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Rejected the focused older-fast combination `FORCE_NVCC_O=2`,
+  `LLMK_SM120_SUPER_M=9`, and `LLMK_SM120_DWEIGHT_SPLIT_K=16` while keeping
+  the current direct/overlap dWeight stack. The macro build passed
+  `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes), then
+  TinyStories 3-step validation averaged `2836.11 ms` with steps `2828.15`,
+  `2841.45`, and `2838.72 ms` (`2840.08 ms` excluding first-step warmup).
+  Promoting the same settings as the no-override source default also passed
+  both smoke gates, but the required 3-step validation averaged `2842.13 ms`
+  with steps `2835.39`, `2845.66`, and `2845.34 ms` (`2845.50 ms` excluding
+  first-step warmup), slower than the best accepted `LLMK_SM120_SUPER_M=7`
+  run. The source defaults remain O3, shared swizzle 7, and split-K 8.
 - Rejected a current-source retest of the scoped 64x128 small-M dWeight TN
   tile route, `LLMK_SM120_DWEIGHT_N128_M64=1`, for `M <= 1024` and
   `N % 128 == 0` rows. The macro build passed `test_matmul` (`8/8`) and
