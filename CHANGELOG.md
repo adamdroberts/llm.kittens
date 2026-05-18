@@ -8,6 +8,12 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Rejected `LLMK_SM120_DWEIGHT_SPLIT_K=16` after a qkv-focused split-K
+  retest. The macro build passed `test_matmul` (`8/8`), but TinyStories
+  3-step validation regressed from the current `2837.54 ms` source average to
+  `2840.11 ms` with steps `2836.83`, `2841.52`, and `2841.99 ms`
+  (`2841.75 ms` excluding first-step warmup). The default remains
+  `LLMK_SM120_DWEIGHT_SPLIT_K=8`.
 - Rejected `LLMK_SM120_DWEIGHT_SUPER_M=1` at the matmul smoke gate. The macro
   build completed, but `test_matmul` failed reproducibly with changing unsafe
   rows: first the direct dWeight row hit max diff `1.7031` versus `0.50`, then
