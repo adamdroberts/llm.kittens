@@ -8,6 +8,12 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Rejected the historical `FORCE_NVCC_O=2` plus `LLMK_SM120_SUPER_M=9`
+  pairing at the matmul smoke gate on the current source. The macro build
+  completed, but `test_matmul` failed the accumulated dWeight row first
+  (`1.6250` versus `0.50`) and then failed the fused dGELU dInput row on rerun
+  (`2.3789` versus `0.50`). No TinyStories 3-step timing was run because the
+  candidate was numerically unsafe.
 - Rejected reverting the current pure SM120 TK source to `FORCE_NVCC_O=2`.
   The O2 build passed `test_matmul` (`8/8`), but TinyStories 3-step validation
   averaged `2841.29 ms` with steps `2831.71`, `2841.73`, and `2850.44 ms`
