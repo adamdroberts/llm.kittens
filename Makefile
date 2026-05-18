@@ -26,7 +26,7 @@ SM120_USE_CUBLASLT_GEMM ?= 1
 
 ifeq ($(DEVICE_ARCH),SM120)
   ifeq ($(SM120_USE_CUBLASLT_GEMM),0)
-    FORCE_NVCC_O ?= 2
+    FORCE_NVCC_O ?= 3
   else
     FORCE_NVCC_O ?= 3
   endif

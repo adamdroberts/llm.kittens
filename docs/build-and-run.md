@@ -85,7 +85,7 @@ The Makefile picks these defaults; override on the command line if needed.
 | Flag | Default | Effect |
 |---|---|---|
 | `TK_ROOT=` | `$(abspath ../ThunderKittens)` | ThunderKittens checkout |
-| `FORCE_NVCC_O=` | `3` (`2` for pure SM120 TK builds with `SM120_USE_CUBLASLT_GEMM=0`) | nvcc optimisation level |
+| `FORCE_NVCC_O=` | `3` | nvcc optimisation level |
 | `DEVICE_ARCH=SM90` | `SM90` | CUDA/TK architecture; supported values are `SM90`, `SM100`, `SM103`, and `SM120` |
 | `NO_OMP=1` | unset | Disable OpenMP host parallelism |
 | `NO_MULTI_GPU=1` | unset | Disable NCCL even if installed |

@@ -192,7 +192,7 @@ A short reference for the most common tunables. The full list is in the
 script's `usage` block.
 
 ```text
-FORCE_NVCC_O=3              nvcc optimisation level for compile (pure SM120 TK defaults to 2).
+FORCE_NVCC_O=3              nvcc optimisation level for compile.
 MAKE_EXTRA="NO_MULTI_GPU=1" extra make arguments for compile-only hosts.
 REQUIRE_NCCL=1              fail preflight if libnccl is missing.
 REQUIRE_MPI=1               fail preflight if mpirun/mpicc is missing.

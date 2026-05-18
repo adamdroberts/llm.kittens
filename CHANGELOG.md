@@ -8,6 +8,14 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Promoted pure SM120 TK builds back to `FORCE_NVCC_O=3` after the latest
+  dWeight-overlap and LM-head wait-point changes. The O3 build passed
+  `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes), and
+  TinyStories 3-step validation improved over the O2 source default from
+  `2873.56 ms` to `2863.68 ms` average with steps `2880.65`, `2865.13`, and
+  `2845.26 ms` (`2855.20 ms` excluding first-step warmup). Pure TK still
+  trails the supplied llm.c baseline and SM120 cuBLASLt fallback, so the goal
+  remains open.
 - Promoted narrowing the deferred SM120 LM-head dWeight wait to immediately
   after final LayerNorm backward. This keeps the useful overlap between
   LM-head dWeight and LNF backward but avoids carrying the side-stream wait
