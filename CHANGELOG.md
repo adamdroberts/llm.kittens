@@ -992,6 +992,12 @@ changelog is the diary; `goal.md` is the plan.
   mixed and TinyStories 3-step validation averaged `2813.07 ms` with steps
   `2806.37`, `2812.08`, and `2814.05 ms`, not enough to displace the current
   `3` default.
+- Rejected a temporary 128x192 4-warp TN tile route for SM120 dWeight. The
+  build passed `test_matmul` (`8/8`) and `test_attention` (all three smoke
+  shapes), but the focused benchmark catastrophically regressed every dWeight
+  row (`attproj` dWeight `1272.32 us`, `lmhead` dWeight `45821.98 us`), and
+  TinyStories 3-step validation slowed to `3294.73 ms` with steps `3286.69`,
+  `3290.03`, and `3299.44 ms`. The temporary N192 tile/dispatch was removed.
 
 ## 2026-05-09 — Blackwell build support
 
