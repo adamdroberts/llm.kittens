@@ -27,6 +27,12 @@ changelog is the diary; `goal.md` is the plan.
   versus `23626.61 us`. TinyStories 3-step validation regressed to
   `37568.93 ms` with steps `36552.55`, `38345.41`, and `36792.45 ms`, so the
   source default remains `LLMK_SM120_DWEIGHT_SUPER_M=2`.
+- Rejected macro-only `LLMK_SM120_DWEIGHT_SUPER_M=19` at the smoke gate. The
+  first `test_matmul` run failed accumulated dWeight with max diff `2.3750`
+  versus the `0.50` tolerance, and an immediate rerun failed the same
+  accumulated dWeight row again while also hitting the recurring unrelated
+  GPT-2 MLP-up forward transient. No focused benchmark or TinyStories 3-step
+  validation was run because the dWeight kernel was numerically unsafe.
 
 ## 2026-05-17 — SM120 RTX 5090 GEMM fallback and pure-TK tuning
 
