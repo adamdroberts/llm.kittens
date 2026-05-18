@@ -521,6 +521,13 @@ changelog is the diary; `goal.md` is the plan.
   rows behind cuBLASLt (`1.48x`, `1.57x`, `1.31x`, `1.32x`, and `1.23x`
   slower), and the required TinyStories 3-step validation regressed to
   `3618.29 ms` with steps `3660.48`, `3614.09`, and `3622.49 ms`.
+- Rejected `LLMK_SM120_DWEIGHT_SPLIT_K=64`. The build passed `test_matmul`
+  (`8/8`) and `test_attention` (all three smoke shapes), but the focused
+  benchmark showed the extra qkv split parallelism still left qkv dWeight
+  `1.47x` slower than cuBLASLt and worsened LM-head dWeight to `1.24x` slower.
+  The required TinyStories 3-step validation averaged `3614.52 ms` with steps
+  `3630.85`, `3624.55`, and `3604.48 ms`, so the default split-K cap remains
+  unchanged.
 
 ## 2026-05-09 — Blackwell build support
 
