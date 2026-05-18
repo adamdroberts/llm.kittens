@@ -77,6 +77,11 @@ changelog is the diary; `goal.md` is the plan.
   (all three smoke shapes), but TinyStories 3-step validation regressed badly
   to `23199.38 ms` with steps `24328.04`, `23569.20`, and `22829.56 ms`, so
   the attention prep launch remains at `3` warps.
+- Rejected `LLMK_SM120_DPREP_WARPS=7` for the same packed-QKV attention
+  backward prep helper. The build passed `test_matmul` (`8/8`) and
+  `test_attention` (all three smoke shapes), but TinyStories 3-step validation
+  regressed badly to `22620.45 ms` with steps `24170.88`, `22256.58`, and
+  `22984.32 ms`, so the attention prep launch remains at `3` warps.
 
 ## 2026-05-17 — SM120 RTX 5090 GEMM fallback and pure-TK tuning
 
