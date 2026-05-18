@@ -561,6 +561,13 @@ changelog is the diary; `goal.md` is the plan.
   `2482.82 ms` with steps `2486.47`, `2482.03`, and `2483.60 ms`. This remains
   significantly faster than the supplied llm.c baseline, confirming the
   current slowdown is specific to the pure-TK GEMM path.
+- Tested pure SM120 TK codegen with `FORCE_NVCC_O=2`. It passed `test_matmul`
+  (`8/8`) and `test_attention` (all three smoke shapes), but the focused
+  benchmark still left pure TK behind cuBLASLt on every material GEMM row. The
+  required TinyStories 3-step validation averaged `3608.73 ms` with steps
+  `3604.22`, `3617.01`, and `3600.45 ms`, only a small improvement over the
+  current pure-TK rebaseline and still behind the supplied llm.c baseline, so
+  the build default remains `O3`.
 
 ## 2026-05-09 — Blackwell build support
 
