@@ -377,6 +377,12 @@ changelog is the diary; `goal.md` is the plan.
   regressed to `3230.19 ms` by the trainer report, slower than the restored
   cuBLASLt default and slower than the supplied llm.c baseline, so the hook was
   removed.
+- Rejected a cuBLASLt fallback workspace sweep with
+  `LLMK_SM120_CUBLASLT_WORKSPACE_MB=512`. `test_matmul` and `test_attention`
+  passed, and the focused benchmark did not show a clear win over the restored
+  default. The required TinyStories 3-step validation made no progress before
+  initial validation output and was terminated with the trainer at about
+  `99.6%` CPU, so the workspace default stays at `128` MiB.
 
 ## 2026-05-09 — Blackwell build support
 
