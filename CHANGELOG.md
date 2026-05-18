@@ -1620,6 +1620,11 @@ changelog is the diary; `goal.md` is the plan.
   3-step validation completed with the expected finite loss/norm trace but
   averaged `3384.57 ms` with steps `3379.52`, `3382.37`, and `3386.77 ms`,
   so the pure-TK kernel-outperformance goal remains open.
+- Rejected a global direct column-layout shared-to-register load hook for the
+  SM120 NN and TN GEMM kernels. The build completed, but `test_matmul` failed
+  the fused dGELU dInput row with max diff `2.4453` versus the `0.50`
+  tolerance, so no focused benchmark or TinyStories 3-step validation was run.
+  The temporary hook was removed.
 
 ## 2026-05-09 — Blackwell build support
 
