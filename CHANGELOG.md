@@ -144,6 +144,14 @@ changelog is the diary; `goal.md` is the plan.
   the no-override source-default rebuild averaged `2973.54 ms` with steps
   `3014.38`, `3005.64`, and `2941.45 ms`. That did not beat the committed O2
   default or the supplied llm.c baseline, so pure SM120 TK remains on `O2`.
+- Re-profiled the current pure SM120 TK default after reducing LM-head scratch.
+  The profiled build passed `test_matmul` (`8/8`) and `test_attention` (all
+  three shapes), and the required TinyStories 3-step validation averaged
+  `2970.15 ms` with steps `2976.98`, `2964.26`, and `2976.04 ms`. The
+  remaining gap versus the profiled cuBLASLt fallback is now mostly GEMM:
+  forward is `~0.87 s/step`, LM-head backward `~0.43 s/step`, FC/FCProj
+  backward `~0.74 s/step` combined, and QKV backward `~0.28 s/step`; packed
+  attention backward is faster than the profiled fallback at `~0.30 s/step`.
 
 ## 2026-05-17 — SM120 RTX 5090 GEMM fallback and pure-TK tuning
 
