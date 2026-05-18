@@ -279,7 +279,7 @@ void kernel_nt(const __grid_constant__ typename T::globals_nt g)
 
 // ---- kernel_nn : C = A · B ------------------------------------------------
 
-template <typename T, int SUPER_M, bool APPLY_DGELU>
+template <typename T, int SUPER_M, bool APPLY_DGELU, bool DIRECT_B_COL>
 __global__ __launch_bounds__(T::NUM_THREADS, 1)
 void kernel_nn(const __grid_constant__ typename T::globals_nn g)
 {
@@ -325,17 +325,23 @@ void kernel_nn(const __grid_constant__ typename T::globals_nn g)
         auto As_slice = As[stage].template subtile<T::WARP_M, T::K_TILE>({w, 0});
         a_rt a_reg;
         ::kittens::warp::load(a_reg, As_slice);
+        if constexpr (DIRECT_B_COL) {
+            b_rt_col b_reg_col;
+            ::kittens::warp::load(b_reg_col, Bs[stage]);
+            ::kittens::warp::mma_AB(accum, a_reg, b_reg_col, accum);
+        } else {
 #if LLMK_SM120_INPLACE_LAYOUT_SWAP
-        b_rt_row b_reg_row;
-        ::kittens::warp::load(b_reg_row, Bs[stage]);
-        auto& b_reg_col = ::kittens::warp::swap_layout_inplace(b_reg_row);
+            b_rt_row b_reg_row;
+            ::kittens::warp::load(b_reg_row, Bs[stage]);
+            auto& b_reg_col = ::kittens::warp::swap_layout_inplace(b_reg_row);
 #else
-        b_rt_col b_reg_col;
-        b_rt_row b_reg_row;
-        ::kittens::warp::load(b_reg_row, Bs[stage]);
-        ::kittens::warp::swap_layout(b_reg_col, b_reg_row);
+            b_rt_col b_reg_col;
+            b_rt_row b_reg_row;
+            ::kittens::warp::load(b_reg_row, Bs[stage]);
+            ::kittens::warp::swap_layout(b_reg_col, b_reg_row);
 #endif
-        ::kittens::warp::mma_AB(accum, a_reg, b_reg_col, accum);
+            ::kittens::warp::mma_AB(accum, a_reg, b_reg_col, accum);
+        }
     }
 
     if constexpr (APPLY_DGELU) {
@@ -471,7 +477,8 @@ template <int _M_BLOCK = 2, int _N_BLOCK = 4, int _SUPER_M = 8,
           bool _A_TRANSPOSED = false, bool _B_TRANSPOSED = false,
           bool _APPLY_BIAS = false, bool _APPLY_GELU = false,
           bool _STORE_PRE_GELU = false,
-          typename _TRAITS = sm120_detail::traits_128x64>
+          typename _TRAITS = sm120_detail::traits_128x64,
+          bool _DIRECT_B_COL = false>
 struct matmul_template {
     static constexpr int M_BLOCK = _M_BLOCK;
     static constexpr int N_BLOCK = _N_BLOCK;
@@ -481,6 +488,7 @@ struct matmul_template {
     static constexpr bool APPLY_BIAS     = _APPLY_BIAS;
     static constexpr bool APPLY_GELU     = _APPLY_GELU;
     static constexpr bool STORE_PRE_GELU = _STORE_PRE_GELU;
+    static constexpr bool DIRECT_B_COL   = _DIRECT_B_COL;
     using traits = _TRAITS;
 };
 
@@ -519,6 +527,7 @@ using matmul_small_n                 = matmul_template<2, 2, LLMK_SM120_DINP_SUP
 using matmul_n96                     = matmul_template<2, 4, LLMK_SM120_DINP_SUPER_M, false, false, false, false, false, sm120_detail::traits_grad_128x96>;
 using matmul_wide                    = matmul_template<2, 4, LLMK_SM120_DINP_SUPER_M, false, false, false, false, false, sm120_detail::traits_grad_256x64>;
 using matmul_huge_n                  = matmul_template<2, 4, LLMK_SM120_SUPER_M, false, false, false, false, false, sm120_detail::traits_128x128>;
+using matmul_default_direct_bcol     = matmul_template<2, 4, LLMK_SM120_DINP_SUPER_M, false, false, false, false, false, sm120_detail::traits_grad_128x64, true>;
 using matmul_default_dgelu           = matmul_template<2, 4, LLMK_SM120_DINP_SUPER_M, false, false, false, true,  false, sm120_detail::traits_grad_128x64>;
 using matmul_small_n_dgelu           = matmul_template<2, 2, LLMK_SM120_DINP_SUPER_M, false, false, false, true,  false, sm120_detail::traits_grad_128x64>;
 using matmul_n96_dgelu               = matmul_template<2, 4, LLMK_SM120_DINP_SUPER_M, false, false, false, true,  false, sm120_detail::traits_grad_128x96>;
@@ -576,7 +585,7 @@ inline void launch(bf16* d_A, bf16* d_B, bf16* d_C, int M, int N, int K,
         typename T::c_gl    Cgl{d_C, nullptr, nullptr, M_, N_};
         typename T::c_gl    Pgl{d_pre_gelu == nullptr ? d_C : d_pre_gelu, nullptr, nullptr, M_, N_};
         typename T::globals_nn g{Agl, Bgl, Cgl, Pgl};
-        auto kfn = kernel_nn<T, mmt::SUPER_M, mmt::APPLY_GELU>;
+        auto kfn = kernel_nn<T, mmt::SUPER_M, mmt::APPLY_GELU, mmt::DIRECT_B_COL>;
         kfn<<<grid, block, 0, stream>>>(g);
     } else {
         static_assert(!mmt::APPLY_BIAS && !mmt::APPLY_GELU && !mmt::STORE_PRE_GELU,

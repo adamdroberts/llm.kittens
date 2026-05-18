@@ -6,6 +6,23 @@ milestone. Adds within a milestone are listed in chronological order.
 The canonical "what is done / what is left" is [`goal.md`](goal.md). The
 changelog is the diary; `goal.md` is the plan.
 
+## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
+
+- Promoted a scoped SM120 dInput direct B-column register-load route for the
+  small-K GPT-2 qkv/attention-projection backward GEMMs
+  (`LLMK_SM120_DINP_DIRECT_BCOL_SMALLK=1`). The route leaves fused dGELU,
+  FC, and LM-head dInput on the existing row-load plus register-swap path.
+  The pure-TK build passed `test_matmul` (`9/9`, including the new focused
+  small-K dInput row) and `test_attention` (all three smoke shapes). Focused
+  benchmarking improved qkv dInput to `1107.83 us` versus `1044.12 us`
+  cuBLASLt (`1.06x`) and attention-projection dInput to `373.64 us` versus
+  `384.36 us` cuBLASLt (`0.97x`). TinyStories 3-step validation averaged
+  `2819.67 ms` with steps `2814.32`, `2819.12`, and `2825.58 ms`
+  (`2822.35 ms` total average). This improves the current pure-TK source but
+  remains just behind the supplied llm.c printed baseline and behind the
+  cached cuBLASLt fallback, so the SM120 kernel-outperformance goal remains
+  open.
+
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
 - Promoted cuBLASLt plan caching for the SM120 cuBLASLt fallback build. The

@@ -882,6 +882,11 @@ inline void matmul_dispatch_tk_ab(floatX* out, const floatX* a, const floatX* b,
 #else
     const bool n96 = false;
 #endif
+#ifndef LLMK_SM120_DINP_DIRECT_BCOL_SMALLK
+#define LLMK_SM120_DINP_DIRECT_BCOL_SMALLK 1
+#endif
+    const bool direct_bcol_smallk = !apply_dgelu && (LLMK_SM120_DINP_DIRECT_BCOL_SMALLK != 0) &&
+                                    !huge_n && !n96 && (N == 768) && (K <= 3 * 768);
     if (apply_dgelu) {
         assert(P != nullptr && "matmul_dispatch_tk_ab: dGELU fusion requires pre_gelu");
         if (huge_n) {
@@ -899,6 +904,8 @@ inline void matmul_dispatch_tk_ab(floatX* out, const floatX* a, const floatX* b,
         llmk::gemm::launch<llmk::gemm::matmul_huge_n>(A, B, C, M, N, K, stream);
     } else if (n96) {
         llmk::gemm::launch<llmk::gemm::matmul_n96>(A, B, C, M, N, K, stream);
+    } else if (direct_bcol_smallk) {
+        llmk::gemm::launch<llmk::gemm::matmul_default_direct_bcol>(A, B, C, M, N, K, stream);
     } else if (wide) {
         llmk::gemm::launch<llmk::gemm::matmul_wide>(A, B, C, M, N, K, stream);
     } else if (N % 256 == 0) {
