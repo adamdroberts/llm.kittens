@@ -8,6 +8,16 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Rejected the bundled rollback toward the older O2/split-K dWeight stack:
+  `FORCE_NVCC_O=2`, `LLMK_SM120_SUPER_M=9`,
+  `LLMK_SM120_DWEIGHT_DIRECT_ACCUM=0`,
+  `LLMK_SM120_OVERLAP_DINP_DWEIGHT=0`,
+  `LLMK_SM120_DEFER_LMHEAD_DWEIGHT=0`,
+  `LLMK_SM120_DWEIGHT_SPLIT_K=16`, and
+  `LLMK_SM120_LARGE_DWEIGHT_SPLIT_K=8`. The build passed `test_matmul`
+  (`8/8`), but TinyStories 3-step validation collapsed to `14350.65 ms` with
+  steps `14394.69`, `14190.27`, and `14466.98 ms` (`14328.62 ms` excluding
+  first-step warmup), so the current overlap/direct stack remains necessary.
 - Rejected `LLMK_SM120_DWEIGHT_DIRECT_ACCUM=0` after restoring the scratch-plus-
   add accumulation path for direct dWeight rows. The macro build passed
   `test_matmul` (`8/8`), but TinyStories 3-step validation regressed from the
