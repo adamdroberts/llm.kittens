@@ -885,8 +885,12 @@ inline void matmul_dispatch_tk_ab(floatX* out, const floatX* a, const floatX* b,
 #ifndef LLMK_SM120_DINP_DIRECT_BCOL_SMALLK
 #define LLMK_SM120_DINP_DIRECT_BCOL_SMALLK 1
 #endif
+#ifndef LLMK_SM120_DINP_DIRECT_BCOL_K_CAP
+#define LLMK_SM120_DINP_DIRECT_BCOL_K_CAP (3 * 768)
+#endif
     const bool direct_bcol_smallk = !apply_dgelu && (LLMK_SM120_DINP_DIRECT_BCOL_SMALLK != 0) &&
-                                    !huge_n && !n96 && (N == 768) && (K <= 3 * 768);
+                                    !huge_n && !n96 && (N == 768) &&
+                                    (K <= LLMK_SM120_DINP_DIRECT_BCOL_K_CAP);
     if (apply_dgelu) {
         assert(P != nullptr && "matmul_dispatch_tk_ab: dGELU fusion requires pre_gelu");
         if (huge_n) {

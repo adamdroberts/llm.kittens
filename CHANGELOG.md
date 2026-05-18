@@ -22,6 +22,16 @@ changelog is the diary; `goal.md` is the plan.
   remains just behind the supplied llm.c printed baseline and behind the
   cached cuBLASLt fallback, so the SM120 kernel-outperformance goal remains
   open.
+- Rejected widening the same direct B-column dInput route to the GPT-2 FC
+  backward shape with `LLMK_SM120_DINP_DIRECT_BCOL_K_CAP=3072`. The first
+  `test_matmul` pass hit the known transient MLP-up forward row, the immediate
+  rerun passed `10/10` including the medium-K dInput row, and `test_attention`
+  passed all three smoke shapes. The focused benchmark made FC dInput
+  competitive (`1561.27 us` TK versus `1582.27 us` cuBLASLt), but TinyStories
+  3-step validation regressed to `2962.14 ms` with steps `2922.93`,
+  `2951.67`, and `3011.83 ms` (`2981.75 ms` total average). The source default
+  keeps the direct B-column cap at `2304`, leaving FC and LM-head dInput on the
+  existing row-load path.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
