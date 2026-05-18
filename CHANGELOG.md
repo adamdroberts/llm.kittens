@@ -1070,6 +1070,15 @@ changelog is the diary; `goal.md` is the plan.
   versus the committed split-K `16` default. TinyStories 3-step validation
   averaged `2746.83 ms` with steps `2741.67`, `2743.91`, and `2749.76 ms`, so
   the qkv-only split-K expansion stays rejected.
+- Promoted `LLMK_SM120_DINP_SUPER_M=8` for the SM120 dInput swizzle on top of
+  the K-tile 16 and dWeight `SUPER_M=2` stack. The macro A/B build passed
+  `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes), had a
+  mixed dInput benchmark (qkv `1109.62 us`, fcproj `1476.74 us`, lmhead
+  `23447.24 us`), and averaged `2742.72 ms` on TinyStories with steps
+  `2736.41`, `2739.23`, and `2746.21 ms`. The no-override source-default
+  rebuild passed the same smokes, benchmarked dInput rows at qkv `1086.82 us`,
+  fcproj `1475.79 us`, and lmhead `23621.88 us`, and averaged `2743.37 ms`
+  with steps `2741.44`, `2740.31`, and `2746.44 ms`.
 
 ## 2026-05-09 — Blackwell build support
 
