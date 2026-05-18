@@ -8,6 +8,12 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Rejected `LLMK_SM120_DWEIGHT_DIRECT_ACCUM=0` after restoring the scratch-plus-
+  add accumulation path for direct dWeight rows. The macro build passed
+  `test_matmul` (`8/8`), but TinyStories 3-step validation regressed from the
+  current `2837.54 ms` source average to `2842.27 ms` with steps `2837.04`,
+  `2840.61`, and `2849.17 ms` (`2844.89 ms` excluding first-step warmup). The
+  direct-accumulate path remains the faster default.
 - Rejected restoring split-K LM-head dWeight via
   `LLMK_SM120_DEFER_LMHEAD_DWEIGHT=0` plus
   `LLMK_SM120_LARGE_DWEIGHT_SPLIT_K=8` at the smoke gate. The build completed,
