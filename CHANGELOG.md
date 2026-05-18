@@ -1358,6 +1358,14 @@ changelog is the diary; `goal.md` is the plan.
   shapes), but `bench_sm120_matmul` aborted before timing because LM-head
   dWeight has `M=50304`, which is not divisible by the candidate's 256-row
   tile. No TinyStories validation was run; the hook was removed.
+- Rejected a guarded version of the same 256x128 dWeight route that only used
+  the 8-warp tile when `M % 256 == 0` and left LM-head on the existing 128x128
+  route. The guarded hook passed `test_matmul` (`8/8`) and `test_attention`
+  (all three smoke shapes), but it made the dWeight rows it touched materially
+  worse, including qkv dWeight (`1475.85 us` versus cuBLASLt `1065.81 us`) and
+  attention-projection dWeight (`599.74 us` versus `327.85 us`). TinyStories
+  3-step validation regressed to `3154.36 ms` with steps `3205.86`, `3147.39`,
+  and `3161.33 ms`, so the temporary hook was removed.
 
 ## 2026-05-09 — Blackwell build support
 
