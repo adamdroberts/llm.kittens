@@ -164,6 +164,12 @@ changelog is the diary; `goal.md` is the plan.
   required TinyStories 3-step validation averaged `2925.09 ms` with steps
   `2939.68`, `2916.43`, and `2933.76 ms`, slower than the O2 split-K=8 source
   default, so pure SM120 TK remains on `O2`.
+- Rejected `LLMK_SM120_DWEIGHT_SUPER_M=3` after the split-K=8 promotion. The
+  macro-only build passed `test_matmul` (`8/8`) and `test_attention` (all three
+  shapes), but the required TinyStories 3-step validation averaged
+  `2911.11 ms` with steps `2898.13`, `2909.78`, and `2912.44 ms`, slightly
+  slower than the O2 split-K=8 source default, so the dWeight super-M remains
+  `2`.
 
 ## 2026-05-17 — SM120 RTX 5090 GEMM fallback and pure-TK tuning
 
