@@ -1190,6 +1190,13 @@ changelog is the diary; `goal.md` is the plan.
   dWeight row and worsened the qkv row to `1178.73 us`. TinyStories 3-step
   validation regressed to `2749.03 ms` with steps `2741.59`, `2745.81`, and
   `2752.25 ms`, so the source default remains `LLMK_SM120_DWEIGHT_SUPER_M=2`.
+- Rejected retesting `LLMK_SM120_DINP_SUPER_M=10` under the current K-tile
+  16/dWeight stack. The macro build passed `test_matmul` (`8/8`) and
+  `test_attention` (all three smoke shapes), but the focused benchmark
+  worsened the material dInput rows versus the committed `8` default (qkv
+  `1134.85 us`, fc `1502.11 us`, lmhead `23720.62 us`) and TinyStories
+  3-step validation regressed to `2747.71 ms` with steps `2742.78`, `2744.83`,
+  and `2750.59 ms`. The dInput swizzle remains `8`.
 
 ## 2026-05-09 — Blackwell build support
 
