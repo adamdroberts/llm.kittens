@@ -1423,6 +1423,11 @@ changelog is the diary; `goal.md` is the plan.
   LM-head dWeight (`28791.69 us` versus `21616.07 us`). TinyStories 3-step
   validation averaged `2936.82 ms` with steps `2942.24`, `2939.30`, and
   `2934.34 ms`, so the temporary hook was removed.
+- Rejected a temporary dInput-only 8-warp 128x64 tile. The
+  `LLMK_SM120_DINP_128X64_WARPS8=1` build completed, but `test_matmul`
+  deterministically failed the plain dInput row with max diff `9.7812` on the
+  first run and `11.1562` on the immediate rerun, versus the `0.50` tolerance.
+  No focused benchmark or TinyStories validation was run.
 
 ## 2026-05-09 — Blackwell build support
 
