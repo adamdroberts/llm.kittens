@@ -105,7 +105,10 @@ faster than explicit CUDA GELU on the current pure-TK path.
 The SM120 pure-TK forward dispatcher also enables `LLMK_SM120_FORWARD_N96=1`
 by default so GPT-2 widths divisible by 96 use the 128x96 tile instead of the
 older 256x64/128x64 choices; `LLMK_SM120_FORWARD_N96=0` remains an A/B escape
-hatch.
+hatch. The GPT-2 LM-head huge-N forward route defaults to a 256x128 tile
+(`LLMK_SM120_HUGE_N_M256=1`) after current RTX 5090 validation improved the
+source-default pure-TK 3-step run; `LLMK_SM120_HUGE_N_M256=0` keeps the older
+128x128 tile available for A/B tests.
 
 ### Backward signature (M3)
 

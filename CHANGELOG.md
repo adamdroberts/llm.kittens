@@ -568,6 +568,16 @@ changelog is the diary; `goal.md` is the plan.
   `3604.22`, `3617.01`, and `3600.45 ms`, only a small improvement over the
   current pure-TK rebaseline and still behind the supplied llm.c baseline, so
   the build default remains `O3`.
+- Promoted the pure SM120 TK huge-N forward route to a 256x128 tile by default
+  (`LLMK_SM120_HUGE_N_M256=1`) while keeping the old 128x128 route available
+  with `LLMK_SM120_HUGE_N_M256=0`. The A/B build passed `test_matmul` (`8/8`)
+  and `test_attention` (all three smoke shapes), improved direct LM-head
+  forward to `24521.92 us`, and averaged `3592.08 ms` on the required
+  TinyStories 3-step validation. The promoted source-default rebuild passed the
+  same smokes, kept LM-head forward at `24907.96 us` in the focused benchmark,
+  and averaged `3580.59 ms` with steps `3582.89`, `3567.92`, and `3593.27 ms`.
+  This is the fastest current pure-TK source default, but pure TK still trails
+  the cuBLASLt-backed SM120 default and the supplied llm.c baseline.
 
 ## 2026-05-09 — Blackwell build support
 
