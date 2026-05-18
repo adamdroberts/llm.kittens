@@ -121,6 +121,13 @@ changelog is the diary; `goal.md` is the plan.
   packed attention backward (`~3.9-4.4 s/step`), while grad norm and update were
   negligible. This shifts the next optimization focus toward LM-head and
   packed-attention runtime paths.
+- Ran the same section profiler on the SM120 cuBLASLt GEMM fallback. The build
+  passed `test_matmul` (`8/8`) and `test_attention` (all three shapes), and the
+  required TinyStories 3-step validation averaged `2997.91 ms` with steps
+  `3007.18`, `2983.73`, and `3012.09 ms`. With the same attention kernels,
+  forward dropped to `~0.80 s/step`, LM-head backward to `~0.38 s/step`, and
+  packed attention backward to `~0.56 s/step`, so the pure-TK slowdown is a
+  GEMM-path interaction rather than an attention-only kernel issue.
 
 ## 2026-05-17 — SM120 RTX 5090 GEMM fallback and pure-TK tuning
 
