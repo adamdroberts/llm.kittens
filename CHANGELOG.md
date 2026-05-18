@@ -413,6 +413,9 @@ changelog is the diary; `goal.md` is the plan.
   power-limit artifact. A fresh `-ge 0` retest then averaged `3312.72 ms`,
   confirming the SM120 default should keep GELU fusion enabled even in the
   current runtime state.
+- Retested the same cuBLASLt-backed 3-step run with ZeRO disabled via `-z 0`.
+  It averaged `3262.44 ms`, slightly slower than the current `-z 1` rebaseline,
+  so single-process ZeRO-1 overhead is not the current SM120 bottleneck.
 
 ## 2026-05-09 — Blackwell build support
 
