@@ -431,6 +431,10 @@ changelog is the diary; `goal.md` is the plan.
   stable, but it remains behind both the supplied llm.c baseline and the
   cuBLASLt-backed SM120 default, so the pure-TK kernel-outperformance goal is
   still open.
+- Rejected a macro-wide `LLMK_SM120_GRAD_K_TILE=48` sweep. It compiled, but
+  `test_matmul` aborted before training because the shared gradient tile also
+  applies to dInput shapes whose reduction dimension is not divisible by `48`.
+  No 3-step TinyStories validation was run for this invalid build.
 
 ## 2026-05-09 — Blackwell build support
 
