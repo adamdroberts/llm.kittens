@@ -730,6 +730,12 @@ changelog is the diary; `goal.md` is the plan.
   at `24630.40 us` versus cuBLASLt `21826.90 us` and TinyStories 3-step
   validation averaged `3589.66 ms` with steps `3584.64`, `3608.17`, and
   `3571.15 ms`. The temporary huge-N `SUPER_M` hook was removed.
+- Rejected creating the pure SM120 TK dWeight split-K part streams at high
+  priority. The build passed `test_matmul` (`8/8`) and `test_attention` (all
+  three smoke shapes), but the focused benchmark left dWeight ratios effectively
+  unchanged and TinyStories 3-step validation averaged `3609.70 ms` with steps
+  `3623.49`, `3618.42`, and `3600.99 ms`. The part streams remain normal
+  nonblocking CUDA streams.
 
 ## 2026-05-09 — Blackwell build support
 
