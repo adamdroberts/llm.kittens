@@ -1383,6 +1383,14 @@ changelog is the diary; `goal.md` is the plan.
   (`513.88 us` versus `404.97 us`). TinyStories 3-step validation regressed to
   `3108.64 ms` with steps `3096.47`, `3109.00`, and `3108.28 ms`, so the
   fused bias epilogue remains enabled.
+- Rejected disabling the SM120 fused MLP bias+GELU route with
+  `LLMK_SM120_FUSE_GELU=0`. The first `test_matmul` run reported a transient
+  GPT-2 MLP-up max diff of `7.5000`, but the immediate rerun passed `7/7`
+  smoke rows and `test_attention` passed all three shapes. The focused
+  benchmark still trailed cuBLASLt on the MLP, dInput, dWeight, and LM-head
+  rows, and TinyStories 3-step validation regressed to `3090.25 ms` with steps
+  `3081.57`, `3081.75`, and `3098.75 ms`, so fused MLP bias+GELU remains
+  enabled.
 
 ## 2026-05-09 — Blackwell build support
 
