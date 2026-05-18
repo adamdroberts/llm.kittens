@@ -1266,6 +1266,13 @@ changelog is the diary; `goal.md` is the plan.
   failed before benchmark or TinyStories validation with an illegal memory
   access on the GPT-2 124M MLP-up forward row. The temporary hook was removed,
   so the N96 forward tile remains on the default `LLMK_SM120_K_TILE=32`.
+- Rejected a scoped fused-GELU dispatch hook that disabled the SM120 N96 tile
+  only for the MLP-up bias+GELU forward route while leaving qkv forward on N96.
+  The `LLMK_SM120_FORWARD_GELU_N96=0` build passed `test_matmul` (`8/8`) and
+  `test_attention` (all three smoke shapes), but the focused benchmark
+  regressed fused FC forward to `1947.07 us` versus cuBLASLt `1494.29 us`.
+  TinyStories 3-step validation slowed to `2855.39 ms` with steps `2835.93`,
+  `2856.66`, and `2854.13 ms`, so the temporary hook was removed.
 
 ## 2026-05-09 — Blackwell build support
 
