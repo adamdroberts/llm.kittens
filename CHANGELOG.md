@@ -8,6 +8,16 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Promoted cuBLASLt plan caching for the SM120 cuBLASLt fallback build. The
+  macro probe with `LLMK_SM120_CACHE_CUBLASLT_PLANS=1` passed `test_matmul`
+  (`8/8`) and `test_attention` (all three smoke shapes), then TinyStories
+  3-step validation averaged `2624.24 ms` with steps `2624.77`, `2624.50`,
+  and `2623.46 ms` (`2623.98 ms` excluding first-step warmup). Promoting the
+  cache through the Makefile and rebuilding with no extra flags passed the same
+  smoke gates and averaged `2623.44 ms` with steps `2623.20`, `2621.45`, and
+  `2625.68 ms` (`2623.57 ms` excluding first-step warmup), improving the
+  previous uncached cuBLASLt fallback baseline while leaving the pure-TK
+  kernel-outperformance goal open.
 - Tested the combined SM120 forward+dInput cuBLASLt fallback probe with
   dWeight still on TK. The build passed `test_matmul` (`8/8`) and
   `test_attention` (all three smoke shapes), then TinyStories 3-step

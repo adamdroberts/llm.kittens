@@ -70,6 +70,8 @@ Disabled-by-default SM120 diagnostic fallbacks
 `LLMK_SM120_CUBLASLT_DWEIGHT_FALLBACK`) can route one GEMM role through the
 same GPU cuBLASLt path as the full SM120 fallback build while leaving the other
 roles on TK; they are for A/B timing only and do not change pure-TK defaults.
+Full SM120 cuBLASLt fallback builds cache cuBLASLt plans by default to remove
+per-call descriptor and heuristic setup overhead from training measurements.
 
 `matmul_template<M_BLOCK, N_BLOCK, SUPER_M, A_TRANSPOSED, B_TRANSPOSED,
 APPLY_BIAS, APPLY_GELU, STORE_PRE_GELU>` is ported from
