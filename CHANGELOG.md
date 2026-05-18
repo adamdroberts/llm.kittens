@@ -1653,6 +1653,13 @@ changelog is the diary; `goal.md` is the plan.
   worsened every dInput row and TinyStories 3-step validation regressed to
   `4044.97 ms` with steps `4047.73`, `4026.52`, and `4063.41 ms`. The
   temporary hook was removed.
+- Rejected isolating the stricter `cp.async` wait policy to the SM120 NT
+  forward kernel. The wait-1 candidate passed `test_matmul` (`8/8`) and
+  `test_attention` (all three smoke shapes), but the focused benchmark
+  regressed the forward rows, including qkv (`1316.94 us`) and LM-head
+  (`33061.30 us`). TinyStories 3-step validation averaged `3675.21 ms` with
+  steps `3717.45`, `3699.34`, and `3651.08 ms`, so the temporary hook was
+  removed.
 
 ## 2026-05-09 — Blackwell build support
 
