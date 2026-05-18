@@ -1463,6 +1463,13 @@ changelog is the diary; `goal.md` is the plan.
   `21663.35 us`). TinyStories 3-step validation averaged `3403.15 ms` with
   steps `3389.46`, `3386.64`, and `3419.65 ms`, so the temporary hook was
   removed.
+- Rejected a dWeight-specific N128 K-tile value of `8`. The temporary
+  `LLMK_SM120_DWEIGHT_N128_K_TILE=8` hook failed at `test_matmul` compile time:
+  ThunderKittens rejected the generated `st<bf16,8,128>` and matching register
+  tiles because their row/column dimensions are not divisible by the required
+  tile dimensions. No smoke, benchmark, or TinyStories 3-step validation was
+  run for this invalid tile, and the N128 dWeight route again uses the shared
+  `LLMK_SM120_HUGE_N_K_TILE=16` trait.
 
 ## 2026-05-09 — Blackwell build support
 
