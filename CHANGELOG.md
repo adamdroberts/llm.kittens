@@ -1298,6 +1298,12 @@ changelog is the diary; `goal.md` is the plan.
   row with max diff `5.2188` versus the `0.50` tolerance, so no focused
   benchmark or TinyStories validation was run. The dInput swizzle remains the
   source default `8`.
+- Rejected increasing SM120 packed-QKV attention prep to
+  `LLMK_SM120_DPREP_WARPS=5` on top of the current K-tile 16 stack. The macro
+  build passed `test_matmul` (`8/8`) and `test_attention` (all three smoke
+  shapes), but TinyStories 3-step validation slowed to `2831.42 ms` with steps
+  `2863.52`, `2820.11`, and `2842.72 ms`. The attention prep launch remains
+  at `3` warps.
 
 ## 2026-05-09 — Blackwell build support
 
