@@ -709,6 +709,14 @@ changelog is the diary; `goal.md` is the plan.
   `26982.29 us` versus cuBLASLt `21752.51 us`, and the required TinyStories
   3-step validation averaged `3595.56 ms` with steps `3609.62`, `3576.41`, and
   `3614.71 ms`. The huge-N wide route remains disabled.
+- Rejected a temporary dWeight-only 256x96 TN tile for pure SM120 TK. The first
+  `test_matmul` run hit the known transient MLP-up forward failure, but an
+  immediate rerun passed `8/8` and `test_attention` passed all three smoke
+  shapes. The focused benchmark improved qkv dWeight to `1360.28 us` but
+  regressed attention-projection dWeight to `698.15 us` versus cuBLASLt
+  `326.88 us`, worsened LM-head dWeight to `25951.42 us`, and the required
+  TinyStories 3-step validation averaged `3585.04 ms` with steps `3597.60`,
+  `3575.07`, and `3595.01 ms`. The temporary wide-N96 TN hook was removed.
 
 ## 2026-05-09 — Blackwell build support
 
