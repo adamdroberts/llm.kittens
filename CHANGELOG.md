@@ -8,6 +8,13 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Refreshed the SM120 cuBLASLt dense-GEMM fallback baseline under the current
+  trainer stack. TinyStories 3-step validation averaged `2646.07 ms` with
+  steps `2701.50`, `2615.67`, and `2621.05 ms` (`2618.36 ms` excluding
+  first-step warmup), with finite loss/norm. This remains much faster than the
+  current pure-TK `LLMK_SM120_SUPER_M=7` source average of `2837.54 ms`, so
+  dense GEMM remains the required optimisation target before the SM120 path can
+  beat all CUDA/cuBLASLt variants.
 - Rejected the SM120 LayerNorm fallback comparison with
   `LLMK_DISABLE_TK_LAYERNORM` at the smoke gate. The macro build completed,
   but `test_layernorm` failed reproducibly on the backward `dbias` check with
