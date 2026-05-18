@@ -641,6 +641,13 @@ changelog is the diary; `goal.md` is the plan.
   required TinyStories 3-step validation regressed to `3635.67 ms` with steps
   `3630.61`, `3646.37`, and `3624.97 ms`. Fused dGELU stays enabled by
   default for pure SM120 TK.
+- Rejected `LLMK_SM120_BIAS_BLOCK_SIZE=1024` for the CUDA bias-gradient
+  reduction under the current pure SM120 TK defaults. It passed `test_matmul`
+  (`8/8`) and `test_attention` (all three smoke shapes), but the focused GEMM
+  benchmark did not show useful surrounding-kernel improvement and the required
+  TinyStories 3-step validation regressed to `3621.31 ms` with steps
+  `3595.30`, `3623.52`, and `3619.10 ms`. The SM120 bias-gradient block size
+  remains `512`.
 
 ## 2026-05-09 — Blackwell build support
 
