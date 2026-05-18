@@ -8,6 +8,14 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Ran the current SM120 matmul microbenchmark against cuBLASLt for GPT-2 124M
+  GEMM shapes. No TK shape beats cuBLASLt yet: qkv dWeight is `1.23x` slower,
+  attproj dWeight is `1.54x` slower, fc fused forward is `1.06x` slower,
+  fcproj dWeight is `1.16x` slower, and LM-head forward/dInput/dWeight remain
+  `1.14x`/`1.13x`/`1.10x` slower with the largest absolute gap. This confirms
+  that the next optimisation rounds need to focus on SM120 TK GEMM tiling,
+  especially dWeight and LM-head, before the full trainer can beat the
+  cuBLASLt fallback.
 - Refreshed the SM120 cuBLASLt dense-GEMM fallback baseline under the current
   trainer stack. TinyStories 3-step validation averaged `2646.07 ms` with
   steps `2701.50`, `2615.67`, and `2621.05 ms` (`2618.36 ms` excluding
