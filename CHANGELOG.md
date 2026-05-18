@@ -96,6 +96,12 @@ changelog is the diary; `goal.md` is the plan.
   unexpectedly slow at `17955.85 ms` with steps `17470.85`, `18412.35`, and
   `17499.36 ms`; post-run GPU state was idle with no source diffs, so this is
   recorded as runtime evidence rather than a promoted source change.
+- Rebaselined the current SM120 cuBLASLt fallback under the same runtime after
+  the slow pure-TK rebaseline. `test_matmul` passed `8/8`, `test_attention`
+  passed all three smoke shapes, and TinyStories 3-step validation averaged
+  `2648.94 ms` with steps `2654.84`, `2646.18`, and `2651.71 ms`. This keeps
+  the slowdown isolated to pure TK and confirms the fallback still beats the
+  supplied llm.c baseline in the current runtime.
 
 ## 2026-05-17 — SM120 RTX 5090 GEMM fallback and pure-TK tuning
 
