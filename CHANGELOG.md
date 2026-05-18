@@ -1280,6 +1280,14 @@ changelog is the diary; `goal.md` is the plan.
   and worsened attention-projection dWeight to `556.20 us`. TinyStories
   3-step validation slowed to `2833.79 ms` with steps `2885.71`, `2818.30`,
   and `2849.28 ms`, so the forward-only hook was removed.
+- Rejected retesting pure SM120 TK `LLMK_SM120_DWEIGHT_SUPER_M=6` on the
+  current K-tile 16/dInput stack. The macro build passed `test_matmul` (`8/8`)
+  and `test_attention` (all three smoke shapes), but the focused benchmark
+  still trailed cuBLASLt on every dWeight row and worsened
+  attention-projection dWeight to `493.91 us` versus cuBLASLt `327.87 us`.
+  TinyStories 3-step validation averaged `2820.47 ms` with steps `2794.60`,
+  `2805.93`, and `2835.00 ms`, so the source default remains
+  `LLMK_SM120_DWEIGHT_SUPER_M=2`.
 
 ## 2026-05-09 — Blackwell build support
 
