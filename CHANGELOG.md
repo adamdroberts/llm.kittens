@@ -1014,6 +1014,13 @@ changelog is the diary; `goal.md` is the plan.
   mixed and the TinyStories 3-step validation averaged `2750.21 ms` with steps
   `2743.93`, `2748.14`, and `2752.27 ms`, slower than the committed
   `LLMK_SM120_DWEIGHT_SUPER_M=3` source default.
+- Rejected retesting adjacent `LLMK_SM120_DWEIGHT_SUPER_M=2` after promoting
+  the huge-N/N128 K tile to `32`. The macro build passed `test_matmul` (`8/8`)
+  and `test_attention` (all three smoke shapes), and the focused benchmark
+  improved LM-head dWeight to `23525.40 us`, but smaller dWeight rows remained
+  mixed and TinyStories 3-step validation averaged `2749.98 ms` with steps
+  `2742.78`, `2748.08`, and `2751.88 ms`, still slower than the committed
+  `LLMK_SM120_DWEIGHT_SUPER_M=3` source default.
 
 ## 2026-05-09 — Blackwell build support
 
