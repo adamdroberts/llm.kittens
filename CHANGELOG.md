@@ -1089,6 +1089,12 @@ changelog is the diary; `goal.md` is the plan.
   (`6.8594` then `6.7344` max abs diff versus tolerance `0.50`), so no focused
   benchmark or TinyStories training validation was run for this incorrect
   candidate.
+- Rejected `LLMK_SM120_DINP_SUPER_M=9` on top of the current K-tile 16 stack.
+  The macro build passed `test_matmul` (`8/8` on rerun after the known
+  transient MLP-up row) and `test_attention` (all three smoke shapes), but the
+  focused benchmark was mixed and TinyStories 3-step validation averaged
+  `2743.50 ms` with steps `2736.84`, `2741.46`, and `2745.55 ms`, slightly
+  slower than the committed `LLMK_SM120_DINP_SUPER_M=8` default.
 
 ## 2026-05-09 — Blackwell build support
 
