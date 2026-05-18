@@ -1288,6 +1288,11 @@ changelog is the diary; `goal.md` is the plan.
   TinyStories 3-step validation averaged `2820.47 ms` with steps `2794.60`,
   `2805.93`, and `2835.00 ms`, so the source default remains
   `LLMK_SM120_DWEIGHT_SUPER_M=2`.
+- Rejected `LLMK_SM120_BIAS_BLOCK_SIZE=480` for the CUDA bias-gradient
+  reduction path. The macro build passed `test_matmul` (`8/8`) and
+  `test_attention` (all three smoke shapes), but TinyStories 3-step validation
+  slowed to `3015.93 ms` with steps `3031.65`, `3007.17`, and `3024.69 ms`.
+  The SM120 bias-gradient block size remains `512`.
 
 ## 2026-05-09 — Blackwell build support
 
