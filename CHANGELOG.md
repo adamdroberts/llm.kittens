@@ -865,6 +865,12 @@ changelog is the diary; `goal.md` is the plan.
   `test_attention` (all three smoke shapes), but the focused benchmark did not
   improve qkv dWeight and TinyStories 3-step validation regressed to
   `2824.83 ms` with steps `2820.62`, `2823.10`, and `2826.57 ms`.
+- Rejected retesting pure SM120 TK `FORCE_NVCC_O=3` under the current swizzle
+  and split-K defaults. The O3 build passed `test_matmul` (`8/8`) and
+  `test_attention` (all three smoke shapes), but the focused benchmark was
+  mixed and TinyStories 3-step validation regressed to `2826.49 ms` with steps
+  `2821.64`, `2825.24`, and `2827.74 ms`, so pure SM120 TK builds keep the O2
+  default.
 
 ## 2026-05-09 — Blackwell build support
 
