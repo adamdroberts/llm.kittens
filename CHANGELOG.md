@@ -1133,6 +1133,11 @@ changelog is the diary; `goal.md` is the plan.
   and `test_attention` (all three smoke shapes), but TinyStories 3-step
   validation regressed sharply to `3104.70 ms` with steps `3104.32`, `3099.08`,
   and `3110.32 ms`. The forward attention tile remains `32`.
+- Rejected intermediate `LLMK_SM120_ATTN_BWD_BLOCK=24`. The build failed at
+  `test_attention` compile time because the SM120 attention backward kernel
+  explicitly supports only `16`, `32`, or `64`, and TK register/shared tile
+  types also require tile dimensions divisible by their base dimensions. No
+  runtime validation was run for this invalid tile.
 
 ## 2026-05-09 — Blackwell build support
 
