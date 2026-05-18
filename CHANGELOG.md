@@ -1454,6 +1454,15 @@ changelog is the diary; `goal.md` is the plan.
   `22893.51 us`). TinyStories 3-step validation averaged `2906.92 ms` with
   steps `2911.05`, `2903.80`, and `2910.03 ms`, so the temporary hook was
   removed.
+- Rejected a 2-warp version of the 128x128 dWeight N128 tile. The first
+  `LLMK_SM120_DWEIGHT_N128_WARPS2=1` `test_matmul` run hit the recurring
+  unrelated MLP-up forward row, the immediate rerun passed `8/8`, and
+  `test_attention` passed all three smoke shapes. The focused benchmark made
+  dWeight much slower across the board, including qkv dWeight (`2220.94 us`
+  versus cuBLASLt `1042.81 us`) and LM-head dWeight (`43562.87 us` versus
+  `21663.35 us`). TinyStories 3-step validation averaged `3403.15 ms` with
+  steps `3389.46`, `3386.64`, and `3419.65 ms`, so the temporary hook was
+  removed.
 
 ## 2026-05-09 — Blackwell build support
 
