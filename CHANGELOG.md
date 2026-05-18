@@ -32,6 +32,16 @@ changelog is the diary; `goal.md` is the plan.
   `2951.67`, and `3011.83 ms` (`2981.75 ms` total average). The source default
   keeps the direct B-column cap at `2304`, leaving FC and LM-head dInput on the
   existing row-load path.
+- Rejected a scoped direct B-column dInput swizzle override with
+  `LLMK_SM120_DINP_DIRECT_BCOL_SUPER_M=12`. The first `test_matmul` pass hit
+  the known transient MLP-up forward row, the immediate rerun passed `9/9`,
+  and `test_attention` passed all three smoke shapes. The focused benchmark
+  made qkv and attention-projection dInput faster than cuBLASLt in that run
+  (`1158.07 us` versus `1182.50 us`, and `383.48 us` versus `411.53 us`),
+  but TinyStories 3-step validation regressed to `3019.29 ms` with steps
+  `2979.29`, `3052.08`, and `3026.51 ms` (`3039.30 ms` total average). The
+  direct B-column route continues to inherit the accepted
+  `LLMK_SM120_DINP_SUPER_M=8` default.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 

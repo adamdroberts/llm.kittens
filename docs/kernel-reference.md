@@ -152,7 +152,8 @@ Current status:
    use `LLMK_SM120_DINP_DIRECT_BCOL_SMALLK=1` by default, directly loading the
    shared B tile into column-major registers instead of row-loading and
    swapping. This keeps fused dGELU, FC, and LM-head dInput on the existing
-   row-load path.
+   row-load path. The scoped direct-load route inherits `LLMK_SM120_DINP_SUPER_M`
+   unless `LLMK_SM120_DINP_DIRECT_BCOL_SUPER_M` is defined for A/B testing.
    On SM120 pure-TK builds, `LLMK_SM120_FUSE_DGELU=1` is now the default when
    the trainer uses `-ge 1`, fusing the MLP GELU backward into the `fcproj`
    dInput GEMM. The fused SM120 path uses in-place register-layout swaps and
