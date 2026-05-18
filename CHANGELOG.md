@@ -1613,6 +1613,13 @@ changelog is the diary; `goal.md` is the plan.
   focused benchmark worsened the dWeight rows versus the accepted `2` default,
   and TinyStories 3-step validation regressed to `3026.30 ms` with steps
   `3018.87`, `3027.63`, and `3024.97 ms`. The dWeight swizzle remains `2`.
+- Rebaselined the clean no-extra-macro pure SM120 TK source default after the
+  rejection-only rounds. `test_matmul` passed `8/8`, `test_attention` passed
+  all three smoke shapes, and the focused benchmark still showed pure TK behind
+  cuBLASLt on the material dInput/dWeight and LM-head rows. TinyStories
+  3-step validation completed with the expected finite loss/norm trace but
+  averaged `3384.57 ms` with steps `3379.52`, `3382.37`, and `3386.77 ms`,
+  so the pure-TK kernel-outperformance goal remains open.
 
 ## 2026-05-09 — Blackwell build support
 
