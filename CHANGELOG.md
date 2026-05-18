@@ -1055,6 +1055,14 @@ changelog is the diary; `goal.md` is the plan.
   and TinyStories 3-step validation averaged `2746.08 ms` with steps
   `2741.13`, `2743.56`, and `2748.60 ms`, slower than the committed
   `LLMK_SM120_DWEIGHT_SUPER_M=2` default.
+- Rejected retesting `LLMK_SM120_DWEIGHT_SUPER_M=4` on top of the K-tile 16
+  route. The macro build passed `test_matmul` (`8/8`) and `test_attention`
+  (all three smoke shapes), but the focused benchmark worsened the material
+  qkv/attproj/lmhead dWeight rows versus the committed `2` default (qkv
+  `1183.03 us`, attproj `504.33 us`, lmhead `23018.25 us`). TinyStories
+  3-step validation averaged `2744.67 ms` with steps `2739.28`, `2742.32`,
+  and `2747.01 ms`, too small a timing difference to justify worse kernel
+  evidence.
 
 ## 2026-05-09 — Blackwell build support
 
