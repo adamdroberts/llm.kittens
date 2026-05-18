@@ -461,6 +461,12 @@ changelog is the diary; `goal.md` is the plan.
   TinyStories 3-step validation averaged `3340.32 ms` with steps `3341.56`,
   `3334.87`, and `3345.78 ms`. That is slightly slower than the pure-TK
   no-master rebaseline, so the cosh-free dGELU derivative remains enabled.
+- Rejected a current no-master retest of `LLMK_SM120_HUGE_N_FORWARD_WIDE=1`.
+  It passed `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes)
+  and improved the direct LM-head forward row to `1.20x` slower than cuBLASLt,
+  but dInput/dWeight stayed behind and the required TinyStories 3-step
+  validation regressed to `3541.71 ms` average with steps `3553.81`, `3531.25`,
+  and `3552.17 ms`.
 
 ## 2026-05-09 — Blackwell build support
 
