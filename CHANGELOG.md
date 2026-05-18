@@ -9,16 +9,17 @@ changelog is the diary; `goal.md` is the plan.
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
 - Promoted SM120 pure-TK overlap between split-K dWeight partial kernels and
-  the same `matmul_backward()` call's dInput GEMM. The wrapper now starts
+  independent work inside the same `matmul_backward()` call. The wrapper now starts
   eligible split-K dWeight work on the existing nonblocking part streams,
-  launches dInput on the main stream, then waits and reduces the dWeight
-  partials before returning. `test_matmul` passed `8/8`, `test_attention`
-  passed all three smoke shapes, and TinyStories 3-step validation improved
-  the current clean source from `2901.62 ms` to `2885.44 ms` average with
-  steps `2880.71`, `2885.51`, and `2890.10 ms` (`2887.81 ms` excluding the
-  first-step warmup in the trainer's total-average line). This is still slower
-  than the supplied llm.c baseline and the SM120 cuBLASLt fallback, so the next
-  target remains the dense GEMM path, especially LM-head and dWeight rows.
+  launches dInput and bias-grad on the main stream, then waits and reduces the
+  dWeight partials before returning. `test_matmul` passed `8/8`,
+  `test_attention` passed all three smoke shapes, and TinyStories 3-step
+  validation improved the current clean source from `2901.62 ms` to
+  `2882.59 ms` average with steps `2879.04`, `2885.46`, and `2883.26 ms`
+  (`2884.36 ms` excluding the first-step warmup in the trainer's total-average
+  line). This is still slower than the supplied llm.c baseline and the SM120
+  cuBLASLt fallback, so the next target remains the dense GEMM path, especially
+  LM-head and dWeight rows.
 - Rebaselined the clean pure SM120 TK source at `b27867f` after the latest
   rejection-only rounds. A no-extra-macro trainer build completed, and the
   TinyStories 3-step validation averaged `2901.62 ms` with steps `2892.39`,

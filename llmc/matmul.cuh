@@ -1217,11 +1217,10 @@ inline void matmul_backward(floatX* dinp, floatX* dweight, floatX* dbias,
     (void)block;
 #endif
 
+#if !(defined(LLMK_SM120_USE_CUBLASLT_GEMM) && defined(KITTENS_SM120))
     MatmulSplitKJob dweight_split_job;
     bool dweight_split_started = false;
-#if defined(LLMK_SM120_USE_CUBLASLT_GEMM) && defined(KITTENS_SM120)
-    (void)dweight_split_job;
-    (void)dweight_split_started;
+    bool dweight_split_finish_pending = false;
 #endif
 #if LLMK_USE_TK_GEMM && defined(KITTENS_SM120) && !defined(LLMK_SM120_USE_CUBLASLT_GEMM)
 #ifndef LLMK_SM120_OVERLAP_DINP_DWEIGHT
@@ -1271,7 +1270,7 @@ inline void matmul_backward(floatX* dinp, floatX* dweight, floatX* dbias,
 #else
         if (matmul_tk_shape_ok(OC, C, M)) {
             if (dweight_split_started) {
-                matmul_dispatch_tk_atb_splitk_finish(dweight_split_job, stream);
+                dweight_split_finish_pending = true;
             } else if (matmul_dispatch_tk_atb_splitk(
                     dweight, dout, inp, OC, C, M, stream, dweight_accumulate,
                     dweight_accum_scratch, dweight_accum_scratch_elements)) {
@@ -1308,4 +1307,9 @@ inline void matmul_backward(floatX* dinp, floatX* dweight, floatX* dbias,
     if (dbias != nullptr) {
         matmul_backward_bias(dbias, dout, dbias_buffer, B, T, OC, stream);
     }
+#if !(defined(LLMK_SM120_USE_CUBLASLT_GEMM) && defined(KITTENS_SM120))
+    if (dweight_split_finish_pending) {
+        matmul_dispatch_tk_atb_splitk_finish(dweight_split_job, stream);
+    }
+#endif
 }
