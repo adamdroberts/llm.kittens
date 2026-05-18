@@ -742,6 +742,12 @@ changelog is the diary; `goal.md` is the plan.
   dWeight while TinyStories 3-step validation still averaged `3601.50 ms` with
   steps `3554.16`, `3583.89`, and `3619.11 ms`. The split-K launcher continues
   to use one nonblocking stream per part.
+- Rejected an 8-warp version of the non-wide 128x64 dWeight TN tile. It passed
+  `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes), but the
+  focused benchmark worsened LM-head dWeight to `26489.19 us` versus cuBLASLt
+  `21165.43 us`, and TinyStories 3-step validation averaged `3621.02 ms` with
+  steps `3619.64`, `3620.27`, and `3621.77 ms`. The non-wide dWeight TN path
+  remains on the 4-warp 128x64 tile.
 
 ## 2026-05-09 — Blackwell build support
 
