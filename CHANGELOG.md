@@ -8,6 +8,17 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Rejected extending LM-head dWeight deferral past final LNF by adding a
+  compact LayerNorm/dbias scratch buffer and waiting only before the first
+  attention-backward scratch reuse. The macro build passed `test_matmul`
+  (`8/8`) and `test_attention` (all three smoke shapes), then TinyStories
+  3-step validation averaged `2835.15 ms` with steps `2823.93`, `2835.22`,
+  and `2846.30 ms` (`2840.76 ms` excluding first-step warmup). Promoting the
+  same scheduling as the no-override source default also passed both smoke
+  gates, but the required 3-step validation averaged `2841.42 ms` with steps
+  `2838.20`, `2844.14`, and `2841.92 ms` (`2843.03 ms` excluding first-step
+  warmup), slower than the best accepted `LLMK_SM120_SUPER_M=7` run. The
+  temporary scratch/defer change was removed.
 - Rejected a current-source retest of the temporary small-M dWeight swizzle
   split, `LLMK_SM120_DWEIGHT_SMALL_M_SUPER_M=3`. The hook routed TN dWeight
   rows with `M <= 1024` and `N % 128 == 0` through a separate 128x128 alias.
