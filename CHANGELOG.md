@@ -8,6 +8,12 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Rejected `LLMK_SM120_ATTN_BWD_BLOCK=32` after retesting the attention
+  backward block size on the current pure SM120 TK source. The macro build
+  passed `test_attention` across all three smoke shapes, but TinyStories
+  3-step validation averaged `2849.89 ms` with steps `2849.73`, `2854.41`,
+  and `2845.54 ms` (`2849.97 ms` excluding first-step warmup), slower than the
+  best accepted `LLMK_SM120_SUPER_M=7` run. The default remains block 16.
 - Rejected `LLMK_SM120_DWEIGHT_SPLIT_K=4` after testing the lower split-K
   direction. The macro build passed `test_matmul` (`8/8`), but TinyStories
   3-step validation averaged `2847.76 ms` with steps `2844.02`, `2850.14`,
