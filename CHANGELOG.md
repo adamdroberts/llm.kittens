@@ -455,6 +455,12 @@ changelog is the diary; `goal.md` is the plan.
   failed the fused dGELU dInput row (`8.1250` max diff versus `0.50`
   tolerance), so the explicit-layout-swap variant was not benchmarked or
   validated with a 3-step TinyStories run.
+- Rejected `LLMK_SM120_FAST_DGELU=0`. It passed `test_matmul` (`8/8`) and
+  `test_attention` (all three smoke shapes), but the focused benchmark still
+  left all material pure-TK backward rows behind cuBLASLt and the required
+  TinyStories 3-step validation averaged `3340.32 ms` with steps `3341.56`,
+  `3334.87`, and `3345.78 ms`. That is slightly slower than the pure-TK
+  no-master rebaseline, so the cosh-free dGELU derivative remains enabled.
 
 ## 2026-05-09 — Blackwell build support
 
