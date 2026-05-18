@@ -187,6 +187,12 @@ changelog is the diary; `goal.md` is the plan.
   focused benchmark was mixed and TinyStories 3-step validation regressed to
   `2922.69 ms` with steps `2902.44`, `2919.40`, and `2925.98 ms`, so the hook
   was removed.
+- Rejected retesting pure SM120 TK `FORCE_NVCC_O=3` after the direct
+  accumulated-dWeight promotion. The O3 build passed `test_matmul` (`8/8`) and
+  `test_attention` (all three shapes), but TinyStories 3-step validation
+  averaged `2918.78 ms` with steps `2920.96`, `2913.55`, and `2924.01 ms`,
+  slower than the O2 direct-accumulate default, so pure SM120 TK remains on
+  `O2`.
 
 ## 2026-05-17 — SM120 RTX 5090 GEMM fallback and pure-TK tuning
 
