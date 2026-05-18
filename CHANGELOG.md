@@ -1273,6 +1273,13 @@ changelog is the diary; `goal.md` is the plan.
   regressed fused FC forward to `1947.07 us` versus cuBLASLt `1494.29 us`.
   TinyStories 3-step validation slowed to `2855.39 ms` with steps `2835.93`,
   `2856.66`, and `2854.13 ms`, so the temporary hook was removed.
+- Rejected a temporary huge-N-forward-only swizzle hook. The
+  `LLMK_SM120_HUGE_N_FORWARD_SUPER_M=10` build passed `test_matmul` (`8/8`)
+  and `test_attention` (all three smoke shapes), but the focused benchmark did
+  not improve LM-head forward (`27052.64 us` versus cuBLASLt `23490.75 us`)
+  and worsened attention-projection dWeight to `556.20 us`. TinyStories
+  3-step validation slowed to `2833.79 ms` with steps `2885.71`, `2818.30`,
+  and `2849.28 ms`, so the forward-only hook was removed.
 
 ## 2026-05-09 — Blackwell build support
 
