@@ -1102,6 +1102,12 @@ changelog is the diary; `goal.md` is the plan.
   benchmark rows and TinyStories 3-step validation regressed to `2748.11 ms`
   with steps `2746.77`, `2744.09`, and `2752.13 ms`. The source default keeps
   the 256x128 huge-N forward tile.
+- Rejected `LLMK_SM120_HUGE_N_K_TILE=8`. The macro build failed at
+  `test_matmul` compile time because the TK shared/register tile types require
+  BF16 dimensions divisible by their base tile dimensions; ptxas reported
+  repeated `Cols must be divisible by the tile dimension`, `Rows must be
+  divisible by the tile dimension`, and zero-sized register tile errors. No
+  benchmark or TinyStories validation was run for this invalid tile.
 
 ## 2026-05-09 — Blackwell build support
 
