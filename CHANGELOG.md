@@ -1175,6 +1175,14 @@ changelog is the diary; `goal.md` is the plan.
   `2747.36 ms` with steps `2738.78`, `2745.63`, and `2749.09 ms`, so the
   temporary hook was removed and huge-N aliases again use the shared
   `LLMK_SM120_SUPER_M=9`.
+- Rejected disabling the SM120 dWeight 128x128 TN route
+  (`LLMK_SM120_DWEIGHT_N128=0`) under the current K-tile 16/dInput stack. The
+  macro build passed `test_matmul` (`8/8`) and `test_attention` (all three
+  smoke shapes), but the focused benchmark regressed every material dWeight row
+  (qkv `1390.10 us`, attproj `553.96 us`, fcproj `1720.52 us`, lmhead
+  `25678.11 us`) and TinyStories 3-step validation slowed to `2836.51 ms` with
+  steps `2829.63`, `2833.90`, and `2839.13 ms`. The dWeight N128 route remains
+  enabled.
 
 ## 2026-05-09 — Blackwell build support
 
