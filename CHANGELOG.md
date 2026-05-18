@@ -65,6 +65,13 @@ changelog is the diary; `goal.md` is the plan.
   `412.07 us`). TinyStories 3-step validation regressed badly to
   `21369.02 ms` with steps `21483.15`, `21252.05`, and `21485.99 ms`, so pure
   SM120 TK builds remain uncapped.
+- Rejected a temporary large-M dWeight split-K hook that used 4-way split-K
+  only for LM-head-sized dWeight rows. It passed `test_matmul` (`8/8`) and
+  `test_attention` (all three smoke shapes), and the focused benchmark improved
+  LM-head dWeight to `24154.74 us`, but that still trailed cuBLASLt
+  (`22577.22 us`) and all material dWeight rows remained behind. TinyStories
+  3-step validation regressed badly to `21070.57 ms` with steps `19565.49`,
+  `21879.00`, and `20262.15 ms`, so the temporary hook was removed.
 
 ## 2026-05-17 — SM120 RTX 5090 GEMM fallback and pure-TK tuning
 
