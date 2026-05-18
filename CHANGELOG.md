@@ -822,6 +822,11 @@ changelog is the diary; `goal.md` is the plan.
   focused benchmark still left every dWeight row well behind cuBLASLt and
   TinyStories 3-step validation regressed to `2834.88 ms` with steps
   `2831.16`, `2834.30`, and `2835.45 ms`.
+- Rejected pure SM120 TK `LLMK_SM120_DWEIGHT_SUPER_M=14`. The build passed
+  `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes), but the
+  focused benchmark still left the dWeight rows behind cuBLASLt and TinyStories
+  3-step validation regressed to `2829.81 ms` with steps `2826.25`,
+  `2827.27`, and `2832.35 ms`.
 
 ## 2026-05-09 — Blackwell build support
 
