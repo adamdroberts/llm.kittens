@@ -805,6 +805,11 @@ struct MatmulSplitKJob {
     bool accumulate = false;
 };
 
+struct MatmulAsyncJob {
+    bool active = false;
+    cudaEvent_t done_event = nullptr;
+};
+
 inline bool matmul_tk_shape_ok(int M, int N, int K) {
 #if LLMK_USE_TK_GEMM
     return M % 128 == 0 && K % 64 == 0 && N % 128 == 0;
@@ -979,6 +984,11 @@ inline bool matmul_dispatch_tk_atb_splitk_start(MatmulSplitKJob* job,
                                                 floatX* partials,
                                                 size_t partial_elements);
 inline void matmul_dispatch_tk_atb_splitk_finish(const MatmulSplitKJob& job, cudaStream_t stream);
+inline bool matmul_dispatch_tk_atb_async_start(MatmulAsyncJob* job,
+                                               floatX* out, const floatX* a, const floatX* b,
+                                               int M, int N, int K, cudaStream_t stream,
+                                               bool accumulate);
+inline void matmul_dispatch_tk_atb_async_finish(const MatmulAsyncJob& job, cudaStream_t stream);
 
 inline bool matmul_dispatch_tk_atb_splitk(floatX* out, const floatX* a, const floatX* b,
                                           int M, int N, int K, cudaStream_t stream,
@@ -1094,6 +1104,53 @@ inline void matmul_dispatch_tk_atb_splitk_finish(const MatmulSplitKJob& job, cud
     matmul_reduce_bf16_partials_kernel<<<grid, block, 0, stream>>>(
         job.out, job.partials, job.out_elements, job.parts, job.accumulate);
     cudaCheck(cudaGetLastError());
+#else
+    (void)job;
+    (void)stream;
+#endif
+}
+
+inline bool matmul_dispatch_tk_atb_async_start(MatmulAsyncJob* job,
+                                               floatX* out, const floatX* a, const floatX* b,
+                                               int M, int N, int K, cudaStream_t stream,
+                                               bool accumulate) {
+#if LLMK_USE_TK_GEMM && defined(KITTENS_SM120)
+    static bool initialized = false;
+    static cudaStream_t dweight_stream;
+    static cudaEvent_t ready_event;
+    static cudaEvent_t done_event;
+    if (!initialized) {
+        cudaCheck(cudaStreamCreateWithFlags(&dweight_stream, cudaStreamNonBlocking));
+        cudaCheck(cudaEventCreateWithFlags(&ready_event, cudaEventDisableTiming));
+        cudaCheck(cudaEventCreateWithFlags(&done_event, cudaEventDisableTiming));
+        initialized = true;
+    }
+    *job = {};
+    cudaCheck(cudaEventRecord(ready_event, stream));
+    cudaCheck(cudaStreamWaitEvent(dweight_stream, ready_event, 0));
+    matmul_dispatch_tk_atb(out, a, b, M, N, K, dweight_stream, accumulate);
+    cudaCheck(cudaEventRecord(done_event, dweight_stream));
+    job->active = true;
+    job->done_event = done_event;
+    return true;
+#else
+    (void)job;
+    (void)out;
+    (void)a;
+    (void)b;
+    (void)M;
+    (void)N;
+    (void)K;
+    (void)stream;
+    (void)accumulate;
+    return false;
+#endif
+}
+
+inline void matmul_dispatch_tk_atb_async_finish(const MatmulAsyncJob& job, cudaStream_t stream) {
+#if LLMK_USE_TK_GEMM && defined(KITTENS_SM120)
+    if (!job.active) return;
+    cudaCheck(cudaStreamWaitEvent(stream, job.done_event, 0));
 #else
     (void)job;
     (void)stream;
@@ -1219,18 +1276,31 @@ inline void matmul_backward(floatX* dinp, floatX* dweight, floatX* dbias,
 
 #if !(defined(LLMK_SM120_USE_CUBLASLT_GEMM) && defined(KITTENS_SM120))
     MatmulSplitKJob dweight_split_job;
+    MatmulAsyncJob dweight_direct_job;
     bool dweight_split_started = false;
+    bool dweight_direct_started = false;
     bool dweight_split_finish_pending = false;
+    bool dweight_direct_finish_pending = false;
 #endif
 #if LLMK_USE_TK_GEMM && defined(KITTENS_SM120) && !defined(LLMK_SM120_USE_CUBLASLT_GEMM)
 #ifndef LLMK_SM120_OVERLAP_DINP_DWEIGHT
 #define LLMK_SM120_OVERLAP_DINP_DWEIGHT 1
+#endif
+#ifndef LLMK_SM120_OVERLAP_DIRECT_DWEIGHT
+#define LLMK_SM120_OVERLAP_DIRECT_DWEIGHT 1
 #endif
 #if LLMK_SM120_OVERLAP_DINP_DWEIGHT
     if (dweight != nullptr && matmul_tk_shape_ok(OC, C, M)) {
         dweight_split_started = matmul_dispatch_tk_atb_splitk_start(
             &dweight_split_job, dweight, dout, inp, OC, C, M, stream,
             dweight_accumulate, dweight_accum_scratch, dweight_accum_scratch_elements);
+#if LLMK_SM120_OVERLAP_DIRECT_DWEIGHT
+        if (!dweight_split_started) {
+            dweight_direct_started = matmul_dispatch_tk_atb_async_start(
+                &dweight_direct_job, dweight, dout, inp, OC, C, M, stream,
+                dweight_accumulate);
+        }
+#endif
     }
 #endif
 #endif
@@ -1271,6 +1341,8 @@ inline void matmul_backward(floatX* dinp, floatX* dweight, floatX* dbias,
         if (matmul_tk_shape_ok(OC, C, M)) {
             if (dweight_split_started) {
                 dweight_split_finish_pending = true;
+            } else if (dweight_direct_started) {
+                dweight_direct_finish_pending = true;
             } else if (matmul_dispatch_tk_atb_splitk(
                     dweight, dout, inp, OC, C, M, stream, dweight_accumulate,
                     dweight_accum_scratch, dweight_accum_scratch_elements)) {
@@ -1310,6 +1382,9 @@ inline void matmul_backward(floatX* dinp, floatX* dweight, floatX* dbias,
 #if !(defined(LLMK_SM120_USE_CUBLASLT_GEMM) && defined(KITTENS_SM120))
     if (dweight_split_finish_pending) {
         matmul_dispatch_tk_atb_splitk_finish(dweight_split_job, stream);
+    }
+    if (dweight_direct_finish_pending) {
+        matmul_dispatch_tk_atb_async_finish(dweight_direct_job, stream);
     }
 #endif
 }

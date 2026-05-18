@@ -8,6 +8,17 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Promoted SM120 pure-TK direct dWeight overlap for dWeight rows where the
+  split-K planner collapses to one part, notably the LM-head-sized dWeight
+  route. These direct dWeight GEMMs now start on a nonblocking side stream,
+  overlap with dInput and bias-grad on the main stream, then synchronize before
+  `matmul_backward()` returns. `test_matmul` passed `8/8`, `test_attention`
+  passed all three smoke shapes, and TinyStories 3-step validation improved
+  the current overlap source from `2882.59 ms` to `2880.34 ms` average with
+  steps `2873.48`, `2884.35`, and `2883.19 ms` (`2883.77 ms` excluding the
+  first-step warmup in the trainer's total-average line). Pure TK still trails
+  the supplied llm.c baseline and SM120 cuBLASLt fallback, so the goal remains
+  open.
 - Promoted SM120 pure-TK overlap between split-K dWeight partial kernels and
   independent work inside the same `matmul_backward()` call. The wrapper now starts
   eligible split-K dWeight work on the existing nonblocking part streams,
