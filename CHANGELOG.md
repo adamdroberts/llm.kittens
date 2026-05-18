@@ -138,6 +138,12 @@ changelog is the diary; `goal.md` is the plan.
   `2939.85`, `3011.87`, and `2913.20 ms`. This is still behind the cuBLASLt
   fallback and the supplied llm.c baseline, so further pure-TK tuning remains
   required.
+- Rejected promoting pure SM120 TK back to `FORCE_NVCC_O=3` after the reduced
+  LM-head scratch default. The explicit O3 build passed `test_matmul` (`8/8`)
+  and `test_attention` (all three shapes), and first averaged `2897.61 ms`, but
+  the no-override source-default rebuild averaged `2973.54 ms` with steps
+  `3014.38`, `3005.64`, and `2941.45 ms`. That did not beat the committed O2
+  default or the supplied llm.c baseline, so pure SM120 TK remains on `O2`.
 
 ## 2026-05-17 — SM120 RTX 5090 GEMM fallback and pure-TK tuning
 
