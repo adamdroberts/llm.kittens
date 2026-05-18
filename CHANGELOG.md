@@ -908,6 +908,11 @@ changelog is the diary; `goal.md` is the plan.
   candidate repeatedly failed the `test_matmul` GPT-2 MLP-up forward case
   (`6.5625` then `6.8750` max diff versus `0.50` tolerance), so it was not
   benchmarked or validated with TinyStories training.
+- Rejected `LLMK_SM120_BIAS_BLOCK_SIZE=576` for the CUDA bias-gradient
+  reduction path. The build passed `test_matmul` (`8/8`) and `test_attention`
+  (all three smoke shapes), but TinyStories 3-step validation regressed to
+  `2826.59 ms` with steps `2820.46`, `2825.42`, and `2827.77 ms`. The source
+  default remains `512`.
 
 ## 2026-05-09 — Blackwell build support
 
