@@ -1634,6 +1634,13 @@ changelog is the diary; `goal.md` is the plan.
   3-step validation averaged `2889.63 ms` with steps `2884.80`, `2882.86`,
   and `2896.39 ms`, slower than the supplied llm.c baseline, so the temporary
   hook was removed.
+- Rejected isolating the direct column-layout load to plain NN dInput only.
+  The candidate passed `test_matmul` (`8/8`) and `test_attention` (all three
+  smoke shapes), and the focused benchmark made qkv and attention-projection
+  dInput faster than cuBLASLt, but fc, fcproj, and LM-head dInput still trailed
+  and the material dWeight rows were still behind. TinyStories 3-step
+  validation regressed to `3585.88 ms` with steps `3569.84`, `3594.94`, and
+  `3576.82 ms`, so the temporary hooks were removed.
 
 ## 2026-05-09 — Blackwell build support
 
