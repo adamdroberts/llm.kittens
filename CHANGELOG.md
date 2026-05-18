@@ -200,6 +200,12 @@ changelog is the diary; `goal.md` is the plan.
   `~294 ms/step`, and QKV backward `~285 ms/step`. The direct dWeight
   accumulate change did not move the next target away from forward and dense
   backward GEMM paths.
+- Rejected `LLMK_SM120_LARGE_DWEIGHT_SPLIT_K=2` after the direct accumulated-
+  dWeight promotion. The macro build passed `test_matmul` (`8/8`) and
+  `test_attention` (all three shapes), but it raised activation allocation
+  from `25514 MiB` to `25588 MiB` and TinyStories 3-step validation regressed
+  to `2903.92 ms` with steps `2897.04`, `2899.60`, and `2908.24 ms`, so the
+  large-dWeight split remains `1`.
 
 ## 2026-05-17 — SM120 RTX 5090 GEMM fallback and pure-TK tuning
 
