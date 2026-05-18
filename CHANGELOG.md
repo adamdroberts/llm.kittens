@@ -8,6 +8,13 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Re-profiled after deferring the LM-head dWeight wait. The profiled
+  TinyStories 3-step run averaged `2919.65 ms` with expected profiler overhead.
+  `bwd_lmhead` dropped to `~263 ms/step`, but `bwd_lnf` rose to
+  `~156 ms/step`, showing the deferred LM-head dWeight work now overlaps and
+  competes with final-LayerNorm backward. The persistent dominant buckets are
+  still forward `~872 ms/step`, FC/FCProj backward `~725 ms/step` combined,
+  attention backward `~301 ms/step`, and QKV backward `~264 ms/step`.
 - Promoted deferring the SM120 pure-TK LM-head dWeight wait until just before
   token-embedding backward. The GPT-2 backward path now starts the tied
   LM-head dWeight GEMM on a nonblocking side stream, runs the LM-head dInput
