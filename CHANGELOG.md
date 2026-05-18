@@ -1539,6 +1539,14 @@ changelog is the diary; `goal.md` is the plan.
   (`1.04x` slower than cuBLASLt), but TinyStories 3-step validation regressed
   badly to `3387.68 ms` with steps `3396.48`, `3372.17`, and `3403.20 ms`, so
   the temporary route was removed.
+- Rejected pure SM120 TK codegen with `--extra-device-vectorization`. The
+  build passed `test_matmul` (`8/8`) and `test_attention` (all three smoke
+  shapes), but the focused benchmark still left every pure-TK GEMM row behind
+  cuBLASLt and worsened key timings such as qkv dWeight (`1191.98 us` versus
+  `1014.41 us`) and LM-head dWeight (`24070.96 us` versus `21794.65 us`).
+  TinyStories 3-step validation regressed to `3013.36 ms` with steps
+  `3031.73`, `3005.11`, and `3021.61 ms`, so pure SM120 TK builds keep the
+  current default codegen flags.
 
 ## 2026-05-09 — Blackwell build support
 
