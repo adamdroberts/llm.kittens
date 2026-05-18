@@ -967,6 +967,12 @@ changelog is the diary; `goal.md` is the plan.
   but qkv dWeight regressed to `1535.27 us` in the focused benchmark and
   TinyStories 3-step validation slowed to `2820.86 ms` with steps `2814.07`,
   `2817.38`, and `2824.34 ms`.
+- Rejected enabling the SM90 TK LayerNorm forward/fused-residual path on SM120.
+  Forward and fused-forward values passed the layernorm smoke tolerance, but
+  `test_layernorm` repeatedly failed backward `dbias` (`0.496948` max diff
+  versus `0.120` tolerance), including after splitting the SM120 forward opt-in
+  away from the TK backward warp-reduction macro. The temporary SM120
+  LayerNorm opt-in was removed and the CUDA fallback remains active.
 
 ## 2026-05-09 — Blackwell build support
 
