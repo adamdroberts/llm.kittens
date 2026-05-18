@@ -1414,6 +1414,15 @@ changelog is the diary; `goal.md` is the plan.
   `2859.28`, `2923.24`, and `2902.60 ms`, still slower than the accepted
   source default and the llm.c baseline, so the global SM120 swizzle remains
   `9`.
+- Rejected a temporary dWeight-only N96 route. The
+  `LLMK_SM120_DWEIGHT_FORCE_N96=1` hook forced dWeight TN shapes with
+  `N % 96 == 0` through the 128x96 tile while leaving dInput routing
+  unchanged. It passed `test_matmul` (`8/8`) and `test_attention` (all three
+  smoke shapes), but the focused benchmark worsened every dWeight row,
+  including qkv dWeight (`1376.45 us` versus cuBLASLt `1028.39 us`) and
+  LM-head dWeight (`28791.69 us` versus `21616.07 us`). TinyStories 3-step
+  validation averaged `2936.82 ms` with steps `2942.24`, `2939.30`, and
+  `2934.34 ms`, so the temporary hook was removed.
 
 ## 2026-05-09 — Blackwell build support
 
