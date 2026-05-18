@@ -1660,6 +1660,11 @@ changelog is the diary; `goal.md` is the plan.
   (`33061.30 us`). TinyStories 3-step validation averaged `3675.21 ms` with
   steps `3717.45`, `3699.34`, and `3651.08 ms`, so the temporary hook was
   removed.
+- Rejected direct column-layout loading for the SM120 attention forward V tile.
+  The candidate passed `test_attention` and passed `test_matmul` on rerun after
+  the recurring unrelated MLP-up transient, but TinyStories 3-step validation
+  regressed catastrophically to `17988.24 ms` with steps `17063.37`,
+  `17795.62`, and `18180.86 ms`. The temporary hook was removed.
 
 ## 2026-05-09 — Blackwell build support
 
