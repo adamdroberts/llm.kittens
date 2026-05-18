@@ -883,6 +883,12 @@ changelog is the diary; `goal.md` is the plan.
   shapes), and qkv dWeight improved to `1379.51 us` in the focused benchmark,
   but other backward rows regressed and TinyStories 3-step validation slowed to
   `2921.11 ms` with steps `2917.34`, `2920.17`, and `2922.04 ms`.
+- Rejected disabling the fused SM120 dGELU dInput path
+  (`LLMK_SM120_FUSE_DGELU=0`). The build passed `test_matmul` (`7/7`, with the
+  fused dGELU smoke skipped by design) and `test_attention` (all three smoke
+  shapes). The focused benchmark improved several plain backward GEMM timings,
+  but TinyStories 3-step validation regressed to `2865.33 ms` with steps
+  `2857.62`, `2862.82`, and `2867.85 ms`, so the source default remains fused.
 
 ## 2026-05-09 — Blackwell build support
 
