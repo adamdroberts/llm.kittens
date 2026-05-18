@@ -754,6 +754,11 @@ changelog is the diary; `goal.md` is the plan.
   and TinyStories 3-step validation averaged `3588.50 ms` with steps
   `3589.03`, `3602.48`, and `3574.52 ms`. The reducer remains at the
   256-thread launch.
+- Rejected pure SM120 TK codegen with `-Xptxas -dlcm=ca`. It passed
+  `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes), but the
+  focused benchmark did not close the GEMM gap and TinyStories 3-step
+  validation averaged `3591.41 ms` with steps `3608.48`, `3581.24`, and
+  `3601.58 ms`. Pure SM120 TK builds keep the normal ptxas cache mode.
 
 ## 2026-05-09 — Blackwell build support
 
