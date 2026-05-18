@@ -1122,6 +1122,12 @@ changelog is the diary; `goal.md` is the plan.
   `bench_sm120_matmul` aborted before timing because the 256-row TN tile
   asserts `M % T::M_TILE == 0`, which is not true for every covered dWeight
   row. The temporary hook was removed and no TinyStories validation was run.
+- Rejected increasing SM120 packed-QKV attention prep to
+  `LLMK_SM120_DPREP_WARPS=4` on top of the current K-tile 16 stack. The macro
+  build passed `test_matmul` (`8/8`) and `test_attention` (all three smoke
+  shapes), but TinyStories 3-step validation averaged `2744.14 ms` with steps
+  `2739.37`, `2742.82`, and `2745.46 ms`, slower than the committed
+  `LLMK_SM120_DPREP_WARPS=3` default.
 
 ## 2026-05-09 — Blackwell build support
 
