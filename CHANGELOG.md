@@ -1204,6 +1204,12 @@ changelog is the diary; `goal.md` is the plan.
   `1579.54 us`. TinyStories 3-step validation regressed to `2747.68 ms` with
   steps `2743.72`, `2747.19`, and `2748.17 ms`, so the dInput swizzle remains
   `8`.
+- Rejected a partial K-loop unroll in all SM120 GEMM kernels. Changing the
+  three K loops from `#pragma unroll 1` to `#pragma unroll 2` compiled, but
+  `test_matmul` failed reproducibly on two runs: the GPT-2 MLP-up forward row
+  reported max diffs `7.7031` then `7.7188`, and the fused dGELU row reported
+  `14.6562` then `14.2344`, all versus the `0.50` tolerance. The temporary
+  source edit was reverted and no benchmark or TinyStories validation was run.
 
 ## 2026-05-09 — Blackwell build support
 
