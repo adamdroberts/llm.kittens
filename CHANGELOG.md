@@ -1116,6 +1116,12 @@ changelog is the diary; `goal.md` is the plan.
   the no-override source-default rebuild passed the same smokes but averaged
   `2743.67 ms` with steps `2737.96`, `2740.97`, and `2746.37 ms`, slower than
   the committed O2 source default, so pure SM120 TK keeps `FORCE_NVCC_O=2`.
+- Rejected a temporary `LLMK_SM120_DWEIGHT_WIDE_N128=1` hook that routed the
+  SM120 N128 TN dWeight path through the 256x128 tile. The candidate passed
+  `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes), but
+  `bench_sm120_matmul` aborted before timing because the 256-row TN tile
+  asserts `M % T::M_TILE == 0`, which is not true for every covered dWeight
+  row. The temporary hook was removed and no TinyStories validation was run.
 
 ## 2026-05-09 — Blackwell build support
 
