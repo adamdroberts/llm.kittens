@@ -515,6 +515,12 @@ changelog is the diary; `goal.md` is the plan.
   and LM-head). The required TinyStories 3-step validation regressed badly to
   `5272.44 ms` with steps `5036.14`, `5312.39`, and `5232.49 ms`, so the hook
   was removed again.
+- Rejected a macro-only `LLMK_SM120_DWEIGHT_SUPER_M=4` retest under the
+  no-master pure-TK path. It passed `test_matmul` (`8/8`) and `test_attention`
+  (all three smoke shapes), but the focused benchmark still had all dWeight
+  rows behind cuBLASLt (`1.48x`, `1.57x`, `1.31x`, `1.32x`, and `1.23x`
+  slower), and the required TinyStories 3-step validation regressed to
+  `3618.29 ms` with steps `3660.48`, `3614.09`, and `3622.49 ms`.
 
 ## 2026-05-09 — Blackwell build support
 
