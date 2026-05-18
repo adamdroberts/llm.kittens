@@ -8,6 +8,12 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Rejected `LLMK_SM120_DINP_SUPER_M=9` after the adjacent dInput swizzle
+  retest. The macro build passed `test_matmul` (`8/8`), but TinyStories
+  3-step validation regressed from the current `2837.54 ms` source average to
+  `2843.71 ms` with steps `2834.88`, `2845.46`, and `2850.79 ms`
+  (`2848.12 ms` excluding first-step warmup). The default remains
+  `LLMK_SM120_DINP_SUPER_M=8`.
 - Rejected `LLMK_SM120_DINP_SUPER_M=7` at the matmul smoke gate. The macro
   build completed, but `test_matmul` failed reproducibly on the dInput A*B
   row with max diffs `7.6406` and `5.3906` versus the `0.50` tolerance. No
