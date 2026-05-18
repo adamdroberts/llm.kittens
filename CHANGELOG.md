@@ -1246,6 +1246,13 @@ changelog is the diary; `goal.md` is the plan.
   `test_attention` (all three smoke shapes), but TinyStories 3-step validation
   slowed to `2832.82 ms` with steps `2835.94`, `2823.95`, and `2841.69 ms`.
   The attention prep launch remains at `3` warps.
+- Rejected lowering `LLMK_SM120_HUGE_N_THRESHOLD` to `2048` under the current
+  K-tile 16 stack. The macro build passed `test_matmul` (`8/8`) and
+  `test_attention` (all three smoke shapes), and the focused benchmark improved
+  a few attention/projection rows, but it badly regressed qkv forward
+  (`1298.24 us`) and the MLP-up path. TinyStories 3-step validation slowed to
+  `2825.23 ms` with steps `2810.98`, `2817.60`, and `2832.86 ms`, so the
+  huge-N threshold remains `8192`.
 
 ## 2026-05-09 — Blackwell build support
 
