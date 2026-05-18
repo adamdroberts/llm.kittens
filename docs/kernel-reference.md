@@ -60,7 +60,7 @@ namespace llmk::gemm {
 
 The SM120-specific wrapper uses the same template surface but tunes its
 Blackwell cp.async kernels separately: the shared `LLMK_SM120_SUPER_M` swizzle
-defaults to `9` after RTX 5090 3-step validation. dInput uses a separate
+defaults to `8` after RTX 5090 3-step validation. dInput uses a separate
 `LLMK_SM120_DINP_SUPER_M=8` default, while dWeight keeps its separate
 `LLMK_SM120_DWEIGHT_SUPER_M=2` default and routes supported TN dWeight shapes
 through a 128x128 tile by default (`LLMK_SM120_DWEIGHT_N128=1`).
@@ -119,8 +119,8 @@ source-default pure-TK 3-step run; `LLMK_SM120_HUGE_N_M256=0` keeps the older
 `LLMK_SM120_HUGE_N_K_TILE=16` after the current dWeight N128 route made the
 smaller K tile's dWeight gains outweigh the LM-head forward slowdown in the
 3-step validation. The shared SM120
-forward/dInput/huge-N tile swizzle now uses `LLMK_SM120_SUPER_M=9` by default;
-the old `8` and `10` values remain useful A/B references.
+forward/huge-N tile swizzle now uses `LLMK_SM120_SUPER_M=8` by default;
+the old `9` and `10` values remain useful A/B references.
 
 ### Backward signature (M3)
 
