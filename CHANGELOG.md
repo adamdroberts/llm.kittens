@@ -8,6 +8,12 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Rejected `LLMK_SM120_DWEIGHT_SUPER_M=1` at the matmul smoke gate. The macro
+  build completed, but `test_matmul` failed reproducibly with changing unsafe
+  rows: first the direct dWeight row hit max diff `1.7031` versus `0.50`, then
+  the rerun failed the GPT-2 MLP-up forward row with max diff `7.1562`. No
+  TinyStories 3-step timing was run because the candidate was numerically
+  unsafe.
 - Ran the current SM120 matmul microbenchmark against cuBLASLt for GPT-2 124M
   GEMM shapes. No TK shape beats cuBLASLt yet: qkv dWeight is `1.23x` slower,
   attproj dWeight is `1.54x` slower, fc fused forward is `1.06x` slower,
