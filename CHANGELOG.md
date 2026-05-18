@@ -8,6 +8,15 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Refreshed `bench_sm120_matmul` on the current pure SM120 TK source against
+  the cuBLASLt fallback variants to pick the next optimization target. The
+  largest remaining gaps were attention-projection dWeight (`517.94 us` TK vs
+  `325.57 us` cuBLASLt, `1.59x`), attention-projection dInput (`456.36 us` vs
+  `385.27 us`, `1.18x`), fcproj accumulated dWeight (`1663.72 us` vs
+  `1363.95 us`, `1.22x`), and LM-head forward/dInput (`27100.01 us` vs
+  `23148.19 us`, `1.17x`; `25118.81 us` vs `22283.56 us`, `1.13x`). No
+  trainer timing was run for this benchmark-only round; source defaults were
+  unchanged.
 - Rejected deferring only QKV dWeight split-K finish until after LN1 backward
   with `LLMK_SM120_DEFER_QKV_DWEIGHT_FINISH=1`. The macro build passed
   `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes), but
