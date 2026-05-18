@@ -1352,6 +1352,12 @@ changelog is the diary; `goal.md` is the plan.
   regressed to `3055.98 ms` with steps `3045.03`, `3049.89`, and
   `3062.08 ms`, so the temporary hook was removed and the N128 dWeight route
   again uses `LLMK_SM120_HUGE_N_K_TILE=16`.
+- Rejected an unguarded temporary `LLMK_SM120_DWEIGHT_N128_M256=1` hook that
+  routed every N128 dWeight shape through the existing 256x128 / 8-warp tile.
+  It passed `test_matmul` (`8/8`) and `test_attention` (all three smoke
+  shapes), but `bench_sm120_matmul` aborted before timing because LM-head
+  dWeight has `M=50304`, which is not divisible by the candidate's 256-row
+  tile. No TinyStories validation was run; the hook was removed.
 
 ## 2026-05-09 — Blackwell build support
 
