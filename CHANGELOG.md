@@ -1406,6 +1406,14 @@ changelog is the diary; `goal.md` is the plan.
   MLP, projection, and LM-head rows. TinyStories 3-step validation regressed to
   `3052.94 ms` with steps `3036.98`, `3040.83`, and `3065.06 ms`, so the
   global SM120 swizzle remains `9`.
+- Rejected global forward swizzle `LLMK_SM120_SUPER_M=6`. The macro build
+  passed `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes),
+  but the focused benchmark still trailed cuBLASLt on the important dInput,
+  dWeight, MLP, and LM-head rows despite a noisy attention-projection forward
+  win. TinyStories 3-step validation averaged `2912.92 ms` with steps
+  `2859.28`, `2923.24`, and `2902.60 ms`, still slower than the accepted
+  source default and the llm.c baseline, so the global SM120 swizzle remains
+  `9`.
 
 ## 2026-05-09 — Blackwell build support
 
