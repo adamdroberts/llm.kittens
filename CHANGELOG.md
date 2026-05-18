@@ -488,6 +488,12 @@ changelog is the diary; `goal.md` is the plan.
   smoke shapes), but the required TinyStories validation stalled before the
   first step and was killed at `99.7%` CPU after roughly `01:33`, matching the
   known invalid CPU-bound failure mode.
+- Re-tested SM120 cuBLASLt plan caching under the no-master default with
+  `LLMK_SM120_CACHE_CUBLASLT_PLANS`. It passed `test_matmul` (`8/8`) and
+  `test_attention` (all three smoke shapes), and the required TinyStories
+  3-step validation averaged `2480.25 ms` with steps `2485.15`, `2477.94`, and
+  `2482.55 ms`. This is only a noise-level improvement over the accepted
+  no-master default, so plan caching remains opt-in.
 
 ## 2026-05-09 — Blackwell build support
 
