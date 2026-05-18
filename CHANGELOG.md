@@ -8,6 +8,12 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Rejected `LLMK_SM120_HUGE_N_M256=0` at the matmul smoke gate. The macro
+  build completed, but `test_matmul` failed reproducibly: the first run failed
+  the GPT-2 LM-head row with max diff `7.6719` versus `0.50`, and the rerun
+  failed both MLP-up (`6.1406`) and LM-head (`6.9062`) forward rows. No
+  TinyStories 3-step timing was run because the candidate was numerically
+  unsafe.
 - Rejected `LLMK_SM120_FORWARD_N96=0` after retesting the older forward tile
   route on the current stack. The macro build passed `test_matmul` (`8/8`) and
   completed the three timed TinyStories steps, but regressed from the current
