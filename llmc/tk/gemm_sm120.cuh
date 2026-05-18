@@ -12,7 +12,8 @@ grid swizzle inside the kernels and a per-template tile-shape choice.
   * Four presets ship today:
       traits_128x64   — 128×64 ×32 with 4 warps  (baseline)
       traits_256x64   — 256×64 ×32 with 8 warps  (more M-reuse per CTA)
-      traits_128x128  — 128×128×64 with 4 warps  (bigger N tile for huge-N ops)
+      traits_128x128  — 128×128×LLMK_SM120_HUGE_N_K_TILE with 4 warps
+                        (bigger N tile for huge-N ops and SM120 dWeight N128)
       grad_*          — same M/N shapes as above, but K=64 for backward GEMMs
     See the public `matmul_default_* / matmul_wide_* / matmul_huge_n_*` alias
     families. The `matmul_template<>` struct carries a `_TRAITS` parameter so
@@ -58,7 +59,7 @@ constexpr int LOAD_BAR = 0;
 #endif
 
 #ifndef LLMK_SM120_HUGE_N_K_TILE
-#define LLMK_SM120_HUGE_N_K_TILE 64
+#define LLMK_SM120_HUGE_N_K_TILE 32
 #endif
 
 #ifndef LLMK_SM120_HUGE_N_M256

@@ -998,6 +998,15 @@ changelog is the diary; `goal.md` is the plan.
   row (`attproj` dWeight `1272.32 us`, `lmhead` dWeight `45821.98 us`), and
   TinyStories 3-step validation slowed to `3294.73 ms` with steps `3286.69`,
   `3290.03`, and `3299.44 ms`. The temporary N192 tile/dispatch was removed.
+- Promoted `LLMK_SM120_HUGE_N_K_TILE=32` for the SM120 huge-N/N128 tile family.
+  Under the current dWeight N128 route this candidate passed `test_matmul`
+  (`8/8`) and `test_attention` (all three smoke shapes), improved focused
+  dWeight timings substantially (qkv `1220.39 us`, fc `1535.67 us`, fcproj
+  `1556.57 us`, lmhead `23907.68 us`), and averaged `2749.99 ms` on the
+  TinyStories 3-step validation with steps `2742.77`, `2746.69`, and
+  `2753.29 ms`. The no-override source-default rebuild passed the same smokes,
+  confirmed the benchmark improvement, and averaged `2748.57 ms` with steps
+  `2743.59`, `2745.67`, and `2751.47 ms`.
 
 ## 2026-05-09 — Blackwell build support
 
