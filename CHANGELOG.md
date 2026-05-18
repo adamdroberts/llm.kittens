@@ -1547,6 +1547,12 @@ changelog is the diary; `goal.md` is the plan.
   TinyStories 3-step validation regressed to `3013.36 ms` with steps
   `3031.73`, `3005.11`, and `3021.61 ms`, so pure SM120 TK builds keep the
   current default codegen flags.
+- Rejected a temporary dWeight-only 96x128 TN tile route. The first
+  `test_matmul` pass failed accumulated dWeight, but an immediate rerun passed
+  `8/8` and `test_attention` passed all three smoke shapes. The focused
+  benchmark then hit an illegal memory access during qkv dWeight timing after
+  qkv forward/dInput, so no TinyStories 3-step validation was run and the
+  temporary 96x128 hook was removed.
 
 ## 2026-05-09 — Blackwell build support
 
