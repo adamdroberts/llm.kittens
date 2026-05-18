@@ -608,6 +608,13 @@ changelog is the diary; `goal.md` is the plan.
   improve the dWeight rows and the required TinyStories 3-step validation
   regressed to `3605.23 ms` with steps `3612.75`, `3601.57`, and `3608.89 ms`.
   The reducer stays at its 256-thread launch.
+- Rejected a temporary TN-only launch-bounds hook
+  (`LLMK_SM120_TN_MIN_BLOCKS_PER_SM=2`) for the pure SM120 TK dWeight kernel.
+  The build passed `test_matmul` (`8/8`) and `test_attention` (all three smoke
+  shapes), but focused benchmarking worsened every dWeight row and the required
+  TinyStories 3-step validation regressed to `3615.00 ms` with steps
+  `3648.77`, `3618.72`, and `3611.28 ms`. The TN kernel launch bounds remain
+  `__launch_bounds__(T::NUM_THREADS, 1)`.
 
 ## 2026-05-09 — Blackwell build support
 
