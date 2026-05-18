@@ -8,6 +8,14 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Promoted narrowing the deferred SM120 LM-head dWeight wait to immediately
+  after final LayerNorm backward. This keeps the useful overlap between
+  LM-head dWeight and LNF backward but avoids carrying the side-stream wait
+  through the full transformer backward stack. The trainer build completed,
+  and TinyStories 3-step validation improved from `2877.19 ms` to `2873.56 ms`
+  average with steps `2863.32`, `2871.39`, and `2885.96 ms` (`2878.67 ms`
+  excluding first-step warmup). Pure TK still trails the supplied llm.c
+  baseline and SM120 cuBLASLt fallback, so the goal remains open.
 - Rejected making the SM120 background dWeight streams low priority after the
   deferred LM-head wait change. The source hook passed `test_matmul` (`8/8`)
   and `test_attention` (all three smoke shapes), but TinyStories 3-step

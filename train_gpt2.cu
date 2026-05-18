@@ -1103,6 +1103,9 @@ void gpt2_backward_and_reduce(GPT2 *model, int* inputs, const int* targets, int 
         LLMK_PROFILE_SCOPE(LLMK_PROFILE_BWD_LNF);
         layernorm_backward(dresidual, grads.lnfw, grads.lnfb, scratchF, model->acts.scratch_bt4c, residual, params.lnfw, acts.lnf_mean, acts.lnf_rstd, B, T, C, main_stream);
     }
+    if (lmhead_dweight_deferred) {
+        matmul_dispatch_tk_atb_async_finish(lmhead_dweight_job, main_stream);
+    }
 
     // from this point on, we no longer need the values stored in the last residual, so we can reuse that memory as generic
     // scratch for backward computations
@@ -1242,9 +1245,6 @@ void gpt2_backward_and_reduce(GPT2 *model, int* inputs, const int* targets, int 
     }
     {
         LLMK_PROFILE_SCOPE(LLMK_PROFILE_BWD_ENCODER);
-        if (lmhead_dweight_deferred) {
-            matmul_dispatch_tk_atb_async_finish(lmhead_dweight_job, main_stream);
-        }
         encoder_backward(grads.wte, grads.wpe, scratchX, model->workload_indices, model->bucket_info,
                          dresidual, model->inputs, inputs, B, T, C, random_u32(&model->rng_state), main_stream);
     }
