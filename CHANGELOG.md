@@ -1625,6 +1625,15 @@ changelog is the diary; `goal.md` is the plan.
   the fused dGELU dInput row with max diff `2.4453` versus the `0.50`
   tolerance, so no focused benchmark or TinyStories 3-step validation was run.
   The temporary hook was removed.
+- Rejected a scoped direct column-layout shared-to-register load retry that
+  kept fused dGELU on the existing register-swap path while direct-loading
+  plain dInput and dWeight tiles. It passed `test_matmul` (`8/8`) and
+  `test_attention` (all three smoke shapes), and the focused benchmark improved
+  qkv forward/dInput to `0.98x`/`0.96x` of cuBLASLt, but every material
+  dWeight row and LM-head forward still trailed cuBLASLt. TinyStories
+  3-step validation averaged `2889.63 ms` with steps `2884.80`, `2882.86`,
+  and `2896.39 ms`, slower than the supplied llm.c baseline, so the temporary
+  hook was removed.
 
 ## 2026-05-09 — Blackwell build support
 
