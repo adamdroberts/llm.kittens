@@ -8,6 +8,12 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Rejected disabling split-K dWeight/dInput overlap with
+  `LLMK_SM120_OVERLAP_DINP_DWEIGHT=0`. The macro build passed `test_matmul`
+  (`8/8`) and `test_attention` (all three smoke shapes), but TinyStories
+  3-step validation regressed to `2892.90 ms` with steps `2871.76`,
+  `2891.83`, and `2915.10 ms` (`2903.46 ms` excluding first-step warmup).
+  The default keeps split-K dWeight side-stream overlap enabled.
 - Rejected the focused older-fast combination `FORCE_NVCC_O=2`,
   `LLMK_SM120_SUPER_M=9`, and `LLMK_SM120_DWEIGHT_SPLIT_K=16` while keeping
   the current direct/overlap dWeight stack. The macro build passed
