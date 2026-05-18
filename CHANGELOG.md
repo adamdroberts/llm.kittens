@@ -1428,6 +1428,13 @@ changelog is the diary; `goal.md` is the plan.
   deterministically failed the plain dInput row with max diff `9.7812` on the
   first run and `11.1562` on the immediate rerun, versus the `0.50` tolerance.
   No focused benchmark or TinyStories validation was run.
+- Rejected a temporary dInput-only 2-warp 128x64 tile. The
+  `LLMK_SM120_DINP_128X64_WARPS2=1` build passed `test_matmul` (`8/8`) and
+  `test_attention` (all three smoke shapes), but the focused benchmark made
+  every dInput row slower, including qkv dInput (`1383.49 us` versus cuBLASLt
+  `1006.93 us`) and LM-head dInput (`28154.13 us` versus `21951.83 us`).
+  TinyStories 3-step validation averaged `2874.72 ms` with steps `2866.70`,
+  `2869.52`, and `2879.93 ms`, so the temporary hook was removed.
 
 ## 2026-05-09 — Blackwell build support
 
