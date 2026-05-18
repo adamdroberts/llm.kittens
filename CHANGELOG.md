@@ -931,6 +931,12 @@ changelog is the diary; `goal.md` is the plan.
   no-override source-default rebuild passed the same smokes, stayed mixed in
   the focused benchmark, and confirmed an improved source-default trainer
   average of `2814.20 ms` with steps `2809.52`, `2811.78`, and `2816.62 ms`.
+- Rejected adjacent `LLMK_SM120_DWEIGHT_SUPER_M=4` on the dWeight 128x128 TN
+  route. The build passed `test_matmul` (`8/8`) and `test_attention` (all
+  three smoke shapes), but the focused benchmark did not improve the dWeight
+  rows and TinyStories 3-step validation averaged `2812.71 ms` with steps
+  `2807.15`, `2811.48`, and `2813.94 ms`, slightly slower than the `3` macro
+  retest.
 
 ## 2026-05-09 — Blackwell build support
 
