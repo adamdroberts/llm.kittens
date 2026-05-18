@@ -1672,6 +1672,12 @@ changelog is the diary; `goal.md` is the plan.
   attention-projection or fcproj dWeight gaps. TinyStories 3-step validation
   regressed catastrophically to `16645.77 ms` with steps `16974.58`,
   `16367.83`, and `16923.70 ms`, so the temporary hook was removed.
+- Rejected macro-only `LLMK_SM120_DWEIGHT_SUPER_M=18`, which groups the full
+  qkv dWeight M-tile span. It passed `test_matmul` (`8/8`) and
+  `test_attention` (all three smoke shapes), but the focused benchmark still
+  left all dWeight rows behind cuBLASLt and worsened fc/fcproj dWeight.
+  TinyStories 3-step validation regressed to `4642.61 ms` with steps
+  `10255.57`, `4636.76`, and `4648.47 ms`, so the source default remains `2`.
 
 ## 2026-05-09 — Blackwell build support
 
