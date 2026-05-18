@@ -777,6 +777,15 @@ changelog is the diary; `goal.md` is the plan.
   3-step validation regressed to `4933.50 ms` with steps `4982.97`,
   `4955.35`, and `4911.65 ms`. The temporary large-row split-K hook was
   removed.
+- Promoted `LLMK_SM120_SUPER_M=10` as the shared pure SM120 TK forward/dInput
+  swizzle default after a macro-only A/B passed `test_matmul` (`8/8`) and
+  `test_attention` (all three smoke shapes). The focused benchmark remained
+  behind cuBLASLt on most material GEMM rows, but the TinyStories 3-step
+  validation improved sharply to `2828.57 ms` with steps `2825.73`, `2826.18`,
+  and `2830.96 ms`. The no-override source-default rebuild passed the same
+  smokes and averaged `2829.34 ms` with steps `2824.34`, `2827.24`, and
+  `2831.44 ms`, bringing pure TK within noise of the supplied llm.c baseline
+  while the kernel-outperformance goal remains open.
 
 ## 2026-05-09 — Blackwell build support
 

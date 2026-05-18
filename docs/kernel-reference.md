@@ -58,6 +58,11 @@ namespace llmk::gemm {
 }
 ```
 
+The SM120-specific wrapper uses the same template surface but tunes its
+Blackwell cp.async kernels separately: the shared `LLMK_SM120_SUPER_M` swizzle
+defaults to `10` after RTX 5090 3-step validation, while dWeight keeps its
+separate `LLMK_SM120_DWEIGHT_SUPER_M=2` default.
+
 `matmul_template<M_BLOCK, N_BLOCK, SUPER_M, A_TRANSPOSED, B_TRANSPOSED,
 APPLY_BIAS, APPLY_GELU, STORE_PRE_GELU>` is ported from
 `ThunderKittens/kernels/gemm/bf16_h100/bf16_h100_gemm.cu` (lines 1-106). It uses
@@ -108,7 +113,9 @@ older 256x64/128x64 choices; `LLMK_SM120_FORWARD_N96=0` remains an A/B escape
 hatch. The GPT-2 LM-head huge-N forward route defaults to a 256x128 tile
 (`LLMK_SM120_HUGE_N_M256=1`) after current RTX 5090 validation improved the
 source-default pure-TK 3-step run; `LLMK_SM120_HUGE_N_M256=0` keeps the older
-128x128 tile available for A/B tests.
+128x128 tile available for A/B tests. The shared SM120 forward/dInput/huge-N
+tile swizzle now uses `LLMK_SM120_SUPER_M=10` by default; the old value
+can still be restored for A/B testing with `LLMK_SM120_SUPER_M=8`.
 
 ### Backward signature (M3)
 
