@@ -1197,6 +1197,13 @@ changelog is the diary; `goal.md` is the plan.
   `1134.85 us`, fc `1502.11 us`, lmhead `23720.62 us`) and TinyStories
   3-step validation regressed to `2747.71 ms` with steps `2742.78`, `2744.83`,
   and `2750.59 ms`. The dInput swizzle remains `8`.
+- Rejected retesting `LLMK_SM120_DINP_SUPER_M=5` under the current K-tile
+  16/dWeight stack. The macro build passed `test_matmul` (`8/8`) and
+  `test_attention` (all three smoke shapes), but the focused benchmark did not
+  improve the material dInput rows and worsened the fused FC forward timing to
+  `1579.54 us`. TinyStories 3-step validation regressed to `2747.68 ms` with
+  steps `2743.72`, `2747.19`, and `2748.17 ms`, so the dInput swizzle remains
+  `8`.
 
 ## 2026-05-09 — Blackwell build support
 
