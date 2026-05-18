@@ -1665,6 +1665,13 @@ changelog is the diary; `goal.md` is the plan.
   the recurring unrelated MLP-up transient, but TinyStories 3-step validation
   regressed catastrophically to `17988.24 ms` with steps `17063.37`,
   `17795.62`, and `18180.86 ms`. The temporary hook was removed.
+- Rejected a small-M-only dWeight N128 swizzle retest with
+  `LLMK_SM120_DWEIGHT_SMALL_M_SUPER_M=6`. The candidate eventually passed
+  `test_matmul` after two unrelated transient smoke failures and passed
+  `test_attention`, but the focused benchmark did not close the targeted
+  attention-projection or fcproj dWeight gaps. TinyStories 3-step validation
+  regressed catastrophically to `16645.77 ms` with steps `16974.58`,
+  `16367.83`, and `16923.70 ms`, so the temporary hook was removed.
 
 ## 2026-05-09 — Blackwell build support
 
