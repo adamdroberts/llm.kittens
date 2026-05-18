@@ -451,6 +451,10 @@ changelog is the diary; `goal.md` is the plan.
   validation completed with a finite trace but regressed to `3681.43 ms`
   average with steps `3659.10`, `3652.39`, and `3710.48 ms`, so backward N96
   remains disabled.
+- Rejected `LLMK_SM120_INPLACE_LAYOUT_SWAP=0`. It compiled, but `test_matmul`
+  failed the fused dGELU dInput row (`8.1250` max diff versus `0.50`
+  tolerance), so the explicit-layout-swap variant was not benchmarked or
+  validated with a 3-step TinyStories run.
 
 ## 2026-05-09 — Blackwell build support
 
