@@ -390,6 +390,11 @@ changelog is the diary; `goal.md` is the plan.
   regressed the other dWeight rows and the required 3-step validation was
   terminated before initial validation output with the trainer at about
   `99.5%` CPU. The temporary dWeight-only trait hook was removed.
+- Rejected a CUDA bias-gradient reduction block-size sweep with
+  `LLMK_SM120_BIAS_BLOCK_SIZE=1024`. The cuBLASLt-backed TinyStories 3-step
+  validation completed with the expected finite loss/norm trace, but regressed
+  to `3244.20 ms` by the trainer report, so the source default remains the
+  previously validated `512`-thread block.
 
 ## 2026-05-09 — Blackwell build support
 
