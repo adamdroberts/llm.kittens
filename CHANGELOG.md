@@ -8,6 +8,13 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Tested the SM120 dInput-only cuBLASLt fallback probe with forward and
+  dWeight still on TK. The build passed `test_matmul` (`8/8`) and
+  `test_attention` (all three smoke shapes), then TinyStories 3-step
+  validation averaged `2770.57 ms` with steps `2762.16`, `2774.51`, and
+  `2775.03 ms` (`2774.77 ms` excluding first-step warmup). This is faster than
+  the dWeight-only fallback probe, so backward dInput remains a higher-impact
+  SM120 target than dWeight alone.
 - Added disabled-by-default SM120 role-specific cuBLASLt probe switches for
   forward, dInput, and dWeight GEMMs, then tested the dWeight-only fallback
   with forward/dInput still on TK. The first `test_matmul` pass hit the known
