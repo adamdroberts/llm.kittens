@@ -467,6 +467,12 @@ changelog is the diary; `goal.md` is the plan.
   but dInput/dWeight stayed behind and the required TinyStories 3-step
   validation regressed to `3541.71 ms` average with steps `3553.81`, `3531.25`,
   and `3552.17 ms`.
+- Rejected the current pure-TK explicit-GELU runtime path (`-ge 0`) under the
+  no-master default. The current pure-TK build passed `test_matmul` (`8/8`) and
+  `test_attention` (all three smoke shapes), but the user's TinyStories command
+  capped with `-x 3 -ge 0` regressed to `3659.73 ms` average with steps
+  `3634.56`, `3652.68`, and `3666.78 ms`, so fused GELU remains the SM120
+  default.
 
 ## 2026-05-09 — Blackwell build support
 
