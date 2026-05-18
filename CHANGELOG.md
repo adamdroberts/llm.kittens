@@ -1231,6 +1231,11 @@ changelog is the diary; `goal.md` is the plan.
   `1342.93 us`, attproj `493.00 us`, lmhead `28945.54 us`) and TinyStories
   3-step validation slowed to `2901.21 ms` with steps `2878.86`, `2896.43`,
   and `2906.00 ms`. The route remains disabled.
+- Rejected `LLMK_SM120_BIAS_BLOCK_SIZE=384` for the CUDA bias-gradient
+  reduction path. The macro build passed `test_matmul` (`8/8`) and
+  `test_attention` (all three smoke shapes), but TinyStories 3-step validation
+  slowed to `2833.33 ms` with steps `2823.81`, `2831.61`, and `2835.06 ms`.
+  The SM120 bias-gradient block size remains `512`.
 
 ## 2026-05-09 — Blackwell build support
 
