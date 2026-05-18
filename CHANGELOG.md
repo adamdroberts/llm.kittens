@@ -1095,6 +1095,13 @@ changelog is the diary; `goal.md` is the plan.
   focused benchmark was mixed and TinyStories 3-step validation averaged
   `2743.50 ms` with steps `2736.84`, `2741.46`, and `2745.55 ms`, slightly
   slower than the committed `LLMK_SM120_DINP_SUPER_M=8` default.
+- Rejected disabling the 256x128 huge-N forward tile
+  (`LLMK_SM120_HUGE_N_M256=0`) on top of the K-tile 16 stack. The macro build
+  passed `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes)
+  and improved LM-head forward to `25171.34 us`, but it worsened other
+  benchmark rows and TinyStories 3-step validation regressed to `2748.11 ms`
+  with steps `2746.77`, `2744.09`, and `2752.13 ms`. The source default keeps
+  the 256x128 huge-N forward tile.
 
 ## 2026-05-09 — Blackwell build support
 
