@@ -87,6 +87,15 @@ changelog is the diary; `goal.md` is the plan.
   `test_attention` (all three smoke shapes), but TinyStories 3-step validation
   still regressed to `15160.95 ms` with steps `15202.95`, `15265.78`, and
   `15056.12 ms`, so the attention prep launch remains at `3` warps.
+- Rebaselined the current no-extra-macro pure SM120 TK source after the recent
+  rejection-only rounds. `test_matmul` passed on the third run after transient
+  dWeight and MLP-up failures, and `test_attention` passed all three smoke
+  shapes. The focused benchmark still showed pure TK behind cuBLASLt on the
+  material dInput/dWeight and LM-head rows, with attention-projection dWeight
+  `535.35 us` versus cuBLASLt `346.98 us`. TinyStories 3-step validation was
+  unexpectedly slow at `17955.85 ms` with steps `17470.85`, `18412.35`, and
+  `17499.36 ms`; post-run GPU state was idle with no source diffs, so this is
+  recorded as runtime evidence rather than a promoted source change.
 
 ## 2026-05-17 — SM120 RTX 5090 GEMM fallback and pure-TK tuning
 
