@@ -1492,6 +1492,14 @@ changelog is the diary; `goal.md` is the plan.
   versus `21908.70 us`). TinyStories 3-step validation slowed to `3041.63 ms`
   with steps `3091.12`, `3020.36`, and `3062.89 ms`, so the hook was removed
   and plain dInput stays on the accepted `LLMK_SM120_GRAD_K_TILE=64` route.
+- Rejected a small-M-only dWeight N128 swizzle split. The temporary
+  `LLMK_SM120_DWEIGHT_SMALL_M_SUPER_M=3` route passed `test_matmul` (`8/8`) and
+  `test_attention` (all three smoke shapes), but the focused benchmark did not
+  improve the targeted small-M dWeight rows: attention-projection dWeight was
+  `518.85 us` versus cuBLASLt `348.76 us`, and fcproj dWeight was
+  `1572.26 us` versus `1419.39 us`. TinyStories 3-step validation averaged
+  `2814.59 ms` with steps `2806.56`, `2803.64`, and `2825.53 ms`, so the hook
+  was removed.
 
 ## 2026-05-09 — Blackwell build support
 
