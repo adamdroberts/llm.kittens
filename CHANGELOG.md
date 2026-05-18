@@ -1572,6 +1572,12 @@ changelog is the diary; `goal.md` is the plan.
   while leaving dInput and dWeight behind. TinyStories 3-step validation
   regressed to `3017.52 ms` with steps `3015.67`, `3004.43`, and `3030.61 ms`,
   so the wrapper and benchmark hooks were removed.
+- Rejected a cuBLASLt-backed SM120 workspace retest with
+  `LLMK_SM120_CUBLASLT_WORKSPACE_MB=64`. The build passed `test_matmul`
+  (`8/8`) and `test_attention` (all three smoke shapes), but the focused
+  benchmark did not improve the remaining pure-TK gaps and TinyStories 3-step
+  validation averaged `2568.10 ms` with steps `2563.89`, `2561.70`, and
+  `2574.50 ms`, slower than the accepted no-master cuBLASLt default.
 
 ## 2026-05-09 — Blackwell build support
 
