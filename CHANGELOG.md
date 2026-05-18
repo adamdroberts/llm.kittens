@@ -1512,6 +1512,14 @@ changelog is the diary; `goal.md` is the plan.
   (`1278.28 us` versus cuBLASLt `1032.57 us`) and TinyStories 3-step validation
   regressed to `3052.12 ms` with steps `3156.48`, `3059.68`, and `3044.56 ms`.
   Pure SM120 TK builds keep the uncapped register allocation.
+- Rejected a dWeight-specific N128 `K_TILE=64` route. The temporary
+  `LLMK_SM120_DWEIGHT_N128_K_TILE=64` hook kept huge-N forward on K16 and
+  passed `test_matmul` (`8/8`) plus `test_attention` (all three smoke shapes),
+  but the focused benchmark made every dWeight row worse, including qkv
+  `1410.43 us` versus cuBLASLt `1033.24 us` and LM-head `28096.62 us` versus
+  `21501.94 us`. TinyStories 3-step validation regressed to `3163.98 ms` with
+  steps `3171.29`, `3155.54`, and `3172.43 ms`, so the temporary hook was
+  removed.
 
 ## 2026-05-09 — Blackwell build support
 
