@@ -955,6 +955,12 @@ changelog is the diary; `goal.md` is the plan.
   to the 256x64 path, but TinyStories 3-step validation regressed to
   `2815.63 ms` with steps `2812.28`, `2814.61`, and `2816.65 ms`. The
   temporary qkv scope knob was removed.
+- Rejected raising the non-QKV dWeight split-K cap from 8 to 16 under the
+  current 128x128 TN route. The build passed `test_matmul` (`8/8`) and
+  `test_attention` (all three smoke shapes), but the focused benchmark worsened
+  the larger non-QKV dWeight rows and TinyStories 3-step validation regressed
+  to `2822.17 ms` with steps `2818.06`, `2820.82`, and `2823.52 ms`. The
+  temporary split-cap knob was removed.
 
 ## 2026-05-09 — Blackwell build support
 
