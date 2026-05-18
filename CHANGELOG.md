@@ -668,6 +668,13 @@ changelog is the diary; `goal.md` is the plan.
   focused benchmark remained mixed and the required TinyStories 3-step
   validation regressed to `3608.04 ms` with steps `3604.48`, `3615.18`, and
   `3600.90 ms`, so the hook was removed.
+- Rejected reverting the pure SM120 TK huge-N forward route to the old 128x128
+  tile (`LLMK_SM120_HUGE_N_M256=0`) under the O2 default. It passed
+  `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes), but the
+  focused benchmark regressed LM-head forward to `27372.12 us` versus cuBLASLt
+  `21837.13 us`, and the required TinyStories 3-step validation averaged
+  `3616.94 ms` with steps `3655.38`, `3628.57`, and `3605.31 ms`. The promoted
+  256x128 huge-N tile remains the default.
 
 ## 2026-05-09 — Blackwell build support
 
