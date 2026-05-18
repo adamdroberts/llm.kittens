@@ -661,6 +661,13 @@ changelog is the diary; `goal.md` is the plan.
   3-step validation regressed to `3616.17 ms` with steps `3586.78`, `3627.89`,
   and `3604.46 ms`. The dWeight kernel keeps the shared
   `LLMK_SM120_INPLACE_LAYOUT_SWAP=1` default.
+- Rejected a scoped large-M TN no-inplace route for dWeight. The temporary
+  hook kept the normal in-place layout swap for smaller dWeight rows and routed
+  only large-M default-TN rows through the no-inplace alias. It passed
+  `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes), but the
+  focused benchmark remained mixed and the required TinyStories 3-step
+  validation regressed to `3608.04 ms` with steps `3604.48`, `3615.18`, and
+  `3600.90 ms`, so the hook was removed.
 
 ## 2026-05-09 — Blackwell build support
 
