@@ -937,6 +937,11 @@ changelog is the diary; `goal.md` is the plan.
   rows and TinyStories 3-step validation averaged `2812.71 ms` with steps
   `2807.15`, `2811.48`, and `2813.94 ms`, slightly slower than the `3` macro
   retest.
+- Rejected adjacent `LLMK_SM120_DWEIGHT_SUPER_M=5` on the dWeight 128x128 TN
+  route. The build passed `test_matmul` (`8/8`) and `test_attention` (all
+  three smoke shapes), but the focused benchmark remained mixed and TinyStories
+  3-step validation averaged `2813.80 ms` with steps `2808.95`, `2812.76`, and
+  `2814.83 ms`, so the source default stays at `3`.
 
 ## 2026-05-09 — Blackwell build support
 
