@@ -1366,6 +1366,11 @@ changelog is the diary; `goal.md` is the plan.
   attention-projection dWeight (`599.74 us` versus `327.85 us`). TinyStories
   3-step validation regressed to `3154.36 ms` with steps `3205.86`, `3147.39`,
   and `3161.33 ms`, so the temporary hook was removed.
+- Rejected `LLMK_SM120_GRAD_K_TILE=96` before runtime validation. The candidate
+  would reduce dInput loop trips versus the default `64`, but ptxas rejected
+  the 256x64 / 8-warp grad kernels for excessive shared memory (`0x1e000`
+  bytes versus the SM120 limit `0x18c00`), so no smoke, benchmark, or
+  TinyStories validation was run.
 
 ## 2026-05-09 — Blackwell build support
 
