@@ -924,6 +924,13 @@ changelog is the diary; `goal.md` is the plan.
   `2817.55 ms`. This beats the supplied llm.c 3-step average (`2818.23 ms`),
   but the kernel-outperformance goal remains open because the focused dWeight
   rows still trail cuBLASLt.
+- Promoted `LLMK_SM120_DWEIGHT_SUPER_M=3` on top of the new dWeight 128x128
+  TN route. The macro A/B passed `test_matmul` (`8/8`) and `test_attention`
+  (all three smoke shapes), then improved TinyStories 3-step validation to
+  `2812.57 ms` with steps `2808.11`, `2812.02`, and `2813.11 ms`. The
+  no-override source-default rebuild passed the same smokes, stayed mixed in
+  the focused benchmark, and confirmed an improved source-default trainer
+  average of `2814.20 ms` with steps `2809.52`, `2811.78`, and `2816.62 ms`.
 
 ## 2026-05-09 — Blackwell build support
 

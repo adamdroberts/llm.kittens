@@ -74,7 +74,7 @@ constexpr int LOAD_BAR = 0;
 #endif
 
 #ifndef LLMK_SM120_DWEIGHT_SUPER_M
-#define LLMK_SM120_DWEIGHT_SUPER_M 2
+#define LLMK_SM120_DWEIGHT_SUPER_M 3
 #endif
 
 #ifndef LLMK_SM120_INPLACE_LAYOUT_SWAP
