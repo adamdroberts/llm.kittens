@@ -49,6 +49,15 @@ changelog is the diary; `goal.md` is the plan.
   immediate rerun failed the same row with max diff `7.5547` versus the `0.50`
   tolerance. No focused benchmark or TinyStories 3-step validation was run
   because the dInput kernel was numerically unsafe.
+- Rejected raising `LLMK_SM120_HUGE_N_THRESHOLD` to `65536`, which routes the
+  LM-head forward path away from the huge-N 256x128 tile. The build passed
+  `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes), and the
+  focused benchmark improved LM-head forward to `26623.37 us`, but it still
+  trailed cuBLASLt (`23620.97 us`) and left the material dInput/dWeight rows
+  behind, including attention-projection dWeight `585.34 us` versus
+  `351.03 us`. TinyStories 3-step validation regressed to `3784.68 ms` with
+  steps `3739.25`, `3787.55`, and `3781.81 ms`, so the threshold remains
+  `8192`.
 
 ## 2026-05-17 — SM120 RTX 5090 GEMM fallback and pure-TK tuning
 
