@@ -973,6 +973,12 @@ changelog is the diary; `goal.md` is the plan.
   versus `0.120` tolerance), including after splitting the SM120 forward opt-in
   away from the TK backward warp-reduction macro. The temporary SM120
   LayerNorm opt-in was removed and the CUDA fallback remains active.
+- Rejected disabling the SM120 forward `N % 96` GEMM tile
+  (`LLMK_SM120_FORWARD_N96=0`) under the current pure-TK defaults. The build
+  passed `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes),
+  but the focused benchmark badly regressed the qkv, attention-projection, MLP,
+  and projection forward rows, and TinyStories 3-step validation slowed to
+  `2874.11 ms` with steps `2868.20`, `2872.32`, and `2875.90 ms`.
 
 ## 2026-05-09 — Blackwell build support
 
