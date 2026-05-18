@@ -1375,6 +1375,14 @@ changelog is the diary; `goal.md` is the plan.
   `test_matmul` deterministically hit an illegal memory access on the fused
   dGELU dInput smoke row; an immediate rerun failed at the same row. No
   focused benchmark or TinyStories validation was run.
+- Rejected disabling the SM120 fused forward-bias epilogue with
+  `LLMK_SM120_FUSE_BIAS=0`. The macro build passed `test_matmul` (`8/8`) and
+  `test_attention` (all three smoke shapes), but the focused benchmark
+  regressed the bias-bearing forward rows sharply, including qkv forward
+  (`1543.98 us` versus cuBLASLt `1070.10 us`) and attention-projection forward
+  (`513.88 us` versus `404.97 us`). TinyStories 3-step validation regressed to
+  `3108.64 ms` with steps `3096.47`, `3109.00`, and `3108.28 ms`, so the
+  fused bias epilogue remains enabled.
 
 ## 2026-05-09 — Blackwell build support
 
