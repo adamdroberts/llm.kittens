@@ -528,6 +528,13 @@ changelog is the diary; `goal.md` is the plan.
   The required TinyStories 3-step validation averaged `3614.52 ms` with steps
   `3630.85`, `3624.55`, and `3604.48 ms`, so the default split-K cap remains
   unchanged.
+- Rejected a temporary dWeight-only 64x64 TN tile for the wide dWeight route.
+  The hook passed `test_matmul` (`8/8`) and `test_attention` (all three smoke
+  shapes) and improved the direct qkv dWeight row to `1.34x` slower than
+  cuBLASLt, but the other dWeight rows stayed between `1.35x` and `1.63x`
+  slower and the required TinyStories 3-step validation averaged
+  `3624.98 ms` with steps `3627.30`, `3616.67`, and `3633.29 ms`. The hook was
+  removed and the wide dWeight route remains on the current 256x64 tile.
 
 ## 2026-05-09 — Blackwell build support
 
