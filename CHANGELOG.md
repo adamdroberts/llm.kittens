@@ -1533,6 +1533,12 @@ changelog is the diary; `goal.md` is the plan.
   but the dWeight rows still trailed cuBLASLt and TinyStories 3-step validation
   regressed to `3007.03 ms` with steps `3020.74`, `3004.63`, and `3009.44 ms`.
   The temporary route was removed.
+- Rejected narrowing the N64/K16 dWeight route to qkv only. The
+  `LLMK_SM120_DWEIGHT_QKV_N64_K16=1` build passed the matmul and attention
+  smokes and improved qkv dWeight to `1126.56 us` in the focused benchmark
+  (`1.04x` slower than cuBLASLt), but TinyStories 3-step validation regressed
+  badly to `3387.68 ms` with steps `3396.48`, `3372.17`, and `3403.20 ms`, so
+  the temporary route was removed.
 
 ## 2026-05-09 — Blackwell build support
 
