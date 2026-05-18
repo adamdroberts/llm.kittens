@@ -949,6 +949,12 @@ changelog is the diary; `goal.md` is the plan.
   TinyStories 3-step validation regressed to `2814.69 ms` with steps
   `2811.81`, `2812.75`, and `2816.63 ms`. The temporary wide-N128 hook was
   removed.
+- Rejected scoping the dWeight 128x128 TN tile route to non-QKV shapes only.
+  The build passed `test_matmul` (`8/8`) and `test_attention` (all three smoke
+  shapes), and qkv dWeight improved in the focused benchmark when it fell back
+  to the 256x64 path, but TinyStories 3-step validation regressed to
+  `2815.63 ms` with steps `2812.28`, `2814.61`, and `2816.65 ms`. The
+  temporary qkv scope knob was removed.
 
 ## 2026-05-09 — Blackwell build support
 
