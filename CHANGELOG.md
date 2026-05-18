@@ -1261,6 +1261,11 @@ changelog is the diary; `goal.md` is the plan.
   slowed to `2926.51 ms` with steps `2898.79`, `2928.46`, and `2924.56 ms`.
   The temporary hook was removed and the N96 forward tile again uses
   `LLMK_SM120_K_TILE=32`.
+- Rejected a temporary forward-only `LLMK_SM120_N96_K_TILE=16` hook for the
+  same 128x96 SM120 forward tile. The candidate built, but `test_matmul`
+  failed before benchmark or TinyStories validation with an illegal memory
+  access on the GPT-2 124M MLP-up forward row. The temporary hook was removed,
+  so the N96 forward tile remains on the default `LLMK_SM120_K_TILE=32`.
 
 ## 2026-05-09 — Blackwell build support
 
