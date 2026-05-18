@@ -8,6 +8,16 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Rejected a current-source forward-only `LLMK_SM120_FORWARD_SUPER_M=8` hook
+  after a macro pass failed to reproduce as a promoted default. The macro build
+  passed `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes),
+  then TinyStories 3-step validation averaged `2835.17 ms` with steps
+  `2827.83`, `2836.51`, and `2841.16 ms` (`2838.83 ms` excluding first-step
+  warmup). Promoting the same value as the source default also passed both smoke
+  gates, but the required no-override 3-step validation regressed to
+  `2848.74 ms` with steps `2837.18`, `2852.21`, and `2856.82 ms`
+  (`2854.52 ms` excluding first-step warmup), slower than the best accepted
+  `LLMK_SM120_SUPER_M=7` run. The temporary hook was removed.
 - Rejected `LLMK_SM120_ATTN_BWD_BLOCK=32` after retesting the attention
   backward block size on the current pure SM120 TK source. The macro build
   passed `test_attention` across all three smoke shapes, but TinyStories
