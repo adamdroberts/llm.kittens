@@ -786,6 +786,10 @@ changelog is the diary; `goal.md` is the plan.
   smokes and averaged `2829.34 ms` with steps `2824.34`, `2827.24`, and
   `2831.44 ms`, bringing pure TK within noise of the supplied llm.c baseline
   while the kernel-outperformance goal remains open.
+- Rejected the adjacent global `LLMK_SM120_SUPER_M=12` swizzle. The candidate
+  compiled, but `test_matmul` failed the plain dInput row on two consecutive
+  runs (`6.4219` and `6.8789` max diff versus `0.50` tolerance), so it was not
+  benchmarked or validated with TinyStories training.
 
 ## 2026-05-09 — Blackwell build support
 
