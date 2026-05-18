@@ -8,6 +8,12 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Rejected macro-only `LLMK_SM120_BACKWARD_N96=1` at the smoke gate. The build
+  completed for `test_matmul`, `test_attention`, `bench_sm120_matmul`, and
+  `train_gpt2cu`, but `test_matmul` failed accumulated dWeight with max diff
+  `1.5312` versus the `0.50` tolerance after passing the other seven rows. No
+  focused benchmark or TinyStories 3-step validation was run because the
+  candidate was numerically unsafe.
 - Rejected deferring the final training-step loss synchronization from
   `gpt2_backward_and_reduce()` into the gradient-norm scalar copy. The trainer
   build passed with pure SM120 TK flags, but TinyStories 3-step validation
