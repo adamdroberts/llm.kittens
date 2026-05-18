@@ -1063,6 +1063,13 @@ changelog is the diary; `goal.md` is the plan.
   3-step validation averaged `2744.67 ms` with steps `2739.28`, `2742.32`,
   and `2747.01 ms`, too small a timing difference to justify worse kernel
   evidence.
+- Rejected retesting `LLMK_SM120_DWEIGHT_SPLIT_K=32` on top of the K-tile 16
+  and dWeight `SUPER_M=2` defaults. The macro build passed `test_matmul`
+  (`8/8`) and `test_attention` (all three smoke shapes), and improved qkv
+  dWeight to `1156.05 us`, but it worsened attproj forward and LM-head dWeight
+  versus the committed split-K `16` default. TinyStories 3-step validation
+  averaged `2746.83 ms` with steps `2741.67`, `2743.91`, and `2749.76 ms`, so
+  the qkv-only split-K expansion stays rejected.
 
 ## 2026-05-09 — Blackwell build support
 
