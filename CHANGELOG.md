@@ -1148,6 +1148,15 @@ changelog is the diary; `goal.md` is the plan.
   MLP-up row) and `test_attention`, but TinyStories 3-step validation regressed
   to `3111.17 ms` with steps `3105.52`, `3108.17`, and `3114.17 ms`. The
   default non-atomic dQ path remains in place.
+- Rejected retesting the adjacent shared forward/huge-N swizzle
+  `LLMK_SM120_SUPER_M=8` on top of the current K-tile 16, dWeight
+  `SUPER_M=2`, and dInput `SUPER_M=8` stack. The macro build passed
+  `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes), and
+  the focused benchmark improved qkv forward to `1073.78 us` versus cuBLASLt
+  `1109.21 us`, but dInput and dWeight rows still trailed cuBLASLt and
+  TinyStories 3-step validation regressed to `2747.90 ms` with steps
+  `2742.96`, `2745.97`, and `2749.82 ms`. The shared SM120 swizzle remains at
+  the source default `9`.
 
 ## 2026-05-09 — Blackwell build support
 
