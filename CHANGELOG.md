@@ -648,6 +648,12 @@ changelog is the diary; `goal.md` is the plan.
   TinyStories 3-step validation regressed to `3621.31 ms` with steps
   `3595.30`, `3623.52`, and `3619.10 ms`. The SM120 bias-gradient block size
   remains `512`.
+- Rejected `LLMK_SM120_BIAS_BLOCK_SIZE=256` for the same CUDA bias-gradient
+  reduction path. It passed `test_matmul` (`8/8`) and `test_attention` (all
+  three smoke shapes), but the focused benchmark did not expose a useful GEMM
+  side-effect and the required TinyStories 3-step validation regressed to
+  `3617.33 ms` with steps `3567.63`, `3630.49`, and `3604.18 ms`. The SM120
+  bias-gradient block size remains `512`.
 
 ## 2026-05-09 — Blackwell build support
 
