@@ -197,6 +197,20 @@ static void tk_dweight(floatX* out, const floatX* dout, const floatX* inp,
     }
 }
 
+static void tk_dweight_accum(floatX* out, const floatX* dout, const floatX* inp,
+                             floatX* scratch, size_t scratch_elements,
+                             const Shape& s, cudaStream_t stream) {
+    if (!matmul_dispatch_tk_atb_splitk(
+            out, dout, inp, s.N, s.K, s.M, stream,
+            /*accumulate=*/true, scratch, scratch_elements)) {
+        matmul_dispatch_tk_atb(scratch, dout, inp, s.N, s.K, s.M, stream);
+        const size_t elements = (size_t)s.N * s.K;
+        matmul_add_inplace_kernel<<<CEIL_DIV(elements, 256), 256, 0, stream>>>(
+            out, scratch, elements);
+        cudaCheck(cudaGetLastError());
+    }
+}
+
 static void cublaslt_dweight(floatX* out, const floatX* dout, const floatX* inp,
                              const Shape& s, cudaStream_t stream) {
     llmk::cublaslt_sm120::matmul(
@@ -204,6 +218,15 @@ static void cublaslt_dweight(floatX* out, const floatX* dout, const floatX* inp,
         /*transA=*/false, /*transB=*/true,
         /*batch_count=*/0, /*strideA=*/0, /*strideB=*/0, /*strideOut=*/0,
         /*accumulate=*/false, /*pre_gelu=*/nullptr, /*backward=*/true);
+}
+
+static void cublaslt_dweight_accum(floatX* out, const floatX* dout, const floatX* inp,
+                                   const Shape& s, cudaStream_t stream) {
+    llmk::cublaslt_sm120::matmul(
+        out, inp, dout, nullptr, s.K, s.N, s.M, stream,
+        /*transA=*/false, /*transB=*/true,
+        /*batch_count=*/0, /*strideA=*/0, /*strideB=*/0, /*strideOut=*/0,
+        /*accumulate=*/true, /*pre_gelu=*/nullptr, /*backward=*/true);
 }
 
 static void bench_shape(const Shape& s) {
@@ -270,6 +293,16 @@ static void bench_shape(const Shape& s) {
     float cb_dw = bench_us([&] { cublaslt_dweight(DW, O, A, s, 0); }, warmup, iters);
     printf("  dW     TK %9.2f us | cuBLASLt %9.2f us | TK/cuBLASLt %.2fx\n",
            tk_dw, cb_dw, tk_dw / cb_dw);
+    fill_bytes(DW, w_bytes, 4);
+    fill_bytes(DWScratch, (size_t)LLMK_SM120_DWEIGHT_SPLIT_K * w_bytes, 0);
+    float tk_dw_acc = bench_us([&] {
+        tk_dweight_accum(DW, O, A, DWScratch,
+                         (size_t)LLMK_SM120_DWEIGHT_SPLIT_K * s.N * s.K, s, 0);
+    }, warmup, iters);
+    fill_bytes(DW, w_bytes, 4);
+    float cb_dw_acc = bench_us([&] { cublaslt_dweight_accum(DW, O, A, s, 0); }, warmup, iters);
+    printf("  dW+=   TK %9.2f us | cuBLASLt %9.2f us | TK/cuBLASLt %.2fx\n",
+           tk_dw_acc, cb_dw_acc, tk_dw_acc / cb_dw_acc);
     cudaCheck(cudaFree(DW));
     cudaCheck(cudaFree(DWScratch));
 

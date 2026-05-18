@@ -102,6 +102,16 @@ changelog is the diary; `goal.md` is the plan.
   `2648.94 ms` with steps `2654.84`, `2646.18`, and `2651.71 ms`. This keeps
   the slowdown isolated to pure TK and confirms the fallback still beats the
   supplied llm.c baseline in the current runtime.
+- Extended `bench_sm120_matmul` to time the accumulated dWeight (`dW+=`) path
+  used by seven of the eight GPT-2 gradient-accumulation microsteps. The smoke
+  gate hit one transient accumulated dWeight failure, then reran cleanly with
+  `test_matmul` `8/8`; `test_attention` passed all three shapes. The new
+  focused benchmark shows accumulated dWeight still behind cuBLASLt, especially
+  attention-projection dW+= (`566.68 us` vs `386.60 us`) and qkv dW+=
+  (`1394.36 us` vs `1158.64 us`). The required TinyStories 3-step validation
+  averaged `26467.81 ms` with steps `26369.23`, `28045.54`, and `24890.08 ms`,
+  so accumulated dWeight remains a target but does not alone explain the full
+  pure-TK trainer slowdown.
 
 ## 2026-05-17 — SM120 RTX 5090 GEMM fallback and pure-TK tuning
 
