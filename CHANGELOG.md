@@ -615,6 +615,13 @@ changelog is the diary; `goal.md` is the plan.
   TinyStories 3-step validation regressed to `3615.00 ms` with steps
   `3648.77`, `3618.72`, and `3611.28 ms`. The TN kernel launch bounds remain
   `__launch_bounds__(T::NUM_THREADS, 1)`.
+- Rejected pure SM120 TK `FORCE_NVCC_O=1` codegen. The first `test_matmul`
+  pass had a transient MLP-up forward failure, but an immediate rerun passed
+  `8/8` and `test_attention` passed all three smoke shapes. The focused
+  benchmark remained mixed with all material dWeight rows and LM-head forward
+  still behind cuBLASLt, and the required TinyStories 3-step validation
+  averaged `3581.32 ms` with steps `3616.81`, `3585.58`, and `3577.06 ms`.
+  Pure SM120 TK builds therefore keep the current `FORCE_NVCC_O=2` default.
 
 ## 2026-05-09 — Blackwell build support
 
