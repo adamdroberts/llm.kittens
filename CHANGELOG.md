@@ -351,6 +351,13 @@ changelog is the diary; `goal.md` is the plan.
   no step progress and was terminated as CPU-bound after roughly two minutes
   before initial validation loss, with the trainer process at about `99.7%`
   CPU, so the hook was removed.
+- Rejected an rsqrt-based approximate forward GELU hook for the pure SM120 TK
+  path. The `LLMK_SM120_FORWARD_GELU_RSQRT=1` build passed `test_matmul`
+  (`8/8`) and improved the direct fused MLP-up benchmark row to `1521.15 us`,
+  but it still trailed cuBLASLt at `1435.28 us`, and the direct dInput/dWeight
+  rows stayed behind. The required TinyStories 3-step validation again made no
+  step progress after allocation and was terminated with the trainer at about
+  `99.6%` CPU, so the hook was removed.
 
 ## 2026-05-09 — Blackwell build support
 
