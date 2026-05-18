@@ -1440,6 +1440,11 @@ changelog is the diary; `goal.md` is the plan.
   deterministically hit an illegal memory access on the GPT-2 124M MLP-up
   forward row; an immediate rerun failed at the same row. No focused benchmark
   or TinyStories validation was run.
+- Rejected a temporary 2-warp forward N96 tile. The
+  `LLMK_SM120_FORWARD_N96_WARPS2=1` build completed, but `test_matmul`
+  deterministically failed the GPT-2 124M MLP-up forward row with max diff
+  `7.1562` on the first run and `7.8750` on the immediate rerun, versus the
+  `0.50` tolerance. No focused benchmark or TinyStories validation was run.
 
 ## 2026-05-09 — Blackwell build support
 
