@@ -483,6 +483,11 @@ changelog is the diary; `goal.md` is the plan.
   `test_matmul` failed the GPT-2 MLP-up and LM-head rows (`7.0625` and
   `10.3359` max diff versus `0.50` tolerance), so no benchmark or TinyStories
   3-step validation was run and the source edit was reverted.
+- Rejected explicit master weights for the current pure SM120 TK path (`-w 1`).
+  The pure-TK build passed `test_matmul` (`8/8`) and `test_attention` (all three
+  smoke shapes), but the required TinyStories validation stalled before the
+  first step and was killed at `99.7%` CPU after roughly `01:33`, matching the
+  known invalid CPU-bound failure mode.
 
 ## 2026-05-09 — Blackwell build support
 
