@@ -21,8 +21,18 @@ REMOVE_FILES = rm -f
 OUTPUT_FILE = -o $@
 CUDA_OUTPUT_FILE = -o $@
 
-FORCE_NVCC_O ?= 3
 DEVICE_ARCH ?= SM90
+SM120_USE_CUBLASLT_GEMM ?= 1
+
+ifeq ($(DEVICE_ARCH),SM120)
+  ifeq ($(SM120_USE_CUBLASLT_GEMM),0)
+    FORCE_NVCC_O ?= 2
+  else
+    FORCE_NVCC_O ?= 3
+  endif
+else
+  FORCE_NVCC_O ?= 3
+endif
 
 ifeq ($(DEVICE_ARCH),SM90)
   KITTENS_ARCH_DEFINE := -DKITTENS_SM90
@@ -75,7 +85,6 @@ NVCC_LDFLAGS = -lrt -lpthread -ldl -lcuda -lcudadevrt -lcudart_static
 NVCC_INCLUDES =
 NVCC_LDLIBS =
 
-SM120_USE_CUBLASLT_GEMM ?= 1
 ifeq ($(DEVICE_ARCH),SM120)
   ifeq ($(SM120_USE_CUBLASLT_GEMM),1)
     NVCC_FLAGS += -DLLMK_SM120_USE_CUBLASLT_GEMM

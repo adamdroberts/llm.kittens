@@ -578,6 +578,15 @@ changelog is the diary; `goal.md` is the plan.
   and averaged `3580.59 ms` with steps `3582.89`, `3567.92`, and `3593.27 ms`.
   This is the fastest current pure-TK source default, but pure TK still trails
   the cuBLASLt-backed SM120 default and the supplied llm.c baseline.
+- Changed the Makefile default so pure SM120 TK builds
+  (`DEVICE_ARCH=SM120 SM120_USE_CUBLASLT_GEMM=0`) use `FORCE_NVCC_O=2`, while
+  cuBLASLt-backed SM120 builds keep `O3`. On top of the accepted huge-N M256
+  route, the explicit O2 build passed `test_matmul` (`8/8`) and
+  `test_attention` (all three smoke shapes) and averaged `3565.63 ms` on the
+  required TinyStories 3-step validation. A no-override rebuild confirmed the
+  default now emits `-O2`, passed the same smokes, and averaged `3568.07 ms`
+  with steps `3609.56`, `3554.65`, and `3581.49 ms`. This is faster than the
+  O3/M256 source default, but pure TK still remains behind cuBLASLt and llm.c.
 
 ## 2026-05-09 — Blackwell build support
 
