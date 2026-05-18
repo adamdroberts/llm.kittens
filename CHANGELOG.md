@@ -1007,6 +1007,13 @@ changelog is the diary; `goal.md` is the plan.
   `2753.29 ms`. The no-override source-default rebuild passed the same smokes,
   confirmed the benchmark improvement, and averaged `2748.57 ms` with steps
   `2743.59`, `2745.67`, and `2751.47 ms`.
+- Rejected retesting adjacent `LLMK_SM120_DWEIGHT_SUPER_M=4` after promoting
+  the huge-N/N128 K tile to `32`. The macro build passed `test_matmul` (`8/8`
+  on the immediate rerun after the known transient MLP-up row) and
+  `test_attention` (all three smoke shapes), but the focused benchmark stayed
+  mixed and the TinyStories 3-step validation averaged `2750.21 ms` with steps
+  `2743.93`, `2748.14`, and `2752.27 ms`, slower than the committed
+  `LLMK_SM120_DWEIGHT_SUPER_M=3` source default.
 
 ## 2026-05-09 — Blackwell build support
 
