@@ -8,6 +8,13 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Rejected deferring the final training-step loss synchronization from
+  `gpt2_backward_and_reduce()` into the gradient-norm scalar copy. The trainer
+  build passed with pure SM120 TK flags, but TinyStories 3-step validation
+  regressed to `2907.85 ms` average with steps `2905.18`, `2905.01`, and
+  `2913.37 ms` (`2909.19 ms` excluding the first-step warmup in the trainer's
+  total-average line), so the source keeps the explicit final backward
+  synchronization and mean-loss scaling.
 - Rejected `LLMK_SM120_DWEIGHT_SPLIT_K_STREAMS=0`. The stream-disabled dWeight
   split-K build passed `test_attention`, and `test_matmul` passed on rerun after
   one transient GPT-2 MLP-up forward diff. The focused benchmark showed the
