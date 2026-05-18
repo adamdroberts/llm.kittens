@@ -328,6 +328,12 @@ changelog is the diary; `goal.md` is the plan.
   benchmark rows, including qkv and attention projection at `1.48x` and `1.47x`
   slower than cuBLASLt. `LLMK_SM120_SUPER_M=6` failed the plain dInput smoke
   row, so the current defaults remain in place.
+- Rejected a dWeight TN N-swizzle experiment before benchmarking. The disabled
+  compile-time hook grouped consecutive output-N tiles for each output-M tile
+  to try to reuse the A tile in dWeight, but
+  `EXTRA_NVCC_FLAGS='-DLLMK_SM120_DWEIGHT_SWIZZLE_N=1 -DLLMK_SM120_DWEIGHT_SUPER_N=8'`
+  failed `test_matmul` on the GPT-2 MLP-up forward row with max diff `6.0000`,
+  so the hook was removed.
 
 ## 2026-05-09 — Blackwell build support
 
