@@ -687,6 +687,11 @@ changelog is the diary; `goal.md` is the plan.
   ptxas reported the generated 256x128x96 huge-N kernel used `0x24000` bytes
   of shared data, above the SM120 `0x18c00` limit. The huge-N K tile remains
   `64`.
+- Rejected a temporary 512x64 huge-N forward tile for pure SM120 TK. The
+  `LLMK_SM120_HUGE_N_M512_N64=1` build failed at `test_matmul` compile time:
+  ptxas reported the generated 512x64x64 huge-N kernel also used `0x24000`
+  bytes of shared data, above the SM120 `0x18c00` limit. The huge-N tile
+  remains 256x128x64.
 
 ## 2026-05-09 — Blackwell build support
 
