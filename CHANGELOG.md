@@ -181,6 +181,12 @@ changelog is the diary; `goal.md` is the plan.
   averaged `2895.13 ms` with steps `2892.79`, `2883.09`, and `2907.17 ms`,
   improving the pure-TK default while still trailing the supplied llm.c
   baseline and the SM120 cuBLASLt fallback.
+- Rejected a temporary split-K dWeight direct-first hook that wrote split part
+  0 directly to `dweight` and reduced only the remaining partials. The hook
+  passed `test_matmul` (`8/8`) and `test_attention` (all three shapes), but the
+  focused benchmark was mixed and TinyStories 3-step validation regressed to
+  `2922.69 ms` with steps `2902.44`, `2919.40`, and `2925.98 ms`, so the hook
+  was removed.
 
 ## 2026-05-17 — SM120 RTX 5090 GEMM fallback and pure-TK tuning
 
