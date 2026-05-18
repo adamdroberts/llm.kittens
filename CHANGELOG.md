@@ -1485,6 +1485,13 @@ changelog is the diary; `goal.md` is the plan.
   the required TinyStories 3-step validation averaged `2799.31 ms` with steps
   `2779.75`, `2798.74`, and `2799.88 ms`, slower than the current pure-TK
   source default, so the hook was removed.
+- Rejected a plain-dInput-only `K_TILE=96` route. The temporary
+  `LLMK_SM120_DINP_K96=1` build passed the existing matmul and attention smokes,
+  but the focused benchmark regressed every dInput row, including qkv
+  (`1370.29 us` versus cuBLASLt `1048.70 us`) and LM-head (`29623.68 us`
+  versus `21908.70 us`). TinyStories 3-step validation slowed to `3041.63 ms`
+  with steps `3091.12`, `3020.36`, and `3062.89 ms`, so the hook was removed
+  and plain dInput stays on the accepted `LLMK_SM120_GRAD_K_TILE=64` route.
 
 ## 2026-05-09 — Blackwell build support
 
