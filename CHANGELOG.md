@@ -8,6 +8,13 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Rejected a current-source retest of the scoped 64x128 small-M dWeight TN
+  tile route, `LLMK_SM120_DWEIGHT_N128_M64=1`, for `M <= 1024` and
+  `N % 128 == 0` rows. The macro build passed `test_matmul` (`8/8`) and
+  `test_attention` (all three smoke shapes), but TinyStories 3-step validation
+  regressed to `2862.49 ms` with steps `2854.01`, `2865.49`, and
+  `2867.98 ms` (`2866.73 ms` excluding first-step warmup), slower than the
+  best accepted `LLMK_SM120_SUPER_M=7` run. The temporary route was removed.
 - Rejected extending LM-head dWeight deferral past final LNF by adding a
   compact LayerNorm/dbias scratch buffer and waiting only before the first
   attention-backward scratch reuse. The macro build passed `test_matmul`
