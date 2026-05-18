@@ -8,6 +8,12 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Rejected the SM120 attention fallback comparison with
+  `LLMK_DISABLE_TK_MHA_BWD` at the smoke gate. The macro build completed, but
+  `test_attention` failed reproducibly on the `B=1 T=256 NH=2 HS=64` forward
+  row with max diff `0.514648` versus the `0.080` tolerance, despite the
+  `T=192` row passing. No TinyStories 3-step timing was run because the
+  fallback build was numerically unsafe.
 - Re-profiled the current `LLMK_SM120_SUPER_M=7` pure-TK source with
   `LLMK_SM120_PROFILE_TRAIN_STEP`. The profiled TinyStories 3-step run averaged
   `2879.36 ms` with expected profiler overhead. The dominant buckets remain
