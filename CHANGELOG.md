@@ -44,6 +44,11 @@ changelog is the diary; `goal.md` is the plan.
   max diff `7.9375` versus the `0.50` tolerance. No focused benchmark or
   TinyStories 3-step validation was run because the dInput kernel was
   numerically unsafe.
+- Rejected macro-only `LLMK_SM120_DINP_SUPER_M=15` at the smoke gate. The
+  first `test_matmul` run failed plain dInput with max diff `7.2812`, and an
+  immediate rerun failed the same row with max diff `7.5547` versus the `0.50`
+  tolerance. No focused benchmark or TinyStories 3-step validation was run
+  because the dInput kernel was numerically unsafe.
 
 ## 2026-05-17 — SM120 RTX 5090 GEMM fallback and pure-TK tuning
 
