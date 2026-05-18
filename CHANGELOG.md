@@ -622,6 +622,12 @@ changelog is the diary; `goal.md` is the plan.
   still behind cuBLASLt, and the required TinyStories 3-step validation
   averaged `3581.32 ms` with steps `3616.81`, `3585.58`, and `3577.06 ms`.
   Pure SM120 TK builds therefore keep the current `FORCE_NVCC_O=2` default.
+- Rejected a macro-only `LLMK_SM120_DINP_SUPER_M=2` sweep for pure SM120 TK
+  dInput rows. It passed `test_matmul` (`8/8`) and `test_attention` (all three
+  smoke shapes), but the focused benchmark did not improve the NN dInput rows
+  and the required TinyStories 3-step validation regressed to `3585.48 ms`
+  with steps `3578.11`, `3595.51`, and `3575.46 ms`. dInput keeps the global
+  `LLMK_SM120_SUPER_M=8` default.
 
 ## 2026-05-09 — Blackwell build support
 
