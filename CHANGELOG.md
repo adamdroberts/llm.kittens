@@ -8,6 +8,13 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
+- Rejected deferring only QKV dWeight split-K finish until after LN1 backward
+  with `LLMK_SM120_DEFER_QKV_DWEIGHT_FINISH=1`. The macro build passed
+  `test_matmul` (`8/8`) and `test_attention` (all three smoke shapes), but
+  TinyStories 3-step validation averaged `2843.11 ms` with steps `2836.81`,
+  `2840.89`, and `2851.63 ms` (`2846.26 ms` excluding first-step warmup),
+  slower than the best accepted `LLMK_SM120_SUPER_M=7` run. The temporary
+  scheduling hook was removed.
 - Rejected retesting `LLMK_SM120_DWEIGHT_SUPER_M=6` on the current source. The
   first `test_matmul` hit the known transient MLP-up forward row, the immediate
   rerun passed `8/8`, and `test_attention` passed all three smoke shapes, but
