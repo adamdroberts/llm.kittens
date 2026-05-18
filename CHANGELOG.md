@@ -416,6 +416,13 @@ changelog is the diary; `goal.md` is the plan.
 - Retested the same cuBLASLt-backed 3-step run with ZeRO disabled via `-z 0`.
   It averaged `3262.44 ms`, slightly slower than the current `-z 1` rebaseline,
   so single-process ZeRO-1 overhead is not the current SM120 bottleneck.
+- Changed the SM120 `train_gpt2cu` default to disable FP32 master weights unless
+  `-w` is passed explicitly. On RTX 5090, the explicit `-w 0` probe averaged
+  `2481.98 ms`, and the patched source-default run of the user's TinyStories
+  command capped with `-x 3` showed `use_master_weights disabled` and averaged
+  `2481.12 ms` with steps `2484.93`, `2478.22`, and `2484.03 ms`. This restores
+  a significant margin over the supplied llm.c baseline while preserving
+  explicit `-w 1` for master-weight runs.
 
 ## 2026-05-09 — Blackwell build support
 

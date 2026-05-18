@@ -42,7 +42,7 @@ GPT-3 descriptor variants (`gpt3:c384` … `gpt3:c12288`).
 | `-k <name>` | `cosine` | LR schedule name (`cosine`, `linear`). |
 | `-sl <float>` | `0.0` (off) | Skip optimizer step if loss z-score exceeds this. |
 | `-sg <float>` | `0.0` (off) | Skip optimizer step if gradient-norm z-score exceeds this. |
-| `-w <0\|1>` | `1` | Keep FP32 master weights. |
+| `-w <0\|1>` | `1` (`0` on SM120) | Keep FP32 master weights. SM120 defaults this off after RTX 5090 TinyStories timing showed the master-copy optimizer path dominating the 3-step smoke. |
 
 ### Evaluation and sampling
 

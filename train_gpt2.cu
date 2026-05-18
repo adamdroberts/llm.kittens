@@ -1573,7 +1573,7 @@ void error_usage() {
     fprintf(stderr, "  -a <int>    overfit a single batch? 0/1. useful for debugging\n");
     // numerics
     fprintf(stderr, "  -f <int>    enable_tf32 override (default: 1, set to 0 to disable tf32)\n");
-    fprintf(stderr, "  -w <int>    keep f32 copy of weights for the optimizer? (default: 1)\n");
+    fprintf(stderr, "  -w <int>    keep f32 copy of weights for the optimizer? (default: 1, SM120 default: 0)\n");
     fprintf(stderr, "  -ge <int>   gelu fusion: 0=none, 1=TK forward epilogue, 2=reserved (default: 0)\n");
     // memory management
     fprintf(stderr, "  -z <int>    zero_stage, runtime stages: 0,1,2,3\n");
@@ -1683,7 +1683,7 @@ int main(int argc, char *argv[]) {
     int overfit_single_batch = 0; // useful for debugging, 1 = only load a single data batch once
     int max_steps = -1;
     int override_enable_tf32 = 1;
-    int use_master_weights = 1;
+    int use_master_weights = -1; // -1 => per-architecture default
     int gelu_fusion = -1; // 0 = none, 1 = TK forward epilogue, 2 = reserved (-1 => per-GPU default)
     int recompute = 1; // recompute during backward setting, 0 = none, 1 = recompute gelu
     int zero_stage = 0; // Zero Optimization Stage for Multi-GPU training
@@ -1738,6 +1738,14 @@ int main(int argc, char *argv[]) {
         else if (argv[i][1] == 'n' && argv[i][2] == 'k') { checkpoints_keep = atoi(argv[i+1]); }
         else if (argv[i][1] == 'n' && argv[i][2] == 'm') { major_checkpoint_every = atoi(argv[i+1]); }
         else { error_usage(); }
+    }
+
+    if (use_master_weights == -1) {
+#if defined(KITTENS_SM120)
+        use_master_weights = 0;
+#else
+        use_master_weights = 1;
+#endif
     }
     validate_zero_stage_request(zero_stage);
 
