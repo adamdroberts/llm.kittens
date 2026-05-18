@@ -587,6 +587,14 @@ changelog is the diary; `goal.md` is the plan.
   default now emits `-O2`, passed the same smokes, and averaged `3568.07 ms`
   with steps `3609.56`, `3554.65`, and `3581.49 ms`. This is faster than the
   O3/M256 source default, but pure TK still remains behind cuBLASLt and llm.c.
+- Rejected a huge-N-only `LLMK_SM120_HUGE_N_SUPER_M=4` hook for the pure SM120
+  TK LM-head forward path. The candidate build passed `test_matmul` (`8/8`)
+  and `test_attention` (all three smoke shapes), but focused benchmarking kept
+  LM-head forward at `24893.04 us` versus cuBLASLt `21835.15 us`, with dWeight
+  still behind on every material row. The required TinyStories 3-step
+  validation averaged `3567.69 ms` with steps `3566.36`, `3558.51`, and
+  `3576.86 ms`, effectively identical to the current pure-TK default and still
+  behind the supplied llm.c baseline, so the hook was removed.
 
 ## 2026-05-09 — Blackwell build support
 
