@@ -1590,6 +1590,12 @@ changelog is the diary; `goal.md` is the plan.
   up-projection forward row (`7.5078` then `6.8633` max diff versus `0.50`
   tolerance), so no focused benchmark or TinyStories 3-step validation was run.
   The SM120 bias-gradient block size remains `512`.
+- Rejected `LLMK_SM120_DINP_SUPER_M=3` under the current K-tile 16/dWeight
+  stack. The macro build passed `test_matmul` (`8/8`) and `test_attention`
+  (all three smoke shapes), but the focused benchmark did not improve the
+  material dInput rows and TinyStories 3-step validation regressed to
+  `3358.86 ms` with steps `3349.12`, `3366.50`, and `3351.22 ms`. The dInput
+  swizzle remains `8`.
 
 ## 2026-05-09 — Blackwell build support
 
