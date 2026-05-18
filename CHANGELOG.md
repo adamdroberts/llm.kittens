@@ -159,6 +159,11 @@ changelog is the diary; `goal.md` is the plan.
   validation averaged `2907.14 ms` with steps `2898.32`, `2905.02`, and
   `2909.25 ms`, improving the committed pure-TK default but still trailing the
   supplied llm.c baseline and the SM120 cuBLASLt fallback.
+- Rejected `FORCE_NVCC_O=3` after the split-K=8 promotion. The O3 build passed
+  `test_matmul` (`8/8`) and `test_attention` (all three shapes), but the
+  required TinyStories 3-step validation averaged `2925.09 ms` with steps
+  `2939.68`, `2916.43`, and `2933.76 ms`, slower than the O2 split-K=8 source
+  default, so pure SM120 TK remains on `O2`.
 
 ## 2026-05-17 — SM120 RTX 5090 GEMM fallback and pure-TK tuning
 
