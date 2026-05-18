@@ -843,6 +843,12 @@ changelog is the diary; `goal.md` is the plan.
   benchmark, but the extra split launches regressed TinyStories 3-step
   validation to `2825.12 ms` with steps `2818.94`, `2823.61`, and
   `2826.63 ms`.
+- Rejected a temporary 384-thread SM120 dWeight split-K partial reducer. The
+  first `test_matmul` run hit the recurring unrelated MLP-up forward transient,
+  the immediate rerun passed `8/8`, and `test_attention` passed all three smoke
+  shapes. The focused benchmark was mixed and TinyStories 3-step validation
+  regressed to `2824.67 ms` with steps `2821.31`, `2821.56`, and
+  `2827.78 ms`, so the reducer remains at the 256-thread launch.
 
 ## 2026-05-09 — Blackwell build support
 
