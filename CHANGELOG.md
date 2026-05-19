@@ -58,6 +58,17 @@ changelog is the diary; `goal.md` is the plan.
   `2680.95 ms` (`2679.41 ms` total average). This beats the supplied llm.c
   printed baseline, but pure TK still trails the cached SM120 cuBLASLt fallback
   near `2623 ms`, so the kernel-outperformance goal remains open.
+- Profiled the accepted small-K direct B-column dInput source with
+  `LLMK_SM120_PROFILE_TRAIN_STEP=1`. The profiling build completed the required
+  TinyStories 3-step validation with steps `2729.06`, `2721.95`, and
+  `2729.35 ms` (`2725.65 ms` total average); the extra timing events account
+  for the expected overhead versus the unprofiled `2679.28 ms` rebaseline. The
+  dominant per-step buckets were forward (`~811 ms`), FC projection backward
+  (`~344 ms`), FC backward (`~330 ms`), attention backward (`~283 ms`), QKV
+  backward (`~241 ms`), and LM-head backward (`217-265 ms`). Source defaults
+  were unchanged; the next optimization targets remain the GEMM-heavy forward,
+  FC/FCProj backward, QKV/attention backward, and LM-head rows that still trail
+  cuBLASLt.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
