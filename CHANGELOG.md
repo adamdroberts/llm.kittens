@@ -286,6 +286,12 @@ changelog is the diary; `goal.md` is the plan.
   TinyStories validation. The temporary `LLMK_SM120_HUGE_N_FORWARD_K_TILE`
   hook was removed; huge-N forward and dWeight continue to share the K16
   source default.
+- Rejected `LLMK_SM120_BIAS_BLOCK_SIZE=1024` for the CUDA bias-gradient
+  reduction on the current large-K dInput source. The trainer build completed,
+  but TinyStories 3-step validation regressed to `2669.44 ms` with steps
+  `2665.44`, `2667.35`, and `2671.52 ms`, slower than the current pure-TK
+  source default near `2665.06 ms`. Bias-gradient reduction keeps the
+  512-thread source default.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
