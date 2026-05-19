@@ -8,6 +8,19 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected direct-Bcol dInput `LLMK_SM120_DINP_DIRECT_BCOL_SUPER_M=3` under
+  the O3 source-default stack. The macro build passed `test_attention` and
+  `test_matmul` (`10/10`), and TinyStories 3-step validation averaged
+  `2619.77 ms` with steps `2616.35`, `2617.85`, and `2621.69 ms`. The focused
+  benchmark had isolated wins for qkv dInput (`1018.38 us` versus cuBLASLt
+  `1052.81 us`) and FC-projection forward (`1418.24 us` versus `1482.08 us`),
+  but most targeted rows still failed the CUDA comparison: qkv dWeight was
+  `1190.61 us` versus `986.20 us`, attention-projection dWeight was
+  `469.43 us` versus `329.41 us`, FC-projection dInput was `1476.88 us`
+  versus `1364.70 us`, and LM-head forward/dInput/dWeight remained slower than
+  cuBLASLt. The trainer improvement was not promoted because the kernel goal
+  requires every SM120 row to beat the CUDA variant, so the source keeps
+  direct-Bcol `SUPER_M=8`.
 - Rejected direct-Bcol dInput `LLMK_SM120_DINP_DIRECT_BCOL_SUPER_M=4` under
   the O3 source-default stack. The macro build passed `test_attention` and
   `test_matmul` (`10/10`), but the focused benchmark worsened the direct-Bcol
