@@ -8,6 +8,16 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected a qkv-only no-split dWeight route
+  (`LLMK_SM120_QKV_DWEIGHT_SPLIT_K=1`). The temporary hook forced the
+  `M == 3 * N` qkv dWeight shape off the default 8-way split-K fanout and
+  added a guarded qkv-shaped dWeight smoke row; the build passed
+  `test_attention` and `test_matmul` (`11/11`). The focused benchmark showed
+  why split-K is required: qkv dWeight regressed to `2172.99 us` versus
+  cuBLASLt `988.63 us`, with accumulated qkv dWeight at `2192.90 us` versus
+  `990.11 us`. TinyStories 3-step validation averaged `2697.02 ms` with steps
+  `2694.62`, `2693.42`, and `2700.62 ms`, much slower than the `2623.57 ms`
+  O3 source default, so the temporary hook and smoke row were removed.
 - Rejected a temporary 256x64 FC-projection dInput direct B-column route
   (`LLMK_SM120_DINP_FCPROJ_WIDE_DIRECT_BCOL=1`). The macro build passed
   `test_attention` and `test_matmul` (`11/11`, including the guarded FCProj
