@@ -202,6 +202,12 @@ changelog is the diary; `goal.md` is the plan.
   small-K or LM-head dInput. TinyStories 3-step validation regressed to
   `2668.45 ms` with steps `2666.63`, `2667.55`, and `2669.35 ms`, so the
   direct-B-column swizzle remains at the inherited `8` default.
+- Rejected retesting `LLMK_SM120_DWEIGHT_DIRECT_ACCUM=0` on the current
+  large-K dInput source. The macro build passed `test_matmul` (`10/10`) and
+  `test_attention` (all three smoke shapes), but the focused benchmark kept
+  accumulated dWeight rows behind cuBLASLt and worsened several rows. TinyStories
+  3-step validation regressed to `2668.92 ms` with steps `2666.92`, `2666.94`,
+  and `2670.89 ms`, so accumulated dWeight keeps the direct-accumulate default.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
