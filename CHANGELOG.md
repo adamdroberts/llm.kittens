@@ -8,6 +8,15 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected packed-QKV attention prep launch `LLMK_SM120_DPREP_WARPS=11`.
+  The macro build passed `test_matmul` (`10/10`) and `test_attention` (all
+  three smoke shapes including the packed-QKV fast path), but the focused
+  benchmark still left qkv forward/dWeight, attention-projection dWeight,
+  FC/FC-projection forward+dInput, and LM-head rows behind the CUDA variants.
+  TinyStories 3-step validation averaged `2624.10 ms` with steps `2621.64`,
+  `2622.79`, and `2625.41 ms`, slower than the promoted source default and
+  CUDA fallback diagnostics, so the SM120 attention prep launch remains on
+  `LLMK_SM120_DPREP_WARPS=3`.
 - Rejected `LLMK_SM120_ATTN_FWD_BLOCK=24` at compile time. The SM120
   attention kernel explicitly restricts forward block sizes to 16, 32, or 64,
   and the candidate also violates ThunderKittens tile divisibility constraints
