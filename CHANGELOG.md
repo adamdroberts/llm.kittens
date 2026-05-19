@@ -8,6 +8,16 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Refreshed SM120 per-step profiling after promoting the FC-projection dInput
+  direct B-column route. The `LLMK_SM120_PROFILE_TRAIN_STEP=1` build completed
+  the required TinyStories 3-step validation at `2703.41 ms` average with
+  steps `2699.10`, `2703.02`, and `2703.81 ms`; the profiling events explain
+  the overhead versus the unprofiled `2657.45 ms` source default. The dominant
+  steady-state buckets are forward (`~805 ms`), FC projection backward
+  (`~346 ms`), FC backward (`~320 ms`), attention backward (`~284 ms`), QKV
+  backward (`~241 ms`), LM-head backward (`~205 ms`), and final LayerNorm
+  backward (`~178 ms`). Backward GEMM scheduling remains the next optimization
+  target.
 - Promoted the SM120 direct B-column dInput route to cover the GPT-2
   FC-projection dInput shape and use a dedicated `SUPER_M=7` swizzle. The
   macro probe combined `LLMK_SM120_DINP_DIRECT_BCOL_K_CAP=3072` with
