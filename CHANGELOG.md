@@ -51,6 +51,13 @@ changelog is the diary; `goal.md` is the plan.
   `2862.76 ms` with steps `2795.79`, `2848.28`, and `2944.22 ms`
   (`2896.25 ms` total average). The attproj backward path keeps the existing
   immediate dWeight finish before `l_atty` is reused by attention backward.
+- Rebaselined the accepted small-K direct B-column dInput source after the
+  rejected follow-ups. The pure-TK build passed `test_matmul` (`9/9`) and
+  `test_attention` (all three smoke shapes), then TinyStories 3-step
+  validation averaged `2679.28 ms` with steps `2679.01`, `2677.87`, and
+  `2680.95 ms` (`2679.41 ms` total average). This beats the supplied llm.c
+  printed baseline, but pure TK still trails the cached SM120 cuBLASLt fallback
+  near `2623 ms`, so the kernel-outperformance goal remains open.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
