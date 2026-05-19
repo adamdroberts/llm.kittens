@@ -234,6 +234,16 @@ changelog is the diary; `goal.md` is the plan.
   shapes), but TinyStories 3-step validation regressed to `2669.68 ms` with
   steps `2666.71`, `2667.35`, and `2672.02 ms`, so dprep remains at the
   3-warp default.
+- Refreshed the current-source SM120 pure-TK profile after the rejection
+  rounds with `LLMK_SM120_PROFILE_TRAIN_STEP=1`. The profiling build completed
+  the required TinyStories 3-step validation with steps `2717.12`, `2716.85`,
+  and `2719.17 ms` (`2718.01 ms` total average). The dominant buckets remain
+  forward (`~813-815 ms`), FC projection backward (`~345-347 ms`), FC backward
+  (`~330 ms`), attention backward (`~283 ms`), QKV backward (`~238-242 ms`),
+  LM-head backward (`~204-251 ms`), and final layernorm backward
+  (`~132-178 ms`). Source defaults were unchanged; the next targets remain the
+  GEMM-heavy forward, FC/FCProj backward, attention, QKV, and LM-head paths
+  that still trail the cached cuBLASLt fallback.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
