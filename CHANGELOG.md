@@ -8,6 +8,14 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected a temporary fixed-8 split-K dWeight partial reducer specialization.
+  The source hook replaced the runtime `parts` loop with an unrolled
+  `PARTS=8` CUDA kernel for the common qkv/FC/FC-projection dWeight case. The
+  first `test_matmul` pass failed the accumulated dWeight row, the immediate
+  rerun passed `10/10`, and `test_attention` passed all three smoke shapes.
+  TinyStories 3-step validation averaged `2655.62 ms` with steps `2649.45`,
+  `2652.74`, and `2658.50 ms`, slower than the `2653.36 ms` source default,
+  so the temporary reducer specialization was removed.
 - Rejected a post-vectorization LM-head dWeight 2-way split-K retest with
   `LLMK_SM120_DEFER_LMHEAD_DWEIGHT=0` and
   `LLMK_SM120_LARGE_DWEIGHT_SPLIT_K=2`. The macro build passed
