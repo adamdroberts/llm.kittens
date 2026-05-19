@@ -172,6 +172,14 @@ changelog is the diary; `goal.md` is the plan.
   twice on the accumulated dWeight row (`3.6250` then `1.5938` max diff versus
   the `0.50` tolerance), so no benchmark or TinyStories validation was run and
   the temporary forward-only trait split was removed.
+- Rejected a current-stack forward-only `LLMK_SM120_FORWARD_SUPER_M=8` swizzle
+  split after the large-K dInput promotion. `test_matmul` passed on the third
+  run after transient MLP-up and accumulated dWeight row failures, and
+  `test_attention` passed all three smoke shapes. The focused benchmark
+  improved FCProj forward (`1418.89 us` versus `1456.72 us` cuBLASLt) but
+  worsened qkv and FC forward rows, and TinyStories 3-step validation regressed
+  to `2668.91 ms` with steps `2666.62`, `2667.08`, and `2670.73 ms`. The
+  temporary forward-only swizzle hook was removed.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
