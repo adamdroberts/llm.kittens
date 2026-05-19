@@ -8,6 +8,16 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected qkv-only dWeight split-K fanout
+  `LLMK_SM120_DWEIGHT_SPLIT_K=128`. The first `test_matmul` run showed
+  instability with the MLP-up forward row failing at max diff `6.0000`
+  against `0.50`, while an immediate rerun passed `10/10`; `test_attention`
+  passed all three smoke shapes. The focused benchmark rejected the target
+  direction directly: qkv dWeight worsened to `1618.88 us` versus cuBLASLt
+  `1103.32 us`, and qkv dWeight accumulate worsened to `1673.09 us` versus
+  `1107.06 us`. TinyStories 3-step validation regressed to `3514.66 ms`
+  average with steps `3501.17`, `3488.63`, and `3540.69 ms`, so the source
+  default remains `LLMK_SM120_DWEIGHT_SPLIT_K=8`.
 - Rejected scoped fused dInput+dGELU swizzle
   `LLMK_SM120_DINP_DGELU_SUPER_M=10`. The macro build passed `test_matmul`
   (`10/10`) and `test_attention` (all three smoke shapes), and the focused
