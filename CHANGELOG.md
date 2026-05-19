@@ -90,6 +90,14 @@ changelog is the diary; `goal.md` is the plan.
   `2664.34`, and `2665.77 ms`, improving the accepted pure-TK source while
   still leaving the cached cuBLASLt fallback as the training-time target to
   beat.
+- Rejected a narrowly scoped FC projection dInput direct B-column probe
+  (`N == 3072`, `K == 768`). The macro build passed `test_matmul` (`11/11`,
+  including the guarded FCProj dInput row) and `test_attention` (all three
+  smoke shapes), and the focused benchmark improved FCProj dInput to
+  `1418.28 us` versus the prior promoted-source `1477.00 us`, but it still
+  trailed cuBLASLt at `1365.63 us`. TinyStories 3-step validation regressed to
+  `2669.49 ms` with steps `2665.80`, `2668.16`, and `2670.81 ms`, so the
+  temporary FCProj direct route was removed.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
