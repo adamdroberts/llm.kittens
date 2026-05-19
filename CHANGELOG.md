@@ -8,6 +8,12 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected disabling the SM120 N128 dWeight TN tile route under the O3
+  source-default stack. The pure-TK macro build (`LLMK_SM120_DWEIGHT_N128=0`)
+  passed `test_matmul` (`10/10`) and `test_attention` (all three smoke shapes),
+  but TinyStories 3-step validation averaged `2694.55 ms` with steps
+  `2690.18`, `2690.88`, and `2698.23 ms`, much slower than the `2623.57 ms`
+  O3 source default. The source keeps `LLMK_SM120_DWEIGHT_N128=1`.
 - Rejected disabling the SM120 forward N96 route under the O3 source-default
   stack. The pure-TK macro build (`LLMK_SM120_FORWARD_N96=0`) passed
   `test_matmul` (`10/10`) and `test_attention` (all three smoke shapes), but
