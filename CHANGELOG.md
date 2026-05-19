@@ -8,6 +8,13 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected disabling SM120 dWeight direct accumulation after the TN direct
+  B-column promotion. The pure-TK macro build
+  (`LLMK_SM120_DWEIGHT_DIRECT_ACCUM=0`) passed `test_matmul` (`10/10`) and
+  `test_attention` (all three smoke shapes), but TinyStories 3-step validation
+  averaged `2626.56 ms` with steps `2615.71`, `2622.95`, and `2630.16 ms`,
+  slightly slower than the `2623.57 ms` O3 source default. Accumulated
+  dWeight stays on the direct in-kernel accumulation path.
 - Rejected enabling the SM120 backward N96 route for 768-wide dInput/dWeight
   rows. The pure-TK macro build (`LLMK_SM120_BACKWARD_N96=1`) passed
   `test_attention`; the first `test_matmul` hit the known transient MLP-up row
