@@ -8,6 +8,15 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected shared SM120 grid swizzle `LLMK_SM120_SUPER_M=13`. The macro build
+  passed `test_matmul` (`10/10`) and `test_attention` (all three smoke shapes),
+  but the focused benchmark regressed the shared forward/dInput routes: qkv
+  forward was `1166.40 us` TK versus `1105.10 us` cuBLASLt, FC-projection
+  forward was `1529.60 us` versus `1427.19 us`, and LM-head forward stayed
+  behind at `26242.68 us` versus `23417.15 us`. TinyStories 3-step validation
+  regressed to `2738.78 ms` average with steps `2729.84`, `2734.52`, and
+  `2743.04 ms`, so the shared source swizzle remains
+  `LLMK_SM120_SUPER_M=7`.
 - Rejected a temporary SM120 async pipeline depth hook. The all-kernel
   `LLMK_SM120_PIPE_STAGES=3` build failed at ptxas because 256x64 NN/TN
   kernels used `0x1e000` bytes of shared memory versus the `0x18c00` limit.
