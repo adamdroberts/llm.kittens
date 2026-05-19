@@ -8,6 +8,16 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected a temporary fcproj-forward-only wide-tile selector,
+  `LLMK_SM120_FCPROJ_FORWARD_WIDE=1`, that routed only `N == 768 && K == 3072`
+  forward GEMMs through `matmul_wide_nt[_bias]` while leaving qkv, attproj,
+  fused FC, huge-N, dInput, and dWeight dispatch unchanged. The macro build
+  passed `test_attention` and `test_matmul` (`10/10`), but repeated benchmarks
+  regressed the fcproj forward target (`1543.75 us` then `1664.25 us`) and
+  never beat cuBLASLt (`1500.51 us` then `1613.11 us`). TinyStories 3-step
+  validation averaged `2937.75 ms` with steps `2721.96`, `2822.20`, and
+  `3053.30 ms`, worse than the llm.c baseline and current pure-TK path, so the
+  temporary selector was removed.
 - Added `LLMK_SM120_APPROX_GELU_TANH` as a default-off hook for replacing the
   fused forward GeLU epilogue's `tanhf` with the same clamped rational
   approximation shape used by the dGELU experiment path. Rejected
