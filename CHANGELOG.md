@@ -8,6 +8,18 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected a temporary huge-N-forward-only swizzle hook with
+  `LLMK_SM120_HUGE_N_FORWARD_SUPER_M=6`. The hook isolated LM-head-style
+  forward GEMMs from the shared `LLMK_SM120_SUPER_M=7` swizzle and left
+  ordinary forward, dInput, and dWeight aliases unchanged. The macro build
+  passed `test_attention`; the first `test_matmul` hit the known intermittent
+  MLP-up forward row, and an immediate rerun passed `10/10`. The focused
+  benchmark did not close the target: LM-head forward stayed `24981.70 us`
+  versus cuBLASLt `22272.49 us`, FC fused forward regressed to `1607.62 us`,
+  and material dWeight rows still trailed. TinyStories 3-step validation
+  averaged `2624.94 ms` with steps `2619.93`, `2621.55`, and `2628.34 ms`,
+  slower than the current pure-TK rebaseline, so the temporary hook was
+  removed and huge-N forward continues to inherit `LLMK_SM120_SUPER_M=7`.
 - Validated a corrected forward-only cuBLASLt fallback diagnostic with
   `LLMK_SM120_CUBLASLT_FORWARD_FALLBACK=1`, explicit cuBLASLt linkage through
   `NVCC_LDLIBS`, and dInput/dWeight left on the SM120 TK paths. The build
