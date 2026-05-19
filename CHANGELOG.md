@@ -8,6 +8,15 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected lowering dWeight split-K to `LLMK_SM120_DWEIGHT_SPLIT_K=2`. The
+  macro build passed `test_attention`; the first `test_matmul` hit the known
+  intermittent MLP-up forward row, and an immediate rerun passed `10/10`. The
+  focused benchmark showed why the lower fanout is not viable: qkv dWeight
+  regressed to `1567.93 us` versus cuBLASLt `1102.18 us`, and
+  attention-projection dWeight regressed to `1132.30 us` versus `372.10 us`.
+  TinyStories 3-step validation averaged `2688.58 ms` with steps `2683.31`,
+  `2683.68`, and `2693.47 ms`, much slower than the current pure-TK
+  rebaseline, so dWeight split-K stays at `8`.
 - Rejected direct-Bcol dInput `LLMK_SM120_DINP_DIRECT_BCOL_SUPER_M=13`. The
   macro build passed `test_attention` and `test_matmul` (`10/10`), and the
   focused benchmark showed isolated wins for attention-projection forward
