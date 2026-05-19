@@ -8,6 +8,16 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Refreshed the current SM120 pure-TK phase profile with
+  `LLMK_SM120_PROFILE_TRAIN_STEP=1`. The profiling build passed compilation and
+  TinyStories 3-step validation averaged `2668.62 ms` with steps `2666.77`,
+  `2665.92`, and `2671.33 ms`; the profiler overhead makes this unsuitable as
+  a source-default timing comparison. Step-3 phase timings were: forward
+  `807.13 ms`, FC-projection backward `339.81 ms`, FC backward `313.23 ms`,
+  attention backward `287.65 ms`, qkv backward `234.50 ms`, LM-head backward
+  `202.43 ms`, final-LayerNorm backward `166.98 ms`, classifier backward
+  `88.86 ms`, and attention-projection backward `86.90 ms`. The next
+  optimization focus remains the GEMM-heavy forward and FC backward buckets.
 - Rejected a temporary SM120 huge-N `256x96x32` forward tile selector
   (`LLMK_SM120_HUGE_N_N96=1`) at the matmul smoke gate. The candidate compiled
   and `test_attention` passed all three smoke shapes, but `test_matmul` hit an
