@@ -8,6 +8,12 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected retesting pure SM120 TK codegen with `FORCE_NVCC_O=2` after the
+  cache-policy and extra-device-vectorization promotions. The O2 build passed
+  `test_matmul` (`10/10`) and `test_attention` (all three smoke shapes), but
+  TinyStories 3-step validation regressed to `2656.56 ms` with steps
+  `2648.49`, `2655.14`, and `2657.98 ms`, slower than the `2653.36 ms` O3
+  source default. Pure SM120 TK builds keep `FORCE_NVCC_O=3`.
 - Rejected retesting `LLMK_SM120_DWEIGHT_SPLIT_K=16` on top of the promoted
   SM120 pure-TK compiler defaults. The build passed `test_matmul` (`10/10`)
   and `test_attention` (all three smoke shapes), but TinyStories 3-step
