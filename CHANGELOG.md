@@ -8,6 +8,12 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected `LLMK_SM120_DINP_DIRECT_BCOL_SUPER_M=9` after the SM120 compiler
+  default promotions. The macro build passed `test_matmul` (`10/10`) and
+  `test_attention` (all three smoke shapes), but TinyStories 3-step validation
+  averaged `2657.09 ms` with steps `2650.84`, `2654.55`, and `2659.62 ms`,
+  slower than the `2653.36 ms` source default. Direct B-column dInput keeps the
+  `SUPER_M=8` swizzle.
 - Rejected retesting `LLMK_SM120_ATTN_BWD_BLOCK=32` after the SM120
   cache-policy and extra-device-vectorization promotions. The macro build
   passed `test_matmul` (`10/10`) and `test_attention` (all three smoke
