@@ -8,6 +8,17 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Validated the corrected selective cuBLASLt fallback diagnostic for forward
+  and dInput, built with `LLMK_SM120_CUBLASLT_FORWARD_FALLBACK=1` and
+  `LLMK_SM120_CUBLASLT_DINP_FALLBACK=1` while leaving dWeight on the SM120 TK
+  path. The corrected link command passed cuBLASLt explicitly through
+  `NVCC_LDLIBS` so it did not define full `LLMK_SM120_USE_CUBLASLT_GEMM`. The
+  build passed `test_attention` and `test_matmul` (`10/10`). TinyStories
+  3-step validation averaged `2527.49 ms` with steps `2520.85`, `2524.51`,
+  and `2530.48 ms`, slightly faster than the full cuBLASLt fallback selector
+  (`2532.28 ms`). This narrows the remaining TK-side work: forward and dInput
+  are the high-leverage gaps, while keeping current TK dWeight was not the
+  limiter in this fallback mix.
 - Rejected a temporary forward-only swizzle hook,
   `LLMK_SM120_FORWARD_SUPER_M=5`, scoped to NT forward aliases while preserving
   the accepted dInput and dWeight swizzles. The source candidate passed
