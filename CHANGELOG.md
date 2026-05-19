@@ -8,6 +8,14 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected a temporary large-K-only direct B-column dInput swizzle split with
+  `LLMK_SM120_DINP_DIRECT_BCOL_LARGEK_SUPER_M=6`. The source hook added a
+  separate LM-head-style large-K direct-B-column alias while leaving small-K
+  dInput on the accepted `SUPER_M=8` route. The macro build passed
+  `test_matmul` (`10/10`) and `test_attention` (all three smoke shapes), but
+  TinyStories 3-step validation averaged `2654.99 ms` with steps `2648.38`,
+  `2653.73`, and `2656.25 ms`, slower than the `2653.36 ms` source default.
+  The temporary split hook was removed.
 - Rejected disabling the promoted large-K direct B-column dInput route with
   `LLMK_SM120_DINP_DIRECT_BCOL_LARGEK=0` after the SM120 compiler default
   promotions. The macro build passed `test_matmul` (`9/9`, with the guarded
