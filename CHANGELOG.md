@@ -8,6 +8,16 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected scoped fused dInput+dGELU swizzle
+  `LLMK_SM120_DINP_DGELU_SUPER_M=9`. The macro build passed `test_attention`
+  and `test_matmul` (`10/10`). The focused benchmark showed the new
+  FC-projection dInput+dGELU row slightly ahead of cuBLASLt in that run
+  (`1814.95 us` versus `1824.86 us`), but this was slower than the
+  no-override default diagnostic row measured in the previous round
+  (`1794.23 us`). TinyStories 3-step validation averaged `2644.49 ms` with
+  steps `2640.13`, `2641.68`, and `2647.31 ms`, slower than the current
+  pure-TK rebaseline, so fused dGELU aliases keep the default inherited
+  `SUPER_M=8`.
 - Added a focused `bench_sm120_matmul` row for the FC-projection backward
   fused dInput+dGELU path and introduced
   `LLMK_SM120_DINP_DGELU_SUPER_M` as a default-preserving hook for fused dGELU
