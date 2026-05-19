@@ -8,6 +8,17 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected a temporary qkv-forward-only swizzle route with
+  `LLMK_SM120_QKV_FORWARD_SUPER_M=2`. The guarded hook routed only regular
+  GPT-2 qkv forward GEMMs (`N == 3*K`) through a dedicated N96 alias while
+  leaving fused FC, LM-head, dInput, and dWeight dispatch unchanged. The
+  candidate passed `test_matmul` (`10/10`) and `test_attention` (all three
+  smoke shapes), and the focused benchmark produced an isolated qkv forward
+  win (`1068.72 us` TK versus `1090.07 us` cuBLASLt). It also regressed qkv
+  dInput/dWeight, attention-projection forward, and LM-head rows; TinyStories
+  3-step validation averaged `2616.67 ms` with steps `2619.30`, `2615.54`,
+  and `2617.80 ms`, slower than the promoted source default and CUDA fallback
+  diagnostics, so the temporary hook was removed.
 - Rejected a temporary fused-forward-only swizzle hook with
   `LLMK_SM120_FORWARD_GELU_SUPER_M=3`, scoped to the `*_nt_bias_gelu` aliases
   while leaving plain forward, dInput, and dWeight aliases on their accepted
