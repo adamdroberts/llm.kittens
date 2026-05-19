@@ -8,6 +8,15 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected disabling TN dWeight direct B-column register loads with
+  `LLMK_SM120_TN_DIRECT_B_COL=0`. The macro build passed `test_attention` and
+  `test_matmul` (`10/10`), but the focused benchmark worsened the targeted
+  dWeight rows: qkv dWeight was `1240.07 us` versus cuBLASLt `1152.99 us`,
+  attention-projection dWeight was `516.51 us` versus `373.33 us`, FC-projection
+  dWeight was `1512.77 us` versus `1469.90 us`, and LM-head dWeight regressed
+  to `22933.20 us` versus `20837.07 us`. TinyStories 3-step validation
+  averaged `2654.96 ms` with steps `2651.06`, `2652.11`, and `2657.81 ms`, so
+  TN dWeight keeps the promoted direct B-column load path.
 - Rejected a large-K-only direct-Bcol dInput swizzle split with
   `LLMK_SM120_DINP_DIRECT_BCOL_LARGEK_SUPER_M=4`. The temporary alias targeted
   only LM-head-style large-K direct-Bcol dInput and left small-K direct-Bcol
