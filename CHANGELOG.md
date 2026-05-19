@@ -8,6 +8,13 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected pure SM120 TK codegen with
+  `-Xptxas=--allow-expensive-optimizations=true`. The build passed
+  `test_attention` and eventually passed `test_matmul` (`10/10`) after two
+  transient smoke failures, but TinyStories 3-step validation averaged
+  `2655.86 ms` with steps `2652.09`, `2654.48`, and `2657.24 ms`, slower than
+  the `2653.36 ms` source default. The SM120 pure-TK compiler defaults remain
+  `-Xptxas=-dlcm=ca --extra-device-vectorization`.
 - Rejected a temporary fixed-8 split-K dWeight partial reducer specialization.
   The source hook replaced the runtime `parts` loop with an unrolled
   `PARTS=8` CUDA kernel for the common qkv/FC/FC-projection dWeight case. The
