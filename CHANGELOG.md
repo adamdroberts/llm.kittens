@@ -8,6 +8,14 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected enabling the existing TK LayerNorm forward wrapper for SM120 behind
+  an opt-in `LLMK_SM120_TK_LAYERNORM=1` gate. The probe built cleanly and the
+  LayerNorm smoke showed the SM120 TK forward outputs were within tolerance
+  (`0.020295` max diff for plain forward and `0.024888` for fused residual
+  output), while `test_matmul` (`10/10`) and `test_attention` (all three smoke
+  shapes) still passed. `test_layernorm` failed the backward `dbias` check,
+  however, with `0.496948` max diff versus the `0.120` tolerance, so no
+  TinyStories validation was run and the temporary SM120 gate was removed.
 - Rejected a temporary M=768 dWeight 128x64 K16 route at the smoke gate. The
   guarded `LLMK_SM120_DWEIGHT_M768_N64_K16=1` probe sent M=768, N%64 TN
   dWeight rows through a 128x64 tile to target attention-projection and
