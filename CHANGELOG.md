@@ -8,6 +8,11 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected an O3 retest of global SM120 `LLMK_SM120_SUPER_M=8` on top of
+  the current pure-TK source default. The macro build passed `test_attention`
+  and `test_matmul`, then TinyStories 3-step validation averaged `2629.76 ms`
+  with steps `2619.08`, `2625.43`, and `2634.09 ms`, slower than the
+  `2623.57 ms` O3 source default, so `LLMK_SM120_SUPER_M` stays at `7`.
 - Rejected a temporary streaming cache-policy hook for the SM120 split-K
   dWeight partial reducer. The macro build
   (`LLMK_SM120_REDUCE_PARTIALS_STREAMING=1`) used streaming 128-bit loads for
