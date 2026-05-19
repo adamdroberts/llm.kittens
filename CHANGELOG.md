@@ -8,6 +8,16 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected dWeight swizzle `LLMK_SM120_DWEIGHT_SUPER_M=20`. The macro build
+  passed `test_attention` and `test_matmul` (`10/10`). The focused benchmark
+  improved qkv dWeight relative to several rejected high-swizzle probes but
+  still missed the CUDA target (`1201.54 us` versus cuBLASLt `1156.49 us`) and
+  regressed other material dWeight rows, including attention-projection dW+=
+  (`509.48 us` versus `377.97 us`), FC dWeight (`1597.88 us` versus
+  `1490.55 us`), and FC-projection dW+= (`1612.78 us` versus `1470.33 us`).
+  TinyStories 3-step validation averaged `2628.27 ms` with steps `2623.31`,
+  `2624.36`, and `2632.19 ms`, slower than the current pure-TK rebaseline, so
+  dWeight keeps `LLMK_SM120_DWEIGHT_SUPER_M=2`.
 - Rejected a temporary huge-N-forward-only swizzle hook with
   `LLMK_SM120_HUGE_N_FORWARD_SUPER_M=6`. The hook isolated LM-head-style
   forward GEMMs from the shared `LLMK_SM120_SUPER_M=7` swizzle and left
