@@ -8,6 +8,16 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected an FC-only SM120 M3072/N128 dWeight swizzle route
+  (`LLMK_SM120_DWEIGHT_M3072_SUPER_M=4`). The source candidate passed
+  `test_attention`; the first `test_matmul` run hit the known transient
+  MLP-up forward row failure, and an immediate rerun passed `10/10`. The
+  focused benchmark worsened FC dWeight to `1500.39 us` versus cuBLASLt
+  `1307.97 us` and left FC dWeight accumulate at `1456.16 us` versus
+  `1331.24 us`. TinyStories 3-step validation averaged `2621.38 ms` with
+  steps `2616.59`, `2618.81`, and `2623.94 ms`, but the small trainer win was
+  treated as noise because the targeted kernel moved farther from the CUDA
+  variant. The FC dWeight route remains on the shared N128 TN tile.
 - Refreshed the current SM120 pure-TK phase profile with
   `LLMK_SM120_PROFILE_TRAIN_STEP=1`. The profiling build passed compilation and
   TinyStories 3-step validation averaged `2668.62 ms` with steps `2666.77`,
