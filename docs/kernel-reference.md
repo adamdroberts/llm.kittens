@@ -167,8 +167,10 @@ Current status:
    the trainer uses `-ge 1`, fusing the MLP GELU backward into the `fcproj`
    dInput GEMM. The fused SM120 path uses in-place register-layout swaps and
    an approximate dGELU tanh (`LLMK_SM120_APPROX_DGELU_TANH=1`) by default
-   after RTX 5090 smoke and 3-step validation; both knobs remain explicit A/B
-   fallbacks.
+   after RTX 5090 smoke and 3-step validation. It uses a scoped
+   `LLMK_SM120_DINP_DGELU_SUPER_M=11` swizzle, separate from the plain dInput
+   `LLMK_SM120_DINP_SUPER_M=8`, after the fused dGELU row and 3-step trainer
+   both improved. Both dGELU knobs remain explicit A/B fallbacks.
 2. `dweight (OC, C) = doutᵀ (OC, B*T) · inp (B*T, C)` — wired through TK `A^T*B`. For accumulated micro-steps, the product lands in the caller-provided aligned scratch buffer and a small add kernel applies `dweight += scratch`. SM120 pure-TK defaults to `LLMK_SM120_DWEIGHT_SPLIT_K=8` after the reduced LM-head scratch regime made the lower qkv split faster in 3-step training; larger non-QKV dWeight shapes remain capped at 8-way split-K inside the wrapper because larger splits regressed them.
    Supported SM120 TN dWeight shapes now use the 128x128 tile
    (`LLMK_SM120_DWEIGHT_N128=1`) after the current pure-TK stack improved the

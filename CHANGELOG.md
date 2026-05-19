@@ -8,6 +8,17 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Promoted scoped fused dInput+dGELU swizzle
+  `LLMK_SM120_DINP_DGELU_SUPER_M=11` for SM120. The macro probe passed
+  `test_matmul` (`10/10`) and `test_attention` (all three smoke shapes), moved
+  FC-projection dInput+dGELU ahead of cuBLASLt in the focused benchmark
+  (`1766.17 us` versus `1839.35 us`), and TinyStories 3-step validation
+  averaged `2604.88 ms` with steps `2600.86`, `2600.68`, and `2609.08 ms`.
+  After promoting the macro to the source default, the no-override build passed
+  both smoke suites, benchmarked FC-projection dInput+dGELU at `1766.11 us`
+  versus cuBLASLt `1794.02 us`, and validated at `2610.66 ms` average with
+  steps `2609.89`, `2612.36`, and `2608.96 ms`. Broader qkv, attproj,
+  fcproj, and LM-head gaps remain, so the SM120 goal stays open.
 - Rejected a deferred LM-head dWeight split-K scheduling route. The temporary
   source hook kept the promoted LM-head dWeight side-stream deferral but tried
   to start the tied LM-head dWeight as split-K partial streams when
