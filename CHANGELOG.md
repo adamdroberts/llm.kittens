@@ -8,6 +8,13 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected `LLMK_SM120_DWEIGHT_N128_K_TILE=8` at the compile gate after the
+  decoupled huge-N K32 promotion. The N128 dWeight trait instantiated an
+  8-row BF16 shared/register tile, and ThunderKittens rejected it with static
+  assertions that rows and subtile rows must be divisible by the base tile row
+  dimension, followed by zero-sized register-tile variables in
+  `kernel_tn`. No smoke, benchmark, or TinyStories validation was run; the
+  source default stays at `LLMK_SM120_DWEIGHT_N128_K_TILE=16`.
 - Promoted decoupled SM120 huge-N forward K32 tiling while keeping N128
   dWeight on K16. A previous shared `LLMK_SM120_HUGE_N_K_TILE=32` test had
   improved LM-head forward but also changed dWeight N128 tiling; the new
