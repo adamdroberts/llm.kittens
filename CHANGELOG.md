@@ -9,6 +9,13 @@ changelog is the diary; `goal.md` is the plan.
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
 - Rejected fused FC forward GeLU K-tile override
+  `LLMK_SM120_FORWARD_GELU_N96_K_TILE=128` at compile time. The candidate is
+  shape-divisible for GPT-2's fused FC forward K dimension, but ptxas rejected
+  the instantiated SM120 N96 fused kernel because it uses `0x1c000` bytes of
+  shared data while the reported maximum is `0x18c00`. No smoke, benchmark,
+  or TinyStories validation was possible, so the fused GeLU N96 route stays on
+  the default K32 tile.
+- Rejected fused FC forward GeLU K-tile override
   `LLMK_SM120_FORWARD_GELU_N96_K_TILE=96` at the matmul smoke gate. The macro
   build completed, but `test_matmul` failed the GPT-2 MLP-up forward row twice
   (`6.7891` then `6.2188` max diff versus the `0.50` tolerance). No focused
