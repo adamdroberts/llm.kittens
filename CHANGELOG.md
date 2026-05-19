@@ -8,6 +8,14 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected non-huge forward `LLMK_SM120_K_TILE=64` on top of the decoupled
+  K32 huge-N default. The macro build passed `test_matmul` (`10/10`) and
+  `test_attention` (all three smoke shapes), but the focused benchmark
+  regressed the non-huge forward rows badly: qkv forward `1328.62 us`,
+  attention-projection forward `465.15 us`, FC fused forward `1959.33 us`, and
+  FC projection forward `1823.91 us`. TinyStories 3-step validation regressed
+  to `2741.43 ms` total average with steps `2739.89`, `2738.96`, and
+  `2743.90 ms`, so the non-huge forward K tile stays at `32`.
 - Rejected `LLMK_SM120_HUGE_N_K_TILE=64` after the decoupled K32 promotion.
   The macro build kept N128 dWeight isolated on K16 and passed `test_matmul`
   (`10/10`) plus `test_attention` (all three smoke shapes), but the focused
