@@ -8,6 +8,13 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected a temporary SM120 huge-N `256x256x32` forward tile selector
+  (`LLMK_SM120_HUGE_N_N256=1`) at the matmul smoke gate. The candidate
+  compiled and `test_attention` passed all three smoke shapes, but
+  `test_matmul` aborted on the GPT-2 LM-head row because padded vocab
+  `N=50304` is not divisible by the candidate `N_TILE=256`. No benchmark or
+  TinyStories validation was run; huge-N forward remains on the valid
+  `256x128x32` tile.
 - Rejected SM120 `LLMK_SM120_HUGE_N_K_TILE=24` at compile time for the huge-N
   LM-head forward tile. ThunderKittens BF16 shared/register tile constraints
   require rows/columns to be divisible by the base tile dimensions, and the
