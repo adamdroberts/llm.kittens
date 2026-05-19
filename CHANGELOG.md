@@ -8,6 +8,14 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected a post-vectorization LM-head dWeight 2-way split-K retest with
+  `LLMK_SM120_DEFER_LMHEAD_DWEIGHT=0` and
+  `LLMK_SM120_LARGE_DWEIGHT_SPLIT_K=2`. The macro build passed
+  `test_matmul` (`10/10`) and `test_attention` (all three smoke shapes), but
+  it raised activation allocation from `25514 MiB` to `25588 MiB` and
+  TinyStories 3-step validation averaged `2656.63 ms` with steps `2651.01`,
+  `2653.46`, and `2659.81 ms`, slower than the `2653.36 ms` source default.
+  LM-head dWeight stays on the deferred one-part side-stream route.
 - Rejected lowering the direct B-column dInput cap back to
   `LLMK_SM120_DINP_DIRECT_BCOL_K_CAP=2304` after the SM120 compiler default
   promotions. The macro build passed `test_matmul` (`10/10`) and
