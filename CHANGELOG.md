@@ -8,6 +8,18 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected a scoped qkv-only direct-Bcol dInput swizzle split. The temporary
+  source route used `SUPER_M=3` only for the qkv-shaped direct-Bcol dInput GEMM
+  (`N == 768`, `K == 2304`) and left attention-projection, FC, and LM-head on
+  the accepted `SUPER_M=8` route. The build passed `test_attention` and
+  `test_matmul` (`10/10`). The focused benchmark was mixed: qkv forward moved
+  slightly ahead of cuBLASLt (`1073.40 us` versus `1089.31 us`) and
+  attention-projection dInput was faster (`353.92 us` versus `367.87 us`), but
+  qkv dInput still trailed (`1017.91 us` versus `1009.42 us`), material
+  dWeight rows remained behind, and FC/FC-projection forward regressed.
+  TinyStories 3-step validation averaged `2623.35 ms` with steps `2618.26`,
+  `2620.64`, and `2626.05 ms`, slower than the current pure-TK rebaseline, so
+  the temporary qkv alias and dispatch hook were removed.
 - Rebaselined the current pure-TK SM120 source after promoting the faster
   cuBLASLt fallback selector. The pure-TK build passed `test_attention` (all
   three smoke shapes) and `test_matmul` (`10/10`). The focused benchmark now
