@@ -8,6 +8,14 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected a qkv-only SM120 M2304/N128 dWeight swizzle route
+  (`LLMK_SM120_DWEIGHT_M2304_SUPER_M=3`). The source candidate passed
+  `test_attention` and `test_matmul`, but the focused benchmark worsened qkv
+  dWeight to `1231.58 us` versus cuBLASLt `987.56 us` and qkv dWeight
+  accumulate to `1195.82 us` versus `997.37 us`. TinyStories 3-step validation
+  averaged `2624.33 ms` with steps `2617.99`, `2620.54`, and `2628.12 ms`,
+  slower than the `2623.57 ms` O3 source default, so the qkv dWeight route
+  remains on the shared N128 TN tile.
 - Rejected a shape-specific SM120 M768/N128 dWeight swizzle route
   (`LLMK_SM120_DWEIGHT_M768_SUPER_M=3`). The source candidate passed
   `test_attention` and `test_matmul`, and TinyStories 3-step validation
