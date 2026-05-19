@@ -11,18 +11,26 @@ ported verbatim from llm.c/llmc/attention.cuh (lines 14-83).
 #include <float.h>
 #include "cuda_common.h"
 #include "cuda_utils.cuh"
-#if defined(KITTENS_SM90)
+#if !defined(LLMK_DISABLE_TK_MHA) && defined(KITTENS_SM90)
 #define LLMK_USE_TK_MHA 1
+#if defined(LLMK_DISABLE_TK_MHA_BWD)
+#define LLMK_USE_TK_MHA_BWD 0
+#else
 #define LLMK_USE_TK_MHA_BWD 1
+#endif
 #include "tk/attention_h100.cuh"
-#elif defined(KITTENS_SM120)
+#elif !defined(LLMK_DISABLE_TK_MHA) && defined(KITTENS_SM120)
 // sm_120 (consumer Blackwell, RTX 50-series): warp-scope `mma.sync` only,
 // no WGMMA, no tcgen05. Both forward and backward go through TK warp-scope
 // FlashAttention-2 (tk/attention_sm120.cuh). v1 backward covers HS=64; HS=128
 // backward falls back to the scalar path below via the bwd_supports_head_dim
 // gate in attention_backward().
 #define LLMK_USE_TK_MHA 1
+#if defined(LLMK_DISABLE_TK_MHA_BWD)
+#define LLMK_USE_TK_MHA_BWD 0
+#else
 #define LLMK_USE_TK_MHA_BWD 1
+#endif
 #include "tk/attention_sm120.cuh"
 #else
 #define LLMK_USE_TK_MHA 0
@@ -168,6 +176,42 @@ __global__ void attention_float_grads_to_bf16_kernel(floatX* dq, floatX* dk, flo
     dv[idx] = (floatX)vg[idx];
 }
 
+__global__ void attention_qgrad_to_bf16_kernel(floatX* dq, const float* qg, int total) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= total) return;
+    dq[idx] = (floatX)qg[idx];
+}
+
+__global__ void attention_unpermute2_dprep_kernel(floatX* o_perm, floatX* og_perm, float* d_vec,
+                                                  const floatX* o_btc, const floatX* og_btc,
+                                                  int B, int T, int NH, int HS) {
+    int row = blockIdx.x * blockDim.y + threadIdx.y;
+    const int rows = B * NH * T;
+    if (row >= rows) return;
+
+    int t = row % T;
+    int nh = (row / T) % NH;
+    int b = row / (NH * T);
+    int btc_base = (b * T + t) * (NH * HS) + nh * HS;
+    int perm_base = row * HS;
+
+    float acc = 0.0f;
+    for (int hs = threadIdx.x; hs < HS; hs += WARP_SIZE) {
+        floatX o = __ldcs(&o_btc[btc_base + hs]);
+        floatX og = __ldcs(&og_btc[btc_base + hs]);
+        o_perm[perm_base + hs] = o;
+        og_perm[perm_base + hs] = og;
+        acc += (float)o * (float)og;
+    }
+
+    for (int offset = WARP_SIZE / 2; offset > 0; offset /= 2) {
+        acc += __shfl_down_sync(0xffffffff, acc, offset);
+    }
+    if (threadIdx.x == 0) {
+        d_vec[row] = acc;
+    }
+}
+
 __global__ void attention_forward_cuda_kernel(floatX* out, float* lse,
                                               const floatX* q, const floatX* k, const floatX* v,
                                               int B, int T, int NH, int HS) {
@@ -238,16 +282,25 @@ inline void attention_forward(floatX* out, floatX* qkvr, floatX* att,
     const int Tpad = CEIL_DIV(T, granularity) * granularity;
 
     if (Tpad == T) {
-        floatX* vaccum = inp;
         float* lse = reinterpret_cast<float*>(att);
+#if defined(KITTENS_SM120)
+        llmk::attention::launch_forward_causal_btc(
+            llmk::to_bf16(q), llmk::to_bf16(k), llmk::to_bf16(v),
+            lse, llmk::to_bf16(out),
+            B, NH, T, HS, stream);
+#else
+        floatX* vaccum = inp;
         llmk::attention::launch_forward_causal(
             llmk::to_bf16(q), llmk::to_bf16(k), llmk::to_bf16(v),
             lse, llmk::to_bf16(vaccum),
             B, NH, T, HS, stream);
+#endif
         cudaCheck(cudaGetLastError());
 
+#if !defined(KITTENS_SM120)
         num_blocks = CEIL_DIV(B * T * C, block_size);
         unpermute_kernel<<<num_blocks, block_size, 0, stream>>>(vaccum, out, B, T, NH, HS);
+#endif
     } else {
         size_t padded_elems = (size_t)B * Tpad * C;
         floatX* q_pad = inp;
@@ -283,6 +336,28 @@ inline void attention_forward(floatX* out, floatX* qkvr, floatX* att,
 #endif
     cudaCheck(cudaGetLastError());
 }
+
+#if defined(KITTENS_SM120) && LLMK_USE_TK_MHA
+inline void attention_forward_packed_qkv(floatX* out, floatX* att,
+                                         const floatX* qkv_packed,
+                                         int B, int T, int C, int NH,
+                                         cudaStream_t stream) {
+    NVTX_RANGE_FN();
+    const int HS = C / NH;
+    assert(C % NH == 0);
+    assert(HS == 64 || HS == 128);
+    assert(att != nullptr && "attention_forward_packed_qkv uses att storage for TK LSE");
+    const int granularity = llmk::attention::fwd_sequence_granularity();
+    assert(T % granularity == 0 && "SM120 packed-QKV attention requires unpadded T");
+
+    float* lse = reinterpret_cast<float*>(att);
+    llmk::attention::launch_forward_causal_packed_qkv_btc(
+        llmk::to_bf16(const_cast<floatX*>(qkv_packed)),
+        lse, llmk::to_bf16(out),
+        B, NH, T, HS, stream);
+    cudaCheck(cudaGetLastError());
+}
+#endif
 
 __device__ inline void attention_row_stats(float& maxval, float& denom,
                                            const floatX* q_row, const floatX* k_base,
@@ -430,17 +505,68 @@ inline void attention_backward(floatX* dinp, floatX* dqkvr, floatX* datt, floatX
         floatX* o_perm = datt;
         floatX* og_perm = o_perm + qkv_elems;
         float* d_vec = reinterpret_cast<float*>(og_perm + qkv_elems);
-        const size_t vec_elems = (size_t)B * NH * T;
-        float* qg = d_vec + vec_elems;
-        float* kg = qg + qkv_elems;
-        float* vg = kg + qkv_elems;
 
+#if defined(KITTENS_SM120)
+        {
+#ifndef LLMK_SM120_DPREP_WARPS
+#define LLMK_SM120_DPREP_WARPS 4
+#endif
+            dim3 dprep_block(WARP_SIZE, LLMK_SM120_DPREP_WARPS);
+            int dprep_rows = B * NH * T;
+            int dprep_grid = CEIL_DIV(dprep_rows, (int)dprep_block.y);
+            attention_unpermute2_dprep_kernel<<<dprep_grid, dprep_block, 0, stream>>>(
+                o_perm, og_perm, d_vec, scratch, dout, B, T, NH, HS);
+            cudaCheck(cudaGetLastError());
+        }
+#else
         unpermute_kernel_backward<<<num_blocks, block_size, 0, stream>>>(
             o_perm, scratch, B, T, NH, HS);
         cudaCheck(cudaGetLastError());
         unpermute_kernel_backward<<<num_blocks, block_size, 0, stream>>>(
             og_perm, dout, B, T, NH, HS);
         cudaCheck(cudaGetLastError());
+#endif
+
+#if defined(KITTENS_SM120)
+#if defined(LLMK_SM120_ATOMIC_DQ)
+        const size_t vec_elems = (size_t)B * NH * T;
+        float* qg = d_vec + vec_elems;
+        cudaCheck(cudaMemsetAsync(qg, 0, qkv_elems * sizeof(float), stream));
+        llmk::attention::launch_backward_causal(
+            llmk::to_bf16(const_cast<floatX*>(q)),
+            llmk::to_bf16(const_cast<floatX*>(k)),
+            llmk::to_bf16(const_cast<floatX*>(v)),
+            llmk::to_bf16(o_perm),
+            reinterpret_cast<float*>(const_cast<floatX*>(att)),
+            llmk::to_bf16(og_perm),
+            d_vec,
+            qg,
+            llmk::to_bf16(dk),
+            llmk::to_bf16(dv),
+            B, NH, T, HS, stream, /*d_precomputed=*/true);
+        cudaCheck(cudaGetLastError());
+        attention_qgrad_to_bf16_kernel<<<num_blocks, block_size, 0, stream>>>(
+            dq, qg, total);
+        cudaCheck(cudaGetLastError());
+#else
+        llmk::attention::launch_backward_causal_packed_grads(
+            llmk::to_bf16(const_cast<floatX*>(q)),
+            llmk::to_bf16(const_cast<floatX*>(k)),
+            llmk::to_bf16(const_cast<floatX*>(v)),
+            llmk::to_bf16(o_perm),
+            reinterpret_cast<float*>(const_cast<floatX*>(att)),
+            llmk::to_bf16(og_perm),
+            d_vec,
+            llmk::to_bf16(dinp),
+            B, NH, T, HS, stream, /*d_precomputed=*/true);
+        cudaCheck(cudaGetLastError());
+        return;
+#endif
+#else
+        const size_t vec_elems = (size_t)B * NH * T;
+        float* qg = d_vec + vec_elems;
+        float* kg = qg + qkv_elems;
+        float* vg = kg + qkv_elems;
 
         cudaCheck(cudaMemsetAsync(qg, 0, 3 * qkv_elems * sizeof(float), stream));
         llmk::attention::launch_backward_causal(
@@ -457,6 +583,7 @@ inline void attention_backward(floatX* dinp, floatX* dqkvr, floatX* datt, floatX
         attention_float_grads_to_bf16_kernel<<<num_blocks, block_size, 0, stream>>>(
             dq, dk, dv, qg, kg, vg, total);
         cudaCheck(cudaGetLastError());
+#endif
         permute_kernel_backward<<<num_blocks, block_size, 0, stream>>>(dinp, dq, dk, dv, B, T, NH, HS);
         cudaCheck(cudaGetLastError());
         return;
@@ -475,3 +602,43 @@ inline void attention_backward(floatX* dinp, floatX* dqkvr, floatX* datt, floatX
     permute_kernel_backward<<<num_blocks, block_size, 0, stream>>>(dinp, dq, dk, dv, B, T, NH, HS);
     cudaCheck(cudaGetLastError());
 }
+
+#if defined(KITTENS_SM120) && LLMK_USE_TK_MHA_BWD && !defined(LLMK_SM120_ATOMIC_DQ)
+inline void attention_backward_packed_qkv(floatX* dinp, floatX* datt, const floatX* scratch,
+                                          const floatX* dout,
+                                          const floatX* qkv_packed, const floatX* att,
+                                          int B, int T, int C, int NH,
+                                          cudaStream_t stream) {
+    NVTX_RANGE_FN();
+    const int HS = C / NH;
+    assert(C % NH == 0);
+    assert(datt != nullptr && scratch != nullptr && att != nullptr);
+    assert(llmk::attention::bwd_supports_head_dim(HS));
+    assert(T % llmk::attention::bwd_sequence_granularity() == 0);
+
+    const size_t qkv_elems = (size_t)B * NH * T * HS;
+    floatX* o_perm = datt;
+    floatX* og_perm = o_perm + qkv_elems;
+    float* d_vec = reinterpret_cast<float*>(og_perm + qkv_elems);
+
+#ifndef LLMK_SM120_DPREP_WARPS
+#define LLMK_SM120_DPREP_WARPS 4
+#endif
+    dim3 dprep_block(WARP_SIZE, LLMK_SM120_DPREP_WARPS);
+    int dprep_rows = B * NH * T;
+    int dprep_grid = CEIL_DIV(dprep_rows, (int)dprep_block.y);
+    attention_unpermute2_dprep_kernel<<<dprep_grid, dprep_block, 0, stream>>>(
+        o_perm, og_perm, d_vec, scratch, dout, B, T, NH, HS);
+    cudaCheck(cudaGetLastError());
+
+    llmk::attention::launch_backward_causal_packed_qkv_packed_grads(
+        llmk::to_bf16(const_cast<floatX*>(qkv_packed)),
+        llmk::to_bf16(o_perm),
+        reinterpret_cast<float*>(const_cast<floatX*>(att)),
+        llmk::to_bf16(og_perm),
+        d_vec,
+        llmk::to_bf16(dinp),
+        B, NH, T, HS, stream, /*d_precomputed=*/true);
+    cudaCheck(cudaGetLastError());
+}
+#endif

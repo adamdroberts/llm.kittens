@@ -42,7 +42,7 @@ GPT-3 descriptor variants (`gpt3:c384` … `gpt3:c12288`).
 | `-k <name>` | `cosine` | LR schedule name (`cosine`, `linear`). |
 | `-sl <float>` | `0.0` (off) | Skip optimizer step if loss z-score exceeds this. |
 | `-sg <float>` | `0.0` (off) | Skip optimizer step if gradient-norm z-score exceeds this. |
-| `-w <0\|1>` | `1` | Keep FP32 master weights. |
+| `-w <0\|1>` | `1` (`0` on SM120) | Keep FP32 master weights. SM120 defaults this off after RTX 5090 TinyStories timing showed the master-copy optimizer path dominating the 3-step smoke. |
 
 ### Evaluation and sampling
 
@@ -68,7 +68,7 @@ GPT-3 descriptor variants (`gpt3:c384` … `gpt3:c12288`).
 | Flag | Default | Purpose |
 |---|---|---|
 | `-f <0\|1>` | `1` | TF32 override. |
-| `-ge <0\|1\|2>` | per-GPU default | GELU fusion: `0` plain CUDA GELU, `1` opt-in TK MLP-up bias+GELU epilogue, `2` reserved. The dry run defaults `-1` to `0`; H100 numerical validation is still pending — see [`kernel-reference.md`](kernel-reference.md). |
+| `-ge <0\|1\|2>` | backend default | GELU fusion: `0` plain CUDA GELU, `1` fused MLP-up bias+GELU epilogue, `2` reserved. SM120 builds default to `1`; non-SM120 builds default to `0`. |
 | `-r <0\|1\|2>` | `1` | Recompute during backward: `0` none, `1` GELU, `2` GELU+LN. |
 | `-a <0\|1>` | `0` | Overfit a single batch (debug only). |
 | `-lg <int>` | `-1` | Log GPU memory/util every `N` steps. `-1` disables. |

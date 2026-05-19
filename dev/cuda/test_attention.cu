@@ -222,7 +222,8 @@ static double max_abs_diff_bf16_float(const std::vector<__nv_bfloat16>& actual,
     return max_diff;
 }
 
-static int run_case(int T, bool request_tk_backward, uint64_t seed_offset) {
+static int run_case(int T, bool request_tk_backward, uint64_t seed_offset,
+                    bool packed_qkv_sm120 = false) {
     constexpr int B = 1;
     constexpr int NH = 2;
     constexpr int HS = 64;
@@ -239,6 +240,11 @@ static int run_case(int T, bool request_tk_backward, uint64_t seed_offset) {
     printf("TK backward requested/used: %s/%s\n",
            request_tk_backward ? "yes" : "no",
            tk_backward ? "yes" : "no");
+#if defined(KITTENS_SM120)
+    printf("SM120 packed-QKV fast path: %s\n", packed_qkv_sm120 ? "yes" : "no");
+#else
+    (void)packed_qkv_sm120;
+#endif
 
     const size_t out_elems = (size_t)B * T * C;
     const size_t packed_elems = 3 * out_elems;
@@ -249,9 +255,17 @@ static int run_case(int T, bool request_tk_backward, uint64_t seed_offset) {
         4 * padded_elems * sizeof(__nv_bfloat16) +
         (size_t)B * NH * Tpad * sizeof(float);
     const size_t inp_workspace_bytes = std::max(packed_bytes, fwd_workspace_bytes);
-    const size_t att_bytes = (size_t)B * NH * T * sizeof(float);
-    const size_t datt_bf16_elems = 2 * out_elems;
-    const size_t datt_float_elems = (size_t)B * NH * T + 3 * out_elems;
+    size_t att_bf16_elems = 2 * (size_t)B * NH * T;
+    size_t datt_bf16_elems = 2 * out_elems;
+    size_t datt_float_elems = (size_t)B * NH * T + 3 * out_elems;
+#if defined(KITTENS_SM120)
+    datt_bf16_elems = 2 * out_elems;
+    datt_float_elems = (size_t)B * NH * T;
+#if defined(LLMK_SM120_ATOMIC_DQ)
+    datt_float_elems += out_elems;
+#endif
+#endif
+    const size_t att_bytes = att_bf16_elems * sizeof(__nv_bfloat16);
     const size_t datt_bytes =
         datt_bf16_elems * sizeof(__nv_bfloat16) +
         datt_float_elems * sizeof(float);
@@ -309,11 +323,26 @@ static int run_case(int T, bool request_tk_backward, uint64_t seed_offset) {
         cudaCheck(cudaMemset(d_scratch, 0, out_bytes));
     }
 
-    attention_forward(d_out, d_qkvr, d_att, d_inp, B, T, C, NH, 0);
+#if defined(KITTENS_SM120) && LLMK_USE_TK_MHA
+    if (packed_qkv_sm120) {
+        attention_forward_packed_qkv(d_out, d_att, d_inp, B, T, C, NH, 0);
+    } else
+#endif
+    {
+        attention_forward(d_out, d_qkvr, d_att, d_inp, B, T, C, NH, 0);
+    }
     cudaCheck(cudaDeviceSynchronize());
 
-    attention_backward(d_dinp, d_dqkvr, d_datt, tk_backward ? d_out : d_scratch,
-                       d_dout, d_qkvr, d_att, B, T, C, NH, 0);
+#if defined(KITTENS_SM120) && LLMK_USE_TK_MHA_BWD && !defined(LLMK_SM120_ATOMIC_DQ)
+    if (packed_qkv_sm120 && tk_backward) {
+        attention_backward_packed_qkv(d_dinp, d_datt, d_out,
+                                      d_dout, d_inp, d_att, B, T, C, NH, 0);
+    } else
+#endif
+    {
+        attention_backward(d_dinp, d_dqkvr, d_datt, tk_backward ? d_out : d_scratch,
+                           d_dout, d_qkvr, d_att, B, T, C, NH, 0);
+    }
     cudaCheck(cudaDeviceSynchronize());
 
     std::vector<__nv_bfloat16> h_out(out_elems);
@@ -358,6 +387,9 @@ int main() {
     int failures = 0;
     failures += run_case(192, false, 0);
     failures += run_case(256, true, 10000);
+#if defined(KITTENS_SM120) && LLMK_USE_TK_MHA_BWD && !defined(LLMK_SM120_ATOMIC_DQ)
+    failures += run_case(256, true, 20000, true);
+#endif
     if (failures == 0) {
         printf("test_attention smoke OK\n");
     }

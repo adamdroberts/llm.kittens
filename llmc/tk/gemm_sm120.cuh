@@ -9,10 +9,11 @@ grid swizzle inside the kernels and a per-template tile-shape choice.
   * Each (M_TILE × N_TILE × K_TILE, NUM_WARPS) tuple lives in a
     `kernel_traits<>` instantiation. The three kernels (kernel_nt / _nn / _tn)
     are templated on traits + epilogue flags so multiple tile shapes coexist.
-  * Three presets ship today:
+  * Four presets ship today:
       traits_128x64   — 128×64 ×32 with 4 warps  (baseline)
       traits_256x64   — 256×64 ×32 with 8 warps  (more M-reuse per CTA)
-      traits_128x128  — 128×128×32 with 4 warps  (bigger N tile for wide ops)
+      traits_128x128  — 128×128×64 with 4 warps  (bigger N tile for huge-N ops)
+      grad_*          — same M/N shapes as above, but K=64 for backward GEMMs
     See the public `matmul_default_* / matmul_wide_* / matmul_huge_n_*` alias
     families. The `matmul_template<>` struct carries a `_TRAITS` parameter so
     every existing call site keeps its current behavior (default = 128×64).
@@ -29,7 +30,7 @@ Shape constraints (per traits):
   * M divisible by T::M_TILE
   * N divisible by T::N_TILE
   * K divisible by T::K_TILE
-GPT-2 124M dense matmuls satisfy this for all three presets (see plan).
+GPT-2 124M dense matmuls satisfy this for all SM120 presets (see plan).
 
 No TMA on sm_120 (consumer Blackwell has cp.async; TMA is sm_90+ with partial
 sm_120 support that we don't lean on here).
@@ -47,6 +48,53 @@ namespace sm120_detail {
 
 // 4-warp `group<NUM_WARPS>::load_async_wait<N>(bar_id)` syncs on this barrier.
 constexpr int LOAD_BAR = 0;
+
+#ifndef LLMK_SM120_K_TILE
+#define LLMK_SM120_K_TILE 32
+#endif
+
+#ifndef LLMK_SM120_SUPER_M
+#define LLMK_SM120_SUPER_M 8
+#endif
+
+#ifndef LLMK_SM120_HUGE_N_K_TILE
+#define LLMK_SM120_HUGE_N_K_TILE 64
+#endif
+
+#ifndef LLMK_SM120_GRAD_K_TILE
+#define LLMK_SM120_GRAD_K_TILE 64
+#endif
+
+#ifndef LLMK_SM120_DINP_SUPER_M
+#define LLMK_SM120_DINP_SUPER_M LLMK_SM120_SUPER_M
+#endif
+
+#ifndef LLMK_SM120_DWEIGHT_SUPER_M
+#define LLMK_SM120_DWEIGHT_SUPER_M 2
+#endif
+
+#ifndef LLMK_SM120_INPLACE_LAYOUT_SWAP
+#define LLMK_SM120_INPLACE_LAYOUT_SWAP 1
+#endif
+
+#ifndef LLMK_SM120_FAST_DGELU
+#define LLMK_SM120_FAST_DGELU 1
+#endif
+
+#ifndef LLMK_SM120_APPROX_DGELU_TANH
+#define LLMK_SM120_APPROX_DGELU_TANH 1
+#endif
+
+__device__ static inline float sm120_dgelu_tanh(float x) {
+#if LLMK_SM120_APPROX_DGELU_TANH
+    // Fast odd rational approximation, clamped to tanh's range.
+    float x2 = x * x;
+    float y = x * (27.0f + x2) / (27.0f + 9.0f * x2);
+    return fminf(1.0f, fmaxf(-1.0f, y));
+#else
+    return tanhf(x);
+#endif
+}
 
 // ---- kernel_traits bundle -------------------------------------------------
 //
@@ -94,14 +142,18 @@ struct kernel_traits {
         bias_gl bias;
         int     bias_present;
     };
-    struct globals_nn { a_gl_nn A; b_gl_nn B; c_gl C; };
+    struct globals_nn { a_gl_nn A; b_gl_nn B; c_gl C; c_gl P; };
     struct globals_tn { a_gl_tn A; b_gl_tn B; c_gl C; };
 };
 
 // Concrete presets used by the public mmt aliases.
-using traits_128x64  = kernel_traits<128,  64, 32, 4>;
-using traits_256x64  = kernel_traits<256,  64, 32, 8>;
-using traits_128x128 = kernel_traits<128, 128, 32, 4>;
+using traits_128x64  = kernel_traits<128,  64, LLMK_SM120_K_TILE, 4>;
+using traits_128x96  = kernel_traits<128,  96, LLMK_SM120_K_TILE, 4>;
+using traits_256x64  = kernel_traits<256,  64, LLMK_SM120_K_TILE, 8>;
+using traits_128x128 = kernel_traits<128, 128, LLMK_SM120_HUGE_N_K_TILE, 4>;
+using traits_grad_128x64 = kernel_traits<128, 64, LLMK_SM120_GRAD_K_TILE, 4>;
+using traits_grad_128x96 = kernel_traits<128, 96, LLMK_SM120_GRAD_K_TILE, 4>;
+using traits_grad_256x64 = kernel_traits<256, 64, LLMK_SM120_GRAD_K_TILE, 8>;
 
 // ---- SUPER_M grid swizzle -------------------------------------------------
 //
@@ -144,7 +196,10 @@ void kernel_nt(const __grid_constant__ typename T::globals_nt g)
     const int ntiles = (int)g.C.cols() / T::N_TILE;
     int bx, by;
     if (!resolve_tile_coords(mtiles, ntiles, SUPER_M, by, bx)) return;
-    const int w  = threadIdx.x / ::kittens::WARP_THREADS;
+    const int warp_id = threadIdx.x / ::kittens::WARP_THREADS;
+    const int w = (T::NUM_WARPS % 4 == 0)
+        ? (warp_id / 4 + (warp_id % 4) * (T::NUM_WARPS / 4))
+        : warp_id;
 
     __shared__ typename T::a_smem_nt As[T::PIPE_STAGES];
     __shared__ typename T::b_smem_nt Bs[T::PIPE_STAGES];
@@ -218,20 +273,24 @@ void kernel_nt(const __grid_constant__ typename T::globals_nt g)
 
 // ---- kernel_nn : C = A · B ------------------------------------------------
 
-template <typename T, int SUPER_M>
+template <typename T, int SUPER_M, bool APPLY_DGELU>
 __global__ __launch_bounds__(T::NUM_THREADS, 1)
 void kernel_nn(const __grid_constant__ typename T::globals_nn g)
 {
     using a_rt     = rt_bf<T::WARP_M, T::K_TILE, ducks::rt_layout::row>;
     using b_rt_row = rt_bf<T::K_TILE, T::N_TILE, ducks::rt_layout::row>;
     using b_rt_col = rt_bf<T::K_TILE, T::N_TILE, ducks::rt_layout::col>;
+    using p_rt     = rt_bf<T::WARP_M, T::N_TILE, ducks::rt_layout::row>;
     using d_rt     = rt_fl<T::WARP_M, T::N_TILE, ducks::rt_layout::row>;
 
     const int mtiles = (int)g.A.rows() / T::M_TILE;
     const int ntiles = (int)g.C.cols() / T::N_TILE;
     int bx, by;
     if (!resolve_tile_coords(mtiles, ntiles, SUPER_M, by, bx)) return;
-    const int w  = threadIdx.x / ::kittens::WARP_THREADS;
+    const int warp_id = threadIdx.x / ::kittens::WARP_THREADS;
+    const int w = (T::NUM_WARPS % 4 == 0)
+        ? (warp_id / 4 + (warp_id % 4) * (T::NUM_WARPS / 4))
+        : warp_id;
 
     __shared__ typename T::a_smem_nn As[T::PIPE_STAGES];
     __shared__ typename T::b_smem_nn Bs[T::PIPE_STAGES];
@@ -258,13 +317,60 @@ void kernel_nn(const __grid_constant__ typename T::globals_nn g)
         }
 
         auto As_slice = As[stage].template subtile<T::WARP_M, T::K_TILE>({w, 0});
-        a_rt     a_reg;
-        b_rt_row b_reg_row;
-        b_rt_col b_reg_col;
+        a_rt a_reg;
         ::kittens::warp::load(a_reg, As_slice);
+#if LLMK_SM120_INPLACE_LAYOUT_SWAP
+        b_rt_row b_reg_row;
+        ::kittens::warp::load(b_reg_row, Bs[stage]);
+        auto& b_reg_col = ::kittens::warp::swap_layout_inplace(b_reg_row);
+#else
+        b_rt_col b_reg_col;
+        b_rt_row b_reg_row;
         ::kittens::warp::load(b_reg_row, Bs[stage]);
         ::kittens::warp::swap_layout(b_reg_col, b_reg_row);
+#endif
         ::kittens::warp::mma_AB(accum, a_reg, b_reg_col, accum);
+    }
+
+    if constexpr (APPLY_DGELU) {
+        p_rt pre;
+        ::kittens::warp::load(pre, g.P, {0, 0, by * T::NUM_WARPS + w, bx});
+        constexpr float k0 = 0.7978845608028654f;
+        constexpr float k1 = 0.044715f;
+        #pragma unroll
+        for (int i = 0; i < d_rt::height; ++i) {
+            #pragma unroll
+            for (int j = 0; j < d_rt::width; ++j) {
+                auto& acc_tile = accum.tiles[i][j];
+                auto& pre_tile = pre.tiles[i][j];
+                #pragma unroll
+                for (int e = 0; e < 4; ++e) {
+                    float x0 = (float)pre_tile.data[e].x;
+                    float x1 = (float)pre_tile.data[e].y;
+                    float x0_sq = x0 * x0;
+                    float x1_sq = x1 * x1;
+                    float tanh_arg0 = k0 * (x0 + k1 * x0 * x0_sq);
+                    float tanh_arg1 = k0 * (x1 + k1 * x1 * x1_sq);
+                    float tanh_out0 = sm120_dgelu_tanh(tanh_arg0);
+                    float tanh_out1 = sm120_dgelu_tanh(tanh_arg1);
+#if LLMK_SM120_FAST_DGELU
+                    float sech0 = 1.0f - tanh_out0 * tanh_out0;
+                    float sech1 = 1.0f - tanh_out1 * tanh_out1;
+#else
+                    float cosh_out0 = coshf(tanh_arg0);
+                    float cosh_out1 = coshf(tanh_arg1);
+                    float sech0 = 1.0f / (cosh_out0 * cosh_out0);
+                    float sech1 = 1.0f / (cosh_out1 * cosh_out1);
+#endif
+                    float grad0 = 0.5f * (1.0f + tanh_out0)
+                        + x0 * 0.5f * sech0 * k0 * (1.0f + 3.0f * k1 * x0_sq);
+                    float grad1 = 0.5f * (1.0f + tanh_out1)
+                        + x1 * 0.5f * sech1 * k0 * (1.0f + 3.0f * k1 * x1_sq);
+                    acc_tile.data[e].x *= grad0;
+                    acc_tile.data[e].y *= grad1;
+                }
+            }
+        }
     }
 
     ::kittens::warp::store(g.C, accum, {0, 0, by * T::NUM_WARPS + w, bx});
@@ -287,7 +393,10 @@ void kernel_tn(const __grid_constant__ typename T::globals_tn g)
     const int ntiles = (int)g.C.cols() / T::N_TILE;
     int bx, by;
     if (!resolve_tile_coords(mtiles, ntiles, SUPER_M, by, bx)) return;
-    const int w  = threadIdx.x / ::kittens::WARP_THREADS;
+    const int warp_id = threadIdx.x / ::kittens::WARP_THREADS;
+    const int w = (T::NUM_WARPS % 4 == 0)
+        ? (warp_id / 4 + (warp_id % 4) * (T::NUM_WARPS / 4))
+        : warp_id;
 
     __shared__ typename T::a_smem_tn As[T::PIPE_STAGES];
     __shared__ typename T::b_smem_tn Bs[T::PIPE_STAGES];
@@ -316,13 +425,18 @@ void kernel_tn(const __grid_constant__ typename T::globals_tn g)
 
         auto As_slice = As[stage].template subtile<T::K_TILE, T::WARP_M>({0, w});
         a_rt_row a_reg_row;
-        a_rt_col a_reg_col;
         b_rt_row b_reg_row;
-        b_rt_col b_reg_col;
         ::kittens::warp::load(a_reg_row, As_slice);
         ::kittens::warp::load(b_reg_row, Bs[stage]);
+#if LLMK_SM120_INPLACE_LAYOUT_SWAP
+        auto& a_reg_col = ::kittens::warp::swap_layout_inplace(a_reg_row);
+        auto& b_reg_col = ::kittens::warp::swap_layout_inplace(b_reg_row);
+#else
+        a_rt_col a_reg_col;
+        b_rt_col b_reg_col;
         ::kittens::warp::swap_layout(a_reg_col, a_reg_row);
         ::kittens::warp::swap_layout(b_reg_col, b_reg_row);
+#endif
         ::kittens::warp::mma_AtB(accum, a_reg_col, b_reg_col, accum);
     }
 
@@ -359,32 +473,43 @@ struct matmul_template {
 // --- Forward (NT, C = A · Bᵀ) ---
 // Default tile: 128×64. Wide variant: 256×64. Huge-N variant: 128×128.
 
-using matmul_default_nt              = matmul_template<2, 4, 8, false, true,  false, false, false, sm120_detail::traits_128x64>;
-using matmul_default_nt_bias         = matmul_template<2, 4, 8, false, true,  true,  false, false, sm120_detail::traits_128x64>;
-using matmul_default_nt_bias_gelu    = matmul_template<2, 4, 8, false, true,  true,  true,  true,  sm120_detail::traits_128x64>;
-using matmul_small_n_nt              = matmul_template<2, 2, 8, false, true,  false, false, false, sm120_detail::traits_128x64>;
-using matmul_small_n_nt_bias         = matmul_template<2, 2, 8, false, true,  true,  false, false, sm120_detail::traits_128x64>;
-using matmul_small_n_nt_bias_gelu    = matmul_template<2, 2, 8, false, true,  true,  true,  true,  sm120_detail::traits_128x64>;
+using matmul_default_nt              = matmul_template<2, 4, LLMK_SM120_SUPER_M, false, true,  false, false, false, sm120_detail::traits_128x64>;
+using matmul_default_nt_bias         = matmul_template<2, 4, LLMK_SM120_SUPER_M, false, true,  true,  false, false, sm120_detail::traits_128x64>;
+using matmul_default_nt_bias_gelu    = matmul_template<2, 4, LLMK_SM120_SUPER_M, false, true,  true,  true,  true,  sm120_detail::traits_128x64>;
+using matmul_small_n_nt              = matmul_template<2, 2, LLMK_SM120_SUPER_M, false, true,  false, false, false, sm120_detail::traits_128x64>;
+using matmul_small_n_nt_bias         = matmul_template<2, 2, LLMK_SM120_SUPER_M, false, true,  true,  false, false, sm120_detail::traits_128x64>;
+using matmul_small_n_nt_bias_gelu    = matmul_template<2, 2, LLMK_SM120_SUPER_M, false, true,  true,  true,  true,  sm120_detail::traits_128x64>;
 
-using matmul_wide_nt                 = matmul_template<2, 4, 8, false, true,  false, false, false, sm120_detail::traits_256x64>;
-using matmul_wide_nt_bias            = matmul_template<2, 4, 8, false, true,  true,  false, false, sm120_detail::traits_256x64>;
-using matmul_wide_nt_bias_gelu       = matmul_template<2, 4, 8, false, true,  true,  true,  true,  sm120_detail::traits_256x64>;
+using matmul_wide_nt                 = matmul_template<2, 4, LLMK_SM120_SUPER_M, false, true,  false, false, false, sm120_detail::traits_256x64>;
+using matmul_wide_nt_bias            = matmul_template<2, 4, LLMK_SM120_SUPER_M, false, true,  true,  false, false, sm120_detail::traits_256x64>;
+using matmul_wide_nt_bias_gelu       = matmul_template<2, 4, LLMK_SM120_SUPER_M, false, true,  true,  true,  true,  sm120_detail::traits_256x64>;
 
-using matmul_huge_n_nt               = matmul_template<2, 4, 8, false, true,  false, false, false, sm120_detail::traits_128x128>;
-using matmul_huge_n_nt_bias          = matmul_template<2, 4, 8, false, true,  true,  false, false, sm120_detail::traits_128x128>;
-using matmul_huge_n_nt_bias_gelu     = matmul_template<2, 4, 8, false, true,  true,  true,  true,  sm120_detail::traits_128x128>;
+using matmul_n96_nt                  = matmul_template<2, 4, LLMK_SM120_SUPER_M, false, true,  false, false, false, sm120_detail::traits_128x96>;
+using matmul_n96_nt_bias             = matmul_template<2, 4, LLMK_SM120_SUPER_M, false, true,  true,  false, false, sm120_detail::traits_128x96>;
+using matmul_n96_nt_bias_gelu        = matmul_template<2, 4, LLMK_SM120_SUPER_M, false, true,  true,  true,  true,  sm120_detail::traits_128x96>;
+
+using matmul_huge_n_nt               = matmul_template<2, 4, LLMK_SM120_SUPER_M, false, true,  false, false, false, sm120_detail::traits_128x128>;
+using matmul_huge_n_nt_bias          = matmul_template<2, 4, LLMK_SM120_SUPER_M, false, true,  true,  false, false, sm120_detail::traits_128x128>;
+using matmul_huge_n_nt_bias_gelu     = matmul_template<2, 4, LLMK_SM120_SUPER_M, false, true,  true,  true,  true,  sm120_detail::traits_128x128>;
 
 // --- dInp (NN, C = A · B) ---
-using matmul_default                 = matmul_template<2, 4, 8, false, false, false, false, false, sm120_detail::traits_128x64>;
-using matmul_small_n                 = matmul_template<2, 2, 8, false, false, false, false, false, sm120_detail::traits_128x64>;
-using matmul_wide                    = matmul_template<2, 4, 8, false, false, false, false, false, sm120_detail::traits_256x64>;
-using matmul_huge_n                  = matmul_template<2, 4, 8, false, false, false, false, false, sm120_detail::traits_128x128>;
+using matmul_default                 = matmul_template<2, 4, LLMK_SM120_DINP_SUPER_M, false, false, false, false, false, sm120_detail::traits_grad_128x64>;
+using matmul_small_n                 = matmul_template<2, 2, LLMK_SM120_DINP_SUPER_M, false, false, false, false, false, sm120_detail::traits_grad_128x64>;
+using matmul_n96                     = matmul_template<2, 4, LLMK_SM120_DINP_SUPER_M, false, false, false, false, false, sm120_detail::traits_grad_128x96>;
+using matmul_wide                    = matmul_template<2, 4, LLMK_SM120_DINP_SUPER_M, false, false, false, false, false, sm120_detail::traits_grad_256x64>;
+using matmul_huge_n                  = matmul_template<2, 4, LLMK_SM120_SUPER_M, false, false, false, false, false, sm120_detail::traits_128x128>;
+using matmul_default_dgelu           = matmul_template<2, 4, LLMK_SM120_DINP_SUPER_M, false, false, false, true,  false, sm120_detail::traits_grad_128x64>;
+using matmul_small_n_dgelu           = matmul_template<2, 2, LLMK_SM120_DINP_SUPER_M, false, false, false, true,  false, sm120_detail::traits_grad_128x64>;
+using matmul_n96_dgelu               = matmul_template<2, 4, LLMK_SM120_DINP_SUPER_M, false, false, false, true,  false, sm120_detail::traits_grad_128x96>;
+using matmul_wide_dgelu              = matmul_template<2, 4, LLMK_SM120_DINP_SUPER_M, false, false, false, true,  false, sm120_detail::traits_grad_256x64>;
+using matmul_huge_n_dgelu            = matmul_template<2, 4, LLMK_SM120_SUPER_M, false, false, false, true,  false, sm120_detail::traits_128x128>;
 
 // --- dWeight (TN, C = Aᵀ · B) ---
-using matmul_default_tn              = matmul_template<2, 4, 8, true,  false, false, false, false, sm120_detail::traits_128x64>;
-using matmul_small_n_tn              = matmul_template<2, 2, 8, true,  false, false, false, false, sm120_detail::traits_128x64>;
-using matmul_wide_tn                 = matmul_template<2, 4, 8, true,  false, false, false, false, sm120_detail::traits_256x64>;
-using matmul_huge_n_tn               = matmul_template<2, 4, 8, true,  false, false, false, false, sm120_detail::traits_128x128>;
+using matmul_default_tn              = matmul_template<2, 4, LLMK_SM120_DWEIGHT_SUPER_M, true,  false, false, false, false, sm120_detail::traits_grad_128x64>;
+using matmul_small_n_tn              = matmul_template<2, 2, LLMK_SM120_DWEIGHT_SUPER_M, true,  false, false, false, false, sm120_detail::traits_grad_128x64>;
+using matmul_n96_tn                  = matmul_template<2, 4, LLMK_SM120_DWEIGHT_SUPER_M, true,  false, false, false, false, sm120_detail::traits_grad_128x96>;
+using matmul_wide_tn                 = matmul_template<2, 4, LLMK_SM120_DWEIGHT_SUPER_M, true,  false, false, false, false, sm120_detail::traits_grad_256x64>;
+using matmul_huge_n_tn               = matmul_template<2, 4, LLMK_SM120_SUPER_M, true,  false, false, false, false, sm120_detail::traits_128x128>;
 
 // ---- launcher -------------------------------------------------------------
 
@@ -422,13 +547,15 @@ inline void launch(bf16* d_A, bf16* d_B, bf16* d_C, int M, int N, int K,
         auto kfn = kernel_nt<T, mmt::SUPER_M, mmt::APPLY_BIAS, mmt::APPLY_GELU, mmt::STORE_PRE_GELU>;
         kfn<<<grid, block, 0, stream>>>(g);
     } else if constexpr (!mmt::A_TRANSPOSED && !mmt::B_TRANSPOSED) {
-        static_assert(!mmt::APPLY_BIAS && !mmt::APPLY_GELU && !mmt::STORE_PRE_GELU,
-            "gemm_sm120: bias/gelu epilogues only available on NT path.");
+        static_assert(!mmt::APPLY_BIAS && !mmt::STORE_PRE_GELU,
+            "gemm_sm120: bias/pre-GELU epilogues only available on NT path.");
         typename T::a_gl_nn Agl{d_A, nullptr, nullptr, M_, K_};
         typename T::b_gl_nn Bgl{d_B, nullptr, nullptr, K_, N_};
         typename T::c_gl    Cgl{d_C, nullptr, nullptr, M_, N_};
-        typename T::globals_nn g{Agl, Bgl, Cgl};
-        kernel_nn<T, mmt::SUPER_M><<<grid, block, 0, stream>>>(g);
+        typename T::c_gl    Pgl{d_pre_gelu == nullptr ? d_C : d_pre_gelu, nullptr, nullptr, M_, N_};
+        typename T::globals_nn g{Agl, Bgl, Cgl, Pgl};
+        auto kfn = kernel_nn<T, mmt::SUPER_M, mmt::APPLY_GELU>;
+        kfn<<<grid, block, 0, stream>>>(g);
     } else {
         static_assert(!mmt::APPLY_BIAS && !mmt::APPLY_GELU && !mmt::STORE_PRE_GELU,
             "gemm_sm120: bias/gelu epilogues only available on NT path.");
@@ -436,7 +563,8 @@ inline void launch(bf16* d_A, bf16* d_B, bf16* d_C, int M, int N, int K,
         typename T::b_gl_tn Bgl{d_B, nullptr, nullptr, K_, N_};
         typename T::c_gl    Cgl{d_C, nullptr, nullptr, M_, N_};
         typename T::globals_tn g{Agl, Bgl, Cgl};
-        kernel_tn<T, mmt::SUPER_M><<<grid, block, 0, stream>>>(g);
+        auto kfn = kernel_tn<T, mmt::SUPER_M>;
+        kfn<<<grid, block, 0, stream>>>(g);
     }
 }
 

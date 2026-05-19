@@ -79,6 +79,18 @@ __global__ void naive_dweight_ref(const __nv_bfloat16* dout, const __nv_bfloat16
     dweight[oc * C + c] = __float2bfloat16(acc);
 }
 
+__global__ void naive_dinp_ref(const __nv_bfloat16* dout, const __nv_bfloat16* weight,
+                               __nv_bfloat16* dinp, int M, int C, int OC) {
+    int c = blockIdx.x * blockDim.x + threadIdx.x;
+    int m = blockIdx.y * blockDim.y + threadIdx.y;
+    if (m >= M || c >= C) return;
+    float acc = 0.f;
+    for (int oc = 0; oc < OC; ++oc) {
+        acc += __bfloat162float(dout[m * OC + oc]) * __bfloat162float(weight[oc * C + c]);
+    }
+    dinp[m * C + c] = __float2bfloat16(acc);
+}
+
 __global__ void naive_dweight_accum_ref(const __nv_bfloat16* dout, const __nv_bfloat16* inp,
                                         __nv_bfloat16* dweight, int M, int C, int OC) {
     int c = blockIdx.y * blockDim.y + threadIdx.y;
@@ -90,6 +102,28 @@ __global__ void naive_dweight_accum_ref(const __nv_bfloat16* dout, const __nv_bf
     }
     int idx = oc * C + c;
     dweight[idx] = __float2bfloat16(__bfloat162float(dweight[idx]) + acc);
+}
+
+__global__ void naive_dinp_dgelu_ref(const __nv_bfloat16* dout, const __nv_bfloat16* weight,
+                                     const __nv_bfloat16* pre_gelu,
+                                     __nv_bfloat16* dinp,
+                                     int M, int C, int OC) {
+    int c = blockIdx.x * blockDim.x + threadIdx.x;
+    int m = blockIdx.y * blockDim.y + threadIdx.y;
+    if (m >= M || c >= C) return;
+    float acc = 0.f;
+    for (int oc = 0; oc < OC; ++oc) {
+        acc += __bfloat162float(dout[m * OC + oc]) * __bfloat162float(weight[oc * C + c]);
+    }
+    float x = __bfloat162float(pre_gelu[m * C + c]);
+    float cube = 0.044715f * x * x * x;
+    float tanh_arg = sqrtf(2.0f / M_PI) * (x + cube);
+    float tanh_out = tanhf(tanh_arg);
+    float coshf_out = coshf(tanh_arg);
+    float sech_out = 1.0f / (coshf_out * coshf_out);
+    float local_grad = 0.5f * (1.0f + tanh_out)
+        + x * 0.5f * sech_out * sqrtf(2.0f / M_PI) * (1.0f + 3.0f * 0.044715f * x * x);
+    dinp[m * C + c] = __float2bfloat16(acc * local_grad);
 }
 
 static void fill_random_bf16(std::vector<__nv_bfloat16>& h, uint64_t seed, float lo, float hi) {
@@ -117,6 +151,9 @@ int main(int argc, char** argv) {
         printf("⚠ This smoke test targets H100 (sm_90); detected sm_%d%d. Continuing anyway.\n",
                deviceProp.major, deviceProp.minor);
     }
+#if defined(LLMK_SM120_USE_CUBLASLT_GEMM)
+    llmk::cublaslt_sm120::init();
+#endif
 
     // Sweep three shapes that exercise the dispatch logic in matmul_forward:
     //   1. Small square — uses matmul_default<2,4,8>
@@ -130,6 +167,7 @@ int main(int argc, char** argv) {
     };
 
     int failures = 0;
+    int total_tests = (int)(sizeof(shapes)/sizeof(*shapes));
     for (const auto& s : shapes) {
         printf("\n──── %s  M=%d N=%d K=%d ────\n", s.name, s.M, s.N, s.K);
 
@@ -190,6 +228,10 @@ int main(int argc, char** argv) {
     {
         Shape s = {1024, 4096, 1024, "forward bias+GELU epilogue (default)"};
         printf("\n──── %s  M=%d N=%d K=%d ────\n", s.name, s.M, s.N, s.K);
+        if (!matmul_forward_gelu_supported(/*B=*/1, /*T=*/s.M, /*C=*/s.K, /*OC=*/s.N)) {
+            printf("  SKIP: fused bias+GELU is not supported by this build\n");
+        } else {
+        total_tests++;
 
         size_t a_bytes = (size_t)s.M * s.K * sizeof(__nv_bfloat16);
         size_t w_bytes = (size_t)s.N * s.K * sizeof(__nv_bfloat16);
@@ -255,9 +297,133 @@ int main(int argc, char** argv) {
         cudaCheck(cudaFree(dGelu_tk));
         cudaCheck(cudaFree(dPre_ref));
         cudaCheck(cudaFree(dGelu_ref));
+        }
     }
 
     {
+        total_tests++;
+        Shape s = {1024, 1024, 1024, "dInp backward A*B (default)"};
+        printf("\n──── %s  M=%d OC=%d C=%d ────\n", s.name, s.M, s.N, s.K);
+
+        size_t dout_bytes = (size_t)s.M * s.N * sizeof(__nv_bfloat16);
+        size_t w_bytes = (size_t)s.N * s.K * sizeof(__nv_bfloat16);
+        size_t dinp_bytes = (size_t)s.M * s.K * sizeof(__nv_bfloat16);
+
+        std::vector<__nv_bfloat16> hDout((size_t)s.M * s.N);
+        std::vector<__nv_bfloat16> hW((size_t)s.N * s.K);
+        std::vector<__nv_bfloat16> hDinp_tk((size_t)s.M * s.K);
+        std::vector<__nv_bfloat16> hDinp_ref((size_t)s.M * s.K);
+
+        fill_random_bf16(hDout, 50617, -0.75f, 0.75f);
+        fill_random_bf16(hW, 50618, -0.75f, 0.75f);
+
+        __nv_bfloat16 *dDout = nullptr, *dW = nullptr, *dDinp_tk = nullptr, *dDinp_ref = nullptr;
+        cudaCheck(cudaMalloc(&dDout, dout_bytes));
+        cudaCheck(cudaMalloc(&dW, w_bytes));
+        cudaCheck(cudaMalloc(&dDinp_tk, dinp_bytes));
+        cudaCheck(cudaMalloc(&dDinp_ref, dinp_bytes));
+
+        cudaCheck(cudaMemcpy(dDout, hDout.data(), dout_bytes, cudaMemcpyHostToDevice));
+        cudaCheck(cudaMemcpy(dW, hW.data(), w_bytes, cudaMemcpyHostToDevice));
+        cudaCheck(cudaMemset(dDinp_tk, 0, dinp_bytes));
+        cudaCheck(cudaMemset(dDinp_ref, 0, dinp_bytes));
+
+        matmul_backward(dDinp_tk, /*dweight=*/nullptr, /*dbias=*/nullptr,
+                        dDout, /*inp=*/nullptr, dW, /*dbias_buffer=*/nullptr,
+                        /*B=*/1, /*T=*/s.M, /*C=*/s.K, /*OC=*/s.N, /*stream=*/0,
+                        /*dweight_accumulate=*/false);
+        cudaCheck(cudaDeviceSynchronize());
+
+        dim3 block(16, 16);
+        dim3 grid(CEIL_DIV(s.K, 16), CEIL_DIV(s.M, 16));
+        naive_dinp_ref<<<grid, block>>>(dDout, dW, dDinp_ref, s.M, s.K, s.N);
+        cudaCheck(cudaDeviceSynchronize());
+
+        cudaCheck(cudaMemcpy(hDinp_tk.data(), dDinp_tk, dinp_bytes, cudaMemcpyDeviceToHost));
+        cudaCheck(cudaMemcpy(hDinp_ref.data(), dDinp_ref, dinp_bytes, cudaMemcpyDeviceToHost));
+
+        double max_diff = max_abs_diff(hDinp_tk, hDinp_ref);
+        double tolerance = 0.5;
+        bool ok = max_diff < tolerance;
+        printf("  max abs diff = %.4f  (tolerance %.2f)  %s\n",
+               max_diff, tolerance, ok ? "PASS" : "FAIL");
+        if (!ok) failures++;
+
+        cudaCheck(cudaFree(dDout));
+        cudaCheck(cudaFree(dW));
+        cudaCheck(cudaFree(dDinp_tk));
+        cudaCheck(cudaFree(dDinp_ref));
+    }
+
+    {
+        Shape s = {1024, 1024, 1024, "dInp backward fused dGELU"};
+        printf("\n──── %s  M=%d OC=%d C=%d ────\n", s.name, s.M, s.N, s.K);
+        if (!matmul_backward_gelu_fusion_supported()) {
+            printf("  SKIP: fused dGELU backward is not supported by this build\n");
+        } else {
+        total_tests++;
+
+        size_t dout_bytes = (size_t)s.M * s.N * sizeof(__nv_bfloat16);
+        size_t w_bytes = (size_t)s.N * s.K * sizeof(__nv_bfloat16);
+        size_t dinp_bytes = (size_t)s.M * s.K * sizeof(__nv_bfloat16);
+
+        std::vector<__nv_bfloat16> hDout((size_t)s.M * s.N);
+        std::vector<__nv_bfloat16> hW((size_t)s.N * s.K);
+        std::vector<__nv_bfloat16> hPre((size_t)s.M * s.K);
+        std::vector<__nv_bfloat16> hDinp_tk((size_t)s.M * s.K);
+        std::vector<__nv_bfloat16> hDinp_ref((size_t)s.M * s.K);
+
+        fill_random_bf16(hDout, 60617, -0.75f, 0.75f);
+        fill_random_bf16(hW, 60618, -0.75f, 0.75f);
+        fill_random_bf16(hPre, 60619, -1.5f, 1.5f);
+
+        __nv_bfloat16 *dDout = nullptr, *dW = nullptr, *dPre = nullptr, *dDinp_tk = nullptr, *dDinp_ref = nullptr;
+        cudaCheck(cudaMalloc(&dDout, dout_bytes));
+        cudaCheck(cudaMalloc(&dW, w_bytes));
+        cudaCheck(cudaMalloc(&dPre, dinp_bytes));
+        cudaCheck(cudaMalloc(&dDinp_tk, dinp_bytes));
+        cudaCheck(cudaMalloc(&dDinp_ref, dinp_bytes));
+
+        cudaCheck(cudaMemcpy(dDout, hDout.data(), dout_bytes, cudaMemcpyHostToDevice));
+        cudaCheck(cudaMemcpy(dW, hW.data(), w_bytes, cudaMemcpyHostToDevice));
+        cudaCheck(cudaMemcpy(dPre, hPre.data(), dinp_bytes, cudaMemcpyHostToDevice));
+        cudaCheck(cudaMemset(dDinp_tk, 0, dinp_bytes));
+        cudaCheck(cudaMemset(dDinp_ref, 0, dinp_bytes));
+
+        matmul_backward(dDinp_tk, /*dweight=*/nullptr, /*dbias=*/nullptr,
+                        dDout, /*inp=*/nullptr, dW, /*dbias_buffer=*/nullptr,
+                        /*B=*/1, /*T=*/s.M, /*C=*/s.K, /*OC=*/s.N, /*stream=*/0,
+                        /*dweight_accumulate=*/false,
+                        /*dweight_accum_scratch=*/nullptr,
+                        /*dweight_accum_scratch_elements=*/0,
+                        dPre, /*fuse_backward_gelu=*/true);
+        cudaCheck(cudaDeviceSynchronize());
+
+        dim3 block(16, 16);
+        dim3 grid(CEIL_DIV(s.K, 16), CEIL_DIV(s.M, 16));
+        naive_dinp_dgelu_ref<<<grid, block>>>(dDout, dW, dPre, dDinp_ref, s.M, s.K, s.N);
+        cudaCheck(cudaDeviceSynchronize());
+
+        cudaCheck(cudaMemcpy(hDinp_tk.data(), dDinp_tk, dinp_bytes, cudaMemcpyDeviceToHost));
+        cudaCheck(cudaMemcpy(hDinp_ref.data(), dDinp_ref, dinp_bytes, cudaMemcpyDeviceToHost));
+
+        double max_diff = max_abs_diff(hDinp_tk, hDinp_ref);
+        double tolerance = 0.5;
+        bool ok = max_diff < tolerance;
+        printf("  max abs diff = %.4f  (tolerance %.2f)  %s\n",
+               max_diff, tolerance, ok ? "PASS" : "FAIL");
+        if (!ok) failures++;
+
+        cudaCheck(cudaFree(dDout));
+        cudaCheck(cudaFree(dW));
+        cudaCheck(cudaFree(dPre));
+        cudaCheck(cudaFree(dDinp_tk));
+        cudaCheck(cudaFree(dDinp_ref));
+        }
+    }
+
+    {
+        total_tests++;
         Shape s = {1024, 1024, 1024, "dWeight backward A^T*B (default)"};
         printf("\n──── %s  M=%d OC=%d C=%d ────\n", s.name, s.M, s.N, s.K);
 
@@ -273,21 +439,25 @@ int main(int argc, char** argv) {
         fill_random_bf16(hDout, 4242, -1.0f, 1.0f);
         fill_random_bf16(hInp, 9001, -1.0f, 1.0f);
 
-        __nv_bfloat16 *dDout = nullptr, *dInp = nullptr, *dDW_tk = nullptr, *dDW_ref = nullptr;
+        __nv_bfloat16 *dDout = nullptr, *dInp = nullptr, *dDW_tk = nullptr, *dDW_ref = nullptr, *dScratch = nullptr;
         cudaCheck(cudaMalloc(&dDout, dout_bytes));
         cudaCheck(cudaMalloc(&dInp, inp_bytes));
         cudaCheck(cudaMalloc(&dDW_tk, dw_bytes));
         cudaCheck(cudaMalloc(&dDW_ref, dw_bytes));
+        cudaCheck(cudaMalloc(&dScratch, 8 * dw_bytes));
 
         cudaCheck(cudaMemcpy(dDout, hDout.data(), dout_bytes, cudaMemcpyHostToDevice));
         cudaCheck(cudaMemcpy(dInp, hInp.data(), inp_bytes, cudaMemcpyHostToDevice));
         cudaCheck(cudaMemset(dDW_tk, 0, dw_bytes));
         cudaCheck(cudaMemset(dDW_ref, 0, dw_bytes));
+        cudaCheck(cudaMemset(dScratch, 0, 8 * dw_bytes));
 
         matmul_backward(/*dinp=*/nullptr, dDW_tk, /*dbias=*/nullptr,
                         dDout, dInp, /*weight=*/nullptr, /*dbias_buffer=*/nullptr,
                         /*B=*/1, /*T=*/s.M, /*C=*/s.K, /*OC=*/s.N, /*stream=*/0,
-                        /*dweight_accumulate=*/false);
+                        /*dweight_accumulate=*/false,
+                        /*dweight_accum_scratch=*/dScratch,
+                        /*dweight_accum_scratch_elements=*/8 * (size_t)s.N * s.K);
         cudaCheck(cudaDeviceSynchronize());
 
         dim3 block(16, 16);
@@ -309,9 +479,11 @@ int main(int argc, char** argv) {
         cudaCheck(cudaFree(dInp));
         cudaCheck(cudaFree(dDW_tk));
         cudaCheck(cudaFree(dDW_ref));
+        cudaCheck(cudaFree(dScratch));
     }
 
     {
+        total_tests++;
         Shape s = {1024, 1024, 1024, "accumulated dWeight backward A^T*B + add"};
         printf("\n──── %s  M=%d OC=%d C=%d ────\n", s.name, s.M, s.N, s.K);
 
@@ -334,20 +506,20 @@ int main(int argc, char** argv) {
         cudaCheck(cudaMalloc(&dInp, inp_bytes));
         cudaCheck(cudaMalloc(&dDW_tk, dw_bytes));
         cudaCheck(cudaMalloc(&dDW_ref, dw_bytes));
-        cudaCheck(cudaMalloc(&dScratch, dw_bytes));
+        cudaCheck(cudaMalloc(&dScratch, 8 * dw_bytes));
 
         cudaCheck(cudaMemcpy(dDout, hDout.data(), dout_bytes, cudaMemcpyHostToDevice));
         cudaCheck(cudaMemcpy(dInp, hInp.data(), inp_bytes, cudaMemcpyHostToDevice));
         cudaCheck(cudaMemcpy(dDW_tk, hInitial.data(), dw_bytes, cudaMemcpyHostToDevice));
         cudaCheck(cudaMemcpy(dDW_ref, hInitial.data(), dw_bytes, cudaMemcpyHostToDevice));
-        cudaCheck(cudaMemset(dScratch, 0, dw_bytes));
+        cudaCheck(cudaMemset(dScratch, 0, 8 * dw_bytes));
 
         matmul_backward(/*dinp=*/nullptr, dDW_tk, /*dbias=*/nullptr,
                         dDout, dInp, /*weight=*/nullptr, /*dbias_buffer=*/nullptr,
                         /*B=*/1, /*T=*/s.M, /*C=*/s.K, /*OC=*/s.N, /*stream=*/0,
                         /*dweight_accumulate=*/true,
                         /*dweight_accum_scratch=*/dScratch,
-                        /*dweight_accum_scratch_elements=*/(size_t)s.N * s.K);
+                        /*dweight_accum_scratch_elements=*/8 * (size_t)s.N * s.K);
         cudaCheck(cudaDeviceSynchronize());
 
         dim3 block(16, 16);
@@ -372,10 +544,12 @@ int main(int argc, char** argv) {
         cudaCheck(cudaFree(dScratch));
     }
 
-    const int total_tests = (int)(sizeof(shapes)/sizeof(*shapes)) + 3;
     printf("\n──── %d/%d passed ────\n", total_tests - failures, total_tests);
     if (failures == 0) {
         printf("test_matmul smoke OK\n");
     }
+#if defined(LLMK_SM120_USE_CUBLASLT_GEMM)
+    llmk::cublaslt_sm120::destroy();
+#endif
     return failures == 0 ? 0 : 1;
 }

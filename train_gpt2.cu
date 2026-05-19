@@ -66,6 +66,16 @@ GPT-2 Transformer Neural Net training loop. See README.md for usage.
 // defines: multi_gpu_get_shard_offset, multi_gpu_async_reduce_gradient
 #include "llmc/zero.cuh"
 
+#if defined(KITTENS_SM120) && !LLMK_USE_TK_MHA
+#error "SM120 train_gpt2cu requires TK attention; do not build training with CUDA fallback attention"
+#endif
+
+#if defined(KITTENS_SM120) && LLMK_USE_TK_MHA_BWD && !defined(LLMK_SM120_ATOMIC_DQ)
+#define LLMK_GPT2_USE_SM120_PACKED_QKV_ATTENTION 1
+#else
+#define LLMK_GPT2_USE_SM120_PACKED_QKV_ATTENTION 0
+#endif
+
 // ----------------------------------------------------------------------------
 // global vars for I/O
 char filename_buffer[512];
@@ -267,8 +277,18 @@ void fill_in_activation_sizes(const ActivationTensors* data, TensorSpec (&tensor
                       * llmk::attention::fwd_sequence_granularity();
     size_t padded_attention_scratch = 4 * B * T_attn_pad * C
                                     + 2 * B * NH * T_attn_pad; // float LSE tail, in floatX elements
+#if defined(KITTENS_SM120)
+#if defined(LLMK_SM120_ATOMIC_DQ)
+    size_t attention_backward_scratch = 4 * B * T * C
+                                      + 2 * B * NH * T; // bf16 O/dO + float D/dQ, in floatX elements
+#else
+    size_t attention_backward_scratch = 2 * B * T * C
+                                      + 2 * B * NH * T; // bf16 O/dO + float D, in floatX elements
+#endif
+#else
     size_t attention_backward_scratch = 8 * B * T * C
                                       + 2 * B * NH * T; // bf16 O/dO + float D/dQ/dK/dV, in floatX elements
+#endif
     tensors[18] = TENSOR_SPEC(data->output,
                               max(B * T * max(3*C, max(NH*T, Vp)),
                                   max(padded_attention_scratch,
@@ -276,7 +296,19 @@ void fill_in_activation_sizes(const ActivationTensors* data, TensorSpec (&tensor
 
     tensors[19] = TENSOR_SPEC(data->scratch_bt4c, B * T * 4 * C);
     tensors[20] = TENSOR_SPEC(data->scratch_btc, B * T * C);
+#if defined(KITTENS_SM120) && !defined(LLMK_SM120_USE_CUBLASLT_GEMM)
+#ifndef LLMK_SM120_DWEIGHT_SPLIT_K
+#define LLMK_SM120_DWEIGHT_SPLIT_K 16
+#endif
+#ifndef LLMK_SM120_LARGE_DWEIGHT_SPLIT_K
+#define LLMK_SM120_LARGE_DWEIGHT_SPLIT_K 8
+#endif
+    tensors[21] = TENSOR_SPEC(data->matmul_scratch,
+                              max((size_t)LLMK_SM120_LARGE_DWEIGHT_SPLIT_K * Vp * C,
+                                  (size_t)LLMK_SM120_DWEIGHT_SPLIT_K * 4 * C * C));
+#else
     tensors[21] = TENSOR_SPEC(data->matmul_scratch, max(Vp * C, 4 * C * C));
+#endif
 }
 
 void* malloc_and_point_activations(TensorSpec (&tensors)[NUM_ACTIVATION_TENSORS]) {
@@ -776,7 +808,7 @@ void gpt2_forward(GPT2 *model, const int* inputs, size_t B, size_t T) {
     }
 
     // copy inputs/targets to the model
-    cudaCheck(cudaMemcpy(model->inputs, inputs, B * T * sizeof(int), cudaMemcpyHostToDevice));
+    cudaCheck(cudaMemcpyAsync(model->inputs, inputs, B * T * sizeof(int), cudaMemcpyHostToDevice, main_stream));
     // validate inputs, all indices must be in the range [0, V)
     // we can do this while the copies are already underway
     tokenCheck(inputs, B*T, V);
@@ -824,12 +856,17 @@ void gpt2_forward(GPT2 *model, const int* inputs, size_t B, size_t T) {
         // now do the forward pass
         floatX* l_att = acts.att + 2 * l * B * NH * T;
         if (T != model->seq_len) { // unused parts of attention buffer must be zeroed (T-dependent)
-            cudaCheck(cudaMemset(l_att, 0, 2 * B * NH * T * sizeof(floatX)));
+            cudaCheck(cudaMemsetAsync(l_att, 0, 2 * B * NH * T * sizeof(floatX), main_stream));
         }
         // these are only needed as scratchpads for the forward pass, but
         // need not be stored for backward
+#if LLMK_GPT2_USE_SM120_PACKED_QKV_ATTENTION
+        matmul_forward(l_qkvr, l_ln1, l_qkvw, l_qkvb, B, T, C, 3*C, main_stream);
+        attention_forward_packed_qkv(l_atty, l_att, l_qkvr, B, T, C, NH, main_stream);
+#else
         matmul_forward(scratch, l_ln1, l_qkvw, l_qkvb, B, T, C, 3*C, main_stream);
         attention_forward(l_atty, l_qkvr, l_att, scratch, B, T, C, NH, main_stream);
+#endif
 
         matmul_forward(scratch, l_atty, l_attprojw, l_attprojb, B, T, C, C, main_stream);
         fused_residual_forward5(l_residual2, l_ln2, l_ln2_mean, l_ln2_rstd, residual, scratch, l_ln2w, l_ln2b, B*T, C, main_stream);
@@ -857,7 +894,10 @@ void gpt2_forward(GPT2 *model, const int* inputs, size_t B, size_t T) {
     }
 
     matmul_forward(acts.output, acts.lnf, params.wte, NULL, B, T, C, Vp, main_stream);
-    cudaCheck(cudaDeviceSynchronize());
+    // Keep the forward pass asynchronous. Training immediately queues backward
+    // on the same stream, and validation/generation synchronize through their
+    // following device-to-host copies.
+    cudaCheck(cudaGetLastError());
 }
 
 
@@ -878,8 +918,8 @@ float gpt2_validate(GPT2 *model, const int* inputs, const int* targets, size_t B
     // fused classifier: does the forward pass and first part of the backward pass
     const float dloss = 1.0f / (B * T); // results in the uniform average loss over all elements
     // note: we don't need to generate dlogits here
-    cudaCheck(cudaMemset(acts.losses, 0, B*T*sizeof(float)));
-    cudaCheck(cudaMemcpy(model->targets, targets, B * T * sizeof(int), cudaMemcpyHostToDevice));
+    cudaCheck(cudaMemsetAsync(acts.losses, 0, B*T*sizeof(float), main_stream));
+    cudaCheck(cudaMemcpyAsync(model->targets, targets, B * T * sizeof(int), cudaMemcpyHostToDevice, main_stream));
     tokenCheck(targets, B*T, V); // while the memcpy is underway, validate the targets
     fused_classifier(acts.output, acts.losses, dloss, model->targets, B, T, V, Vp, False, main_stream);
     cudaCheck(cudaMemcpy(model->cpu_losses, acts.losses, B * T * sizeof(float), cudaMemcpyDeviceToHost));
@@ -924,7 +964,7 @@ void gpt2_backward_and_reduce(GPT2 *model, int* inputs, const int* targets, int 
     NvtxRange classifier_and_loss_range("classifier_and_loss");
     const float dloss = 1.0f / (float)(B * T * grad_accum_steps); // results in the uniform average loss over all elements
     const bool dweight_accumulate = micro_step != 0;
-    cudaCheck(cudaMemcpy(model->targets, targets, B * T * sizeof(int), cudaMemcpyHostToDevice));
+    cudaCheck(cudaMemcpyAsync(model->targets, targets, B * T * sizeof(int), cudaMemcpyHostToDevice, main_stream));
     tokenCheck(targets, B*T, V);
     fused_classifier(acts.output, acts.losses, dloss, model->targets, B, T, V, Vp, True, main_stream);
 
@@ -932,7 +972,7 @@ void gpt2_backward_and_reduce(GPT2 *model, int* inputs, const int* targets, int 
 
     // reset residual stream gradients (put here to work with gradient accumulation)
     floatX* dresidual = (floatX*)model->acts.scratch_btc; // the main buffer holding the gradient in the backward pass
-    cudaCheck(cudaMemset(dresidual, 0, B * T * C * sizeof(floatX)));
+    cudaCheck(cudaMemsetAsync(dresidual, 0, B * T * C * sizeof(floatX), main_stream));
 
     // re-use the output buffer of the forward pass as a scratchpad during backward pass
     float*  scratchF = (float*)acts.output;
@@ -1006,8 +1046,15 @@ void gpt2_backward_and_reduce(GPT2 *model, int* inputs, const int* targets, int 
             // l_fch_gelu is just a buffer, so re-compute the gelu from l_fch here
             gelu_forward(l_fch_gelu, l_fch_pre_gelu, B*T*4*C, main_stream);
         }
-        matmul_backward(dl_bt4c, dl_fcprojw, dl_fcprojb, dresidual, l_fch_gelu, l_fcprojw, scratchF, B, T, 4*C, C, main_stream, dweight_accumulate, matmul_scratch, matmul_scratch_elements);
-        gelu_backward_inplace(dl_bt4c, l_fch_pre_gelu, B*T*4*C, main_stream);
+        bool fused_gelu_backward = model->gelu_fusion >= 1 && matmul_backward_gelu_fusion_supported();
+        matmul_backward(dl_bt4c, dl_fcprojw, dl_fcprojb, dresidual, l_fch_gelu, l_fcprojw,
+                        scratchF, B, T, 4*C, C, main_stream, dweight_accumulate,
+                        matmul_scratch, matmul_scratch_elements,
+                        fused_gelu_backward ? l_fch_pre_gelu : nullptr,
+                        fused_gelu_backward);
+        if (!fused_gelu_backward) {
+            gelu_backward_inplace(dl_bt4c, l_fch_pre_gelu, B*T*4*C, main_stream);
+        }
         if(model->recompute >= 2) {
             // same as gelu above, l_ln1 and l_ln2 are just buffers if recompute >= 2, recompute them here on demand
             layernorm_forward(l_ln2, l_ln2_mean, l_ln2_rstd, l_residual2, l_ln2w, l_ln2b, B, T, C, main_stream);
@@ -1020,8 +1067,12 @@ void gpt2_backward_and_reduce(GPT2 *model, int* inputs, const int* targets, int 
         floatX* l_att = acts.att + 2 * l * B * NH * T;
         // we need B x T x (4)C buffers. l_atty and l_fch aren't needed anymore at this point, so reuse their memory
         floatX* buffer_a = l_atty;
+#if LLMK_GPT2_USE_SM120_PACKED_QKV_ATTENTION
+        attention_backward_packed_qkv(dl_bt4c, scratchX, buffer_a, dl_btc, l_qkvr, l_att, B, T, C, NH, main_stream);
+#else
         floatX* buffer_b = l_fch_pre_gelu;        // this is B x T x 4C, so even larger than what we need
         attention_backward(dl_bt4c, buffer_b, scratchX, buffer_a, dl_btc, l_qkvr, l_att, B, T, C, NH, main_stream);
+#endif
         if(model->recompute >= 2) {
             layernorm_forward(l_ln1, l_ln1_mean, l_ln1_rstd, residual, l_ln1w, l_ln1b, B, T, C, main_stream);
         }
@@ -1069,10 +1120,11 @@ void gpt2_backward_and_reduce(GPT2 *model, int* inputs, const int* targets, int 
         multi_gpu_async_reduce_gradient(pointers, nelem, &multi_gpu_config, main_stream);
     }
 
-    cudaCheck(cudaDeviceSynchronize());
     if(last_step) {
+        cudaCheck(cudaDeviceSynchronize());
         model->mean_loss /= B*T*grad_accum_steps;
     } else {
+        cudaCheck(cudaGetLastError());
         model->mean_loss = -1.f; // no loss available yet
     }
 }
@@ -1166,8 +1218,8 @@ void gpt2_update(GPT2 *model, float learning_rate, float beta1, float beta2, flo
     if(init_state) {
         model->init_state = false;
         NvtxRange rng("InitOpt");
-        cudaCheck(cudaMemset(model->m_memory, 0, multi_gpu_config->shard_num_parameters * sizeof(float)));
-        cudaCheck(cudaMemset(model->v_memory, 0, multi_gpu_config->shard_num_parameters * sizeof(float)));
+        cudaCheck(cudaMemsetAsync(model->m_memory, 0, multi_gpu_config->shard_num_parameters * sizeof(float), main_stream));
+        cudaCheck(cudaMemsetAsync(model->v_memory, 0, multi_gpu_config->shard_num_parameters * sizeof(float), main_stream));
     }
 
     // save RNG state at this point so we can round from master weights identically when restoring from a checkpoint
@@ -1250,7 +1302,7 @@ void gpt2_update(GPT2 *model, float learning_rate, float beta1, float beta2, flo
         }
     }
 
-    cudaCheck(cudaDeviceSynchronize());
+    cudaCheck(cudaGetLastError());
 }
 
 float gpt2_estimate_mfu(GPT2 *model, int num_tokens, float dt) {
@@ -1313,10 +1365,16 @@ void common_start(bool override_enable_tf32 = true, bool print_device_info = tru
     // set up the cuda streams. atm everything is on the single main stream
     cudaCheck(cudaStreamCreate(&main_stream));
     nvtxNameCudaStreamA(main_stream, "main stream");
+#if defined(LLMK_SM120_USE_CUBLASLT_GEMM)
+    llmk::cublaslt_sm120::init();
+#endif
     (void)override_enable_tf32;
 }
 
 void common_free(GPT2 &model) {
+#if defined(LLMK_SM120_USE_CUBLASLT_GEMM)
+    llmk::cublaslt_sm120::destroy();
+#endif
     cudaCheck(cudaStreamDestroy(main_stream));
     (void)model;
 }
@@ -1515,7 +1573,7 @@ void error_usage() {
     fprintf(stderr, "  -a <int>    overfit a single batch? 0/1. useful for debugging\n");
     // numerics
     fprintf(stderr, "  -f <int>    enable_tf32 override (default: 1, set to 0 to disable tf32)\n");
-    fprintf(stderr, "  -w <int>    keep f32 copy of weights for the optimizer? (default: 1)\n");
+    fprintf(stderr, "  -w <int>    keep f32 copy of weights for the optimizer? (default: 1, SM120 default: 0)\n");
     fprintf(stderr, "  -ge <int>   gelu fusion: 0=none, 1=TK forward epilogue, 2=reserved (default: 0)\n");
     // memory management
     fprintf(stderr, "  -z <int>    zero_stage, runtime stages: 0,1,2,3\n");
@@ -1625,7 +1683,7 @@ int main(int argc, char *argv[]) {
     int overfit_single_batch = 0; // useful for debugging, 1 = only load a single data batch once
     int max_steps = -1;
     int override_enable_tf32 = 1;
-    int use_master_weights = 1;
+    int use_master_weights = -1; // -1 => per-architecture default
     int gelu_fusion = -1; // 0 = none, 1 = TK forward epilogue, 2 = reserved (-1 => per-GPU default)
     int recompute = 1; // recompute during backward setting, 0 = none, 1 = recompute gelu
     int zero_stage = 0; // Zero Optimization Stage for Multi-GPU training
@@ -1681,6 +1739,14 @@ int main(int argc, char *argv[]) {
         else if (argv[i][1] == 'n' && argv[i][2] == 'm') { major_checkpoint_every = atoi(argv[i+1]); }
         else { error_usage(); }
     }
+
+    if (use_master_weights == -1) {
+#if defined(KITTENS_SM120)
+        use_master_weights = 0;
+#else
+        use_master_weights = 1;
+#endif
+    }
     validate_zero_stage_request(zero_stage);
 
     // Host-only dry run: parse model metadata and validate ZeRO shardability without CUDA/NCCL.
@@ -1704,7 +1770,13 @@ int main(int argc, char *argv[]) {
             }
         }
 
-        if (gelu_fusion == -1) { gelu_fusion = 0; }
+        if (gelu_fusion == -1) {
+#if defined(KITTENS_SM120)
+            gelu_fusion = 1;
+#else
+            gelu_fusion = 0;
+#endif
+        }
         gpt2_dry_run_validate(model_source, resuming, use_master_weights,
                               gelu_fusion, recompute, T, zero_stage, &dry_config);
         return EXIT_SUCCESS;
@@ -1723,8 +1795,15 @@ int main(int argc, char *argv[]) {
     int tokens_per_fwdbwd = B * T * multi_gpu_config.num_processes; // one micro-batch processes this many tokens
     // calculate sensible default for total batch size as assuming no gradient accumulation
     if (total_batch_size == -1) { total_batch_size = tokens_per_fwdbwd; }
-    // Keep the fused TK epilogue opt-in until it has H100 numerical validation.
-    if (gelu_fusion == -1) { gelu_fusion = 0; }
+    // SM120 has a fast enough MLP-up GELU epilogue to use by default.
+    // Manual -ge still overrides this.
+    if (gelu_fusion == -1) {
+#if defined(KITTENS_SM120)
+        gelu_fusion = 1;
+#else
+        gelu_fusion = 0;
+#endif
+    }
     // calculate the number of gradient accumulation steps from the desired total batch size
     assert(total_batch_size % tokens_per_fwdbwd == 0);
     int grad_accum_steps = total_batch_size / tokens_per_fwdbwd;

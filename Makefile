@@ -4,7 +4,7 @@
 #     plus opt-in SM100/SM103/SM120 Blackwell build modes
 #   * c++20 instead of c++17 (TK requires it)
 #   * BF16 only — FP16/FP32 paths removed; TK H100 GEMM/MHA are bf16
-#   * cuBLAS, cuBLASLt, cuDNN all removed (every matmul/attn goes through TK)
+#   * cuBLAS/cuDNN removed on Hopper; SM120 can opt into cuBLASLt GEMM fallback
 #   * TK include paths added; TK_ROOT defaults to ../ThunderKittens
 
 CC ?= clang
@@ -69,10 +69,19 @@ NVCC_FLAGS += -ftemplate-backtrace-limit=0
 NVCC_FLAGS += -I$(TK_ROOT)/include -I$(TK_ROOT)/prototype
 NVCC_FLAGS += $(KITTENS_ARCH_DEFINE) $(CUDA_GENCODE)
 NVCC_FLAGS += -DENABLE_BF16
+NVCC_FLAGS += $(EXTRA_NVCC_FLAGS)
 
 NVCC_LDFLAGS = -lrt -lpthread -ldl -lcuda -lcudadevrt -lcudart_static
 NVCC_INCLUDES =
 NVCC_LDLIBS =
+
+SM120_USE_CUBLASLT_GEMM ?= 1
+ifeq ($(DEVICE_ARCH),SM120)
+  ifeq ($(SM120_USE_CUBLASLT_GEMM),1)
+    NVCC_FLAGS += -DLLMK_SM120_USE_CUBLASLT_GEMM
+    NVCC_LDLIBS += -lcublasLt -lcublas
+  endif
+endif
 
 BUILD_DIR = build
 $(shell mkdir -p $(BUILD_DIR))
@@ -173,7 +182,7 @@ endif
 
 $(info ---------------------------------------------)
 
-.PHONY: all cuda_runtime_check test_dataloader test_matmul test_attention test_layernorm test_rope test_rmsnorm test_swiglu test_attention_gqa test_gelu test_fused_classifier test_encoder test_adamw test_global_norm test-kernels probe_layernorm_ref probe_layernorm_tk probe_gelu_ref probe_gelu_tk probe_encoder_ref probe_encoder_tk probe_global_norm_ref probe_global_norm_tk probe_swiglu probe_adamw_ref probe_adamw_tk probe_fused_classifier_ref probe_fused_classifier_tk probe_attention_ref probe_attention_tk probe_matmul_ref probe_matmul_tk probe_rmsnorm probe_rope probe_attention_gqa parity-kernels train_gpt2cu train_llama3cu gpt2_validate test_gpt2cu profile_gpt2cu clean
+.PHONY: all cuda_runtime_check test_dataloader test_matmul bench_sm120_matmul test_attention test_layernorm test_rope test_rmsnorm test_swiglu test_attention_gqa test_gelu test_fused_classifier test_encoder test_adamw test_global_norm test-kernels probe_layernorm_ref probe_layernorm_tk probe_gelu_ref probe_gelu_tk probe_encoder_ref probe_encoder_tk probe_global_norm_ref probe_global_norm_tk probe_swiglu probe_adamw_ref probe_adamw_tk probe_fused_classifier_ref probe_fused_classifier_tk probe_attention_ref probe_attention_tk probe_matmul_ref probe_matmul_tk probe_rmsnorm probe_rope probe_attention_gqa parity-kernels train_gpt2cu train_llama3cu gpt2_validate test_gpt2cu profile_gpt2cu clean
 
 ifeq ($(NVCC),)
   $(error nvcc not found — install CUDA Toolkit 12.4+)
@@ -194,6 +203,9 @@ cuda_runtime_check: dev/cuda/cuda_runtime_check.cu
 # reference kernel. Requires H100 (sm_90a).
 test_matmul: dev/cuda/test_matmul.cu llmc/matmul.cuh llmc/tk/gemm_h100.cuh llmc/tk/tk_common.cuh
 	$(NVCC) $(NVCC_FLAGS) -I. dev/cuda/test_matmul.cu $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) -o $@
+
+bench_sm120_matmul: dev/cuda/bench_sm120_matmul.cu llmc/matmul.cuh llmc/tk/gemm_sm120.cuh llmc/tk/tk_common.cuh
+	$(NVCC) $(NVCC_FLAGS) -DLLMK_SM120_USE_CUBLASLT_GEMM -I. dev/cuda/bench_sm120_matmul.cu $(NVCC_LDFLAGS) $(NVCC_INCLUDES) -lcublasLt -lcublas $(NVCC_LDLIBS) -o $@
 
 test_attention: dev/cuda/test_attention.cu llmc/attention.cuh llmc/tk/attention_h100.cuh llmc/tk/tk_common.cuh
 	$(NVCC) $(NVCC_FLAGS) -I. dev/cuda/test_attention.cu $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) -o $@
