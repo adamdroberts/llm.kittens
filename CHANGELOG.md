@@ -8,6 +8,17 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected a temporary qkv-forward-only swizzle route with
+  `LLMK_SM120_QKV_FORWARD_SUPER_M=3`. The guarded hook routed only regular
+  GPT-2 qkv forward GEMMs (`N == 3*K`) through a dedicated N96 alias while
+  leaving shared forward, dInput, dWeight, fused FC, and LM-head routes
+  unchanged. The candidate passed `test_attention` (all three smoke shapes)
+  and `test_matmul` on rerun after the known intermittent MLP-up row. The
+  focused benchmark still left qkv forward behind cuBLASLt (`1069.02 us` TK
+  versus `1032.60 us`) and qkv dWeight behind (`1191.38 us` versus
+  `1100.97 us`). TinyStories 3-step validation averaged `2625.29 ms` with
+  steps `2624.70`, `2624.72`, and `2625.87 ms`, slower than the promoted
+  source default and fallback diagnostics, so the temporary hook was removed.
 - Rejected lowering SM120 attention forward tiling to
   `LLMK_SM120_ATTN_FWD_BLOCK=16`. The macro build passed `test_attention`
   (all three smoke shapes including the packed-QKV fast path) and `test_matmul`
