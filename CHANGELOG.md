@@ -8,6 +8,13 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected disabling the promoted large-K direct B-column dInput route with
+  `LLMK_SM120_DINP_DIRECT_BCOL_LARGEK=0` after the SM120 compiler default
+  promotions. The macro build passed `test_matmul` (`9/9`, with the guarded
+  large-K row compiled out) and `test_attention` (all three smoke shapes), but
+  TinyStories 3-step validation regressed to `2670.30 ms` with steps
+  `2662.88`, `2666.78`, and `2673.82 ms` and shifted the early norm trace.
+  Large-K direct B-column dInput remains enabled.
 - Rejected `LLMK_SM120_DINP_DIRECT_BCOL_SUPER_M=11` after the SM120 compiler
   default promotions. The macro build passed `test_matmul` (`10/10`) and
   `test_attention` (all three smoke shapes), but TinyStories 3-step validation
