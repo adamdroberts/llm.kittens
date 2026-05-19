@@ -180,6 +180,13 @@ changelog is the diary; `goal.md` is the plan.
   worsened qkv and FC forward rows, and TinyStories 3-step validation regressed
   to `2668.91 ms` with steps `2666.62`, `2667.08`, and `2670.73 ms`. The
   temporary forward-only swizzle hook was removed.
+- Rejected a current-stack `LLMK_SM120_DINP_SUPER_M=9` retest after the
+  large-K direct B-column promotion. The macro build passed `test_matmul`
+  (`10/10`) and `test_attention` (all three smoke shapes). The focused
+  benchmark improved small-K dInput rows but worsened FC dInput and left
+  LM-head dInput effectively unchanged; TinyStories 3-step validation regressed
+  to `2668.82 ms` with steps `2667.20`, `2667.51`, and `2670.14 ms`, so the
+  dInput swizzle remains `8`.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
