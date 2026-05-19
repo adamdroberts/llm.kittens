@@ -128,6 +128,14 @@ changelog is the diary; `goal.md` is the plan.
   regressed to `2670.02 ms` with steps `2668.00`, `2669.25`, and
   `2670.79 ms`. The default keeps the LM-head dWeight side-stream deferral
   enabled because it remains faster than the immediate-wait path.
+- Rejected retesting `LLMK_SM120_HUGE_N_K_TILE=32` on the current large-K
+  dInput source. The macro build passed `test_matmul` (`10/10`) and
+  `test_attention` (all three smoke shapes), and the focused benchmark improved
+  LM-head forward to `24791.84 us` versus the default-source `~25922 us`, but
+  it worsened dWeight rows, including LM-head dWeight at `23698.38 us` versus
+  `20872.77 us` cuBLASLt. TinyStories 3-step validation regressed to
+  `2679.57 ms` with steps `2675.70`, `2678.06`, and `2681.09 ms`, so the
+  huge-N/N128 K tile remains `16`.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
