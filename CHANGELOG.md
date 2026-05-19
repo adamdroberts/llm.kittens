@@ -8,6 +8,15 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Refreshed the combined current-stack SM120 dInput+dWeight cuBLASLt fallback
+  diagnostic. The build used both `LLMK_SM120_CUBLASLT_DINP_FALLBACK=1` and
+  `LLMK_SM120_CUBLASLT_DWEIGHT_FALLBACK=1`, leaving only forward GEMM on the
+  promoted pure-TK stack. It passed `test_matmul` (`10/10`) and
+  `test_attention` (all three smoke shapes), then TinyStories 3-step
+  validation averaged `2589.00 ms` with steps `2604.40`, `2587.43`, and
+  `2590.58 ms`. This is faster than the cached full cuBLASLt fallback near
+  `2623 ms`, confirming the remaining pure-TK gap is dominated by backward
+  dInput/dWeight GEMMs rather than the current K32 forward path.
 - Rejected a direct B-column fused-dGELU dInput route for the GPT-2 FC
   backward shape after pairing it with exact dGELU tanh to recover the
   previous smoke failure. The temporary
