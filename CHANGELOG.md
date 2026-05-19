@@ -8,6 +8,15 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected a direct B-column fused-dGELU dInput route for the GPT-2 FC
+  backward shape after pairing it with exact dGELU tanh to recover the
+  previous smoke failure. The temporary
+  `LLMK_SM120_DINP_DIRECT_BCOL_DGELU_FC=1` hook added a guarded FC dInput smoke
+  row and was built with `LLMK_SM120_APPROX_DGELU_TANH=0`; that build passed
+  `test_matmul` (`11/11`) and `test_attention` (all three smoke shapes).
+  TinyStories 3-step validation still regressed to `2665.14 ms` with steps
+  `2658.41`, `2663.26`, and `2667.02 ms`, so the temporary alias, dispatch
+  hook, and smoke row were removed.
 - Refreshed the current-stack SM120 dInput-only cuBLASLt fallback diagnostic.
   The build used `LLMK_SM120_CUBLASLT_DINP_FALLBACK=1` with explicit cuBLASLt
   linkage while leaving forward and dWeight on the promoted pure-TK stack. It
