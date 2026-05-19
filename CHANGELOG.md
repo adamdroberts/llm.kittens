@@ -8,6 +8,14 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Added `LLMK_SM120_ATTN_BWD_DQ_FIRST` as a default-off hook for launching the
+  non-atomic SM120 attention backward dQ pass before the dK/dV pass. Rejected
+  `LLMK_SM120_ATTN_BWD_DQ_FIRST=1`: the macro build passed `test_attention`
+  across all three smoke shapes, including the packed-QKV fast path, but
+  TinyStories 3-step validation regressed to `2759.73 ms` average with steps
+  `2748.95`, `2769.18`, and `2750.28 ms`, slower than the current pure-TK
+  default and the CUDA/cuBLASLt fallback measurements. The source default keeps
+  the existing dK/dV-then-dQ launch order.
 - Generalized the huge-N forward warp-count hook to
   `LLMK_SM120_HUGE_N_FORWARD_WARPS` while preserving the existing default of
   8 warps. Rejected `LLMK_SM120_HUGE_N_FORWARD_WARPS=16`: the macro build
