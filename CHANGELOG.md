@@ -8,6 +8,15 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected fused FC forward GeLU K-tile override
+  `LLMK_SM120_FORWARD_GELU_N96_K_TILE=8` at compile time. ThunderKittens BF16
+  shared/register tile constraints require the K tile columns to be divisible
+  by the base tile dimensions; the candidate failed static assertions including
+  `Cols must be divisible by the tile dimension`, `Subtile cols must be
+  divisible by the base tile col dimension`, and `Columns must be divisible by
+  the tile size` while instantiating `matmul_n96_nt_bias_gelu`. No smoke,
+  benchmark, or TinyStories validation was possible, so the fused GeLU N96
+  route stays on the default K32 tile.
 - Rejected a temporary fused-forward-only swizzle hook with
   `LLMK_SM120_FORWARD_GELU_SUPER_M=1`, scoped to the `*_nt_bias_gelu` aliases
   while leaving non-GeLU forward, dInput, and dWeight aliases on their source
