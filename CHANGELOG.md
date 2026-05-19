@@ -8,6 +8,10 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected SM120 `LLMK_SM120_DWEIGHT_N128_K_TILE=8` at compile time. The
+  N128 dWeight K-tile shrink trips ThunderKittens shared/register tile static
+  assertions because 8-row swizzled BF16 tiles are not divisible by the base
+  tile row dimension, so no smoke or TinyStories validation was possible.
 - Rejected an O3 retest of SM120 `LLMK_SM120_DWEIGHT_SUPER_M=1` for the
   TN dWeight kernels. The macro build passed `test_attention` and
   `test_matmul`, then TinyStories 3-step validation averaged `2625.48 ms`
