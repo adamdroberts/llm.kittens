@@ -8,6 +8,16 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected shared SM120 grid swizzle `LLMK_SM120_SUPER_M=14`. The macro build
+  passed `test_attention` and `test_matmul` (`10/10`), but the focused
+  benchmark stayed short of the per-kernel target: qkv forward was
+  `1072.82 us` versus cuBLASLt `1038.93 us`, FC-projection forward worsened to
+  `1517.15 us` versus `1346.06 us`, LM-head forward remained `25008.97 us`
+  versus `22186.15 us`, and qkv/attention-projection/LM-head dWeight rows
+  still trailed. TinyStories 3-step validation averaged `2621.47 ms` with
+  steps `2617.38`, `2617.86`, and `2625.09 ms`, effectively tied with the
+  current pure-TK rebaseline and still behind the full cuBLASLt fallback
+  selector, so the source keeps shared `LLMK_SM120_SUPER_M=7`.
 - Rejected the corrected selective cuBLASLt fallback diagnostic for dInput and
   dWeight only, built with
   `LLMK_SM120_CUBLASLT_DINP_FALLBACK=1` and
