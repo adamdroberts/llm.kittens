@@ -8,6 +8,12 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected huge-N forward warp-count override
+  `LLMK_SM120_HUGE_N_FORWARD_WARPS=2`. The macro build completed, but
+  `test_matmul` failed the GPT-2 LM-head forward row with max diff `48.4375`
+  versus the `0.50` tolerance. No benchmark or TinyStories 3-step validation
+  was run because the target kernel was numerically invalid; huge-N forward
+  remains on the 8-warp default.
 - Rejected a temporary fused-forward-only swizzle hook with
   `LLMK_SM120_FORWARD_GELU_SUPER_M=4`, scoped to the `*_nt_bias_gelu` aliases
   while leaving plain forward, dInput, and dWeight aliases on their accepted
