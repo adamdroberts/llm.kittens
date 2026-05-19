@@ -8,6 +8,18 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected narrowing the SM120 small-K direct-Bcol dInput route to
+  `LLMK_SM120_DINP_DIRECT_BCOL_K_CAP=1024`, which leaves only the
+  attention-projection dInput shape on the direct B-column path and routes qkv
+  plus FC/MLP-up dInput back through the row-load path. The macro build passed
+  `test_attention` and `test_matmul` (`10/10`), but the focused benchmark
+  stayed mixed: attention-projection dInput improved to `356.10 us` versus
+  cuBLASLt `365.10 us`, while qkv dInput regressed to `1089.25 us` versus
+  `1006.10 us`, FC dInput still trailed (`1448.56 us` versus `1390.07 us`),
+  and dWeight/LM-head rows remained behind. TinyStories
+  3-step validation averaged `2642.59 ms` with steps `2638.00`, `2639.57`,
+  and `2645.62 ms`, slower than the current pure-TK rebaseline, so the source
+  keeps the broader accepted direct-Bcol cap.
 - Rejected disabling TN dWeight direct B-column register loads with
   `LLMK_SM120_TN_DIRECT_B_COL=0`. The macro build passed `test_attention` and
   `test_matmul` (`10/10`), but the focused benchmark worsened the targeted
