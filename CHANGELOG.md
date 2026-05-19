@@ -8,6 +8,12 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected retesting `LLMK_SM120_DWEIGHT_SUPER_M=3` on top of the promoted TN
+  direct B-column dWeight source. The macro build passed `test_matmul`
+  (`10/10`) and `test_attention` (all three smoke shapes), but TinyStories
+  3-step validation averaged `2624.35 ms` with steps `2616.62`, `2620.31`,
+  and `2628.38 ms`, slightly slower than the new `2623.34 ms` source default.
+  The dWeight swizzle remains `LLMK_SM120_DWEIGHT_SUPER_M=2`.
 - Promoted SM120 TN dWeight direct B-column register loads
   (`LLMK_SM120_TN_DIRECT_B_COL=1`). The macro probe skipped the B-side
   register-layout swap inside the `A^T*B` kernel, passed `test_matmul`
