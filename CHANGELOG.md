@@ -8,6 +8,13 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected lowering SM120 attention forward tiling to
+  `LLMK_SM120_ATTN_FWD_BLOCK=16`. The macro build passed `test_attention`
+  (all three smoke shapes including the packed-QKV fast path) and `test_matmul`
+  on rerun after the known intermittent MLP-up row. TinyStories 3-step
+  validation averaged `2675.37 ms` with steps `2673.83`, `2676.41`, and
+  `2674.34 ms`, slower than the promoted source default and CUDA fallback
+  diagnostics, so attention forward remains on the 32-row tile.
 - Rejected packed-QKV attention prep launch `LLMK_SM120_DPREP_WARPS=9`.
   The macro build passed `test_matmul` (`10/10`) and `test_attention`
   (all three smoke shapes including the packed-QKV fast path), but
