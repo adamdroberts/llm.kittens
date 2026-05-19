@@ -8,6 +8,15 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected direct-Bcol dInput `LLMK_SM120_DINP_DIRECT_BCOL_SUPER_M=4` under
+  the O3 source-default stack. The macro build passed `test_attention` and
+  `test_matmul` (`10/10`), but the focused benchmark worsened the direct-Bcol
+  dInput rows that the swizzle targets: attention-projection dInput moved to
+  `377.19 us` versus cuBLASLt `364.79 us`, and LM-head dInput moved to
+  `22333.33 us` versus cuBLASLt `21136.92 us`. TinyStories 3-step validation
+  averaged `2621.76 ms` with steps `2616.50`, `2618.77`, and `2624.75 ms`,
+  another small end-to-end timing tie that still fails the per-kernel CUDA
+  comparison, so the source keeps direct-Bcol `SUPER_M=8`.
 - Rejected direct-Bcol dInput `LLMK_SM120_DINP_DIRECT_BCOL_SUPER_M=5` under
   the O3 source-default stack. The macro build passed `test_attention` and
   `test_matmul` (`10/10`), and TinyStories 3-step validation improved to
