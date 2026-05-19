@@ -8,6 +8,12 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected an O3 retest of SM120 `LLMK_SM120_DINP_DIRECT_BCOL_SUPER_M=7`
+  for the direct B-column dInput route. The macro build passed
+  `test_attention` and `test_matmul`, then TinyStories 3-step validation
+  averaged `2626.42 ms` with steps `2620.85`, `2622.70`, and `2630.14 ms`,
+  slower than the `2623.57 ms` O3 source default, so the dInput direct B-column
+  swizzle stays at `8`.
 - Rejected an O3 retest of global SM120 `LLMK_SM120_SUPER_M=8` on top of
   the current pure-TK source default. The macro build passed `test_attention`
   and `test_matmul`, then TinyStories 3-step validation averaged `2629.76 ms`
