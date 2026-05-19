@@ -8,6 +8,14 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected `LLMK_SM120_HUGE_N_K_TILE=64` after the decoupled K32 promotion.
+  The macro build kept N128 dWeight isolated on K16 and passed `test_matmul`
+  (`10/10`) plus `test_attention` (all three smoke shapes), but the focused
+  benchmark did not improve LM-head forward versus the K32 default
+  (`24870.98 us` TK versus `22183.82 us` cuBLASLt) and worsened several
+  non-huge rows. TinyStories 3-step validation was effectively tied with the
+  default at `2663.29 ms` total average, with steps `2660.03`, `2660.73`, and
+  `2665.84 ms`, so the huge-N K tile stays at `32`.
 - Rejected `LLMK_SM120_DWEIGHT_N128_K_TILE=8` at the compile gate after the
   decoupled huge-N K32 promotion. The N128 dWeight trait instantiated an
   8-row BF16 shared/register tile, and ThunderKittens rejected it with static
