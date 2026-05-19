@@ -8,6 +8,13 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected packed-QKV attention prep launch `LLMK_SM120_DPREP_WARPS=9`.
+  The macro build passed `test_matmul` (`10/10`) and `test_attention`
+  (all three smoke shapes including the packed-QKV fast path), but
+  TinyStories 3-step validation averaged `2635.76 ms` with steps
+  `2612.28`, `2620.38`, and `2651.13 ms`. That is slower than the promoted
+  source default and CUDA fallback diagnostics, so the SM120 attention prep
+  launch remains on `LLMK_SM120_DPREP_WARPS=3`.
 - Rejected huge-N forward warp-count override
   `LLMK_SM120_HUGE_N_FORWARD_WARPS=2`. The macro build completed, but
   `test_matmul` failed the GPT-2 LM-head forward row with max diff `48.4375`
