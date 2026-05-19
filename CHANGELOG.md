@@ -8,6 +8,12 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected retesting `LLMK_SM120_DWEIGHT_SPLIT_K=16` on top of the promoted
+  FC-projection dInput direct route. The macro build passed `test_matmul`
+  (`10/10`) and `test_attention` (all three smoke shapes), but TinyStories
+  3-step validation regressed to `2660.48 ms` with steps `2652.14`, `2659.02`,
+  and `2661.93 ms`, slower than the new no-override source default
+  (`2657.45 ms`). dWeight split-K remains `8`.
 - Refreshed SM120 per-step profiling after promoting the FC-projection dInput
   direct B-column route. The `LLMK_SM120_PROFILE_TRAIN_STEP=1` build completed
   the required TinyStories 3-step validation at `2703.41 ms` average with
