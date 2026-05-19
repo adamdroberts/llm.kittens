@@ -265,6 +265,12 @@ changelog is the diary; `goal.md` is the plan.
   TinyStories 3-step validation regressed to `2673.15 ms` with steps
   `2669.15`, `2671.66`, and `2674.64 ms`, so dWeight keeps the
   `LLMK_SM120_DWEIGHT_SUPER_M=2` default.
+- Rejected a temporary huge-N forward 256x96x16 tile probe for the SM120
+  LM-head forward path. The candidate compiled, but `test_matmul` failed at
+  the GPT-2 LM-head smoke row with an illegal memory access before benchmarking
+  or TinyStories validation. The temporary `LLMK_SM120_HUGE_N_FORWARD_N96`
+  trait and aliases were removed; huge-N forward remains on the 256x128x16
+  source default.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
