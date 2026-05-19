@@ -195,6 +195,13 @@ changelog is the diary; `goal.md` is the plan.
   improving some FC/FCProj forward timings, and TinyStories 3-step validation
   regressed to `2668.37 ms` with steps `2665.33`, `2666.32`, and `2670.43 ms`.
   The direct-B-column route keeps inheriting `LLMK_SM120_DINP_SUPER_M=8`.
+- Rejected adjacent direct-B-column dInput swizzle
+  `LLMK_SM120_DINP_DIRECT_BCOL_SUPER_M=7`. The macro build passed
+  `test_matmul` (`10/10`) and `test_attention` (all three smoke shapes), and
+  the focused benchmark improved FC dInput to `1449.08 us` but did not improve
+  small-K or LM-head dInput. TinyStories 3-step validation regressed to
+  `2668.45 ms` with steps `2666.63`, `2667.55`, and `2669.35 ms`, so the
+  direct-B-column swizzle remains at the inherited `8` default.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
