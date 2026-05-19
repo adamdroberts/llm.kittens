@@ -80,6 +80,16 @@ changelog is the diary; `goal.md` is the plan.
   pure-TK rebaseline but still behind the cached cuBLASLt fallback near
   `2623 ms`. The macro remains off by default until a promotion run confirms
   it as the best source default.
+- Promoted `LLMK_SM120_DINP_DIRECT_BCOL_LARGEK=1` as the default after a
+  no-override source rebuild. The first `test_matmul` pass hit a transient
+  accumulated dWeight row failure, the immediate rerun passed `10/10`, and
+  `test_attention` passed all three smoke shapes. The focused benchmark kept
+  LM-head dInput at `22242.20 us` versus `21053.73 us` cuBLASLt, and showed
+  qkv/attention-projection dInput at or faster than cuBLASLt in that run.
+  TinyStories 3-step validation averaged `2665.06 ms` with steps `2664.88`,
+  `2664.34`, and `2665.77 ms`, improving the accepted pure-TK source while
+  still leaving the cached cuBLASLt fallback as the training-time target to
+  beat.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
