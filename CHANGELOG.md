@@ -244,6 +244,17 @@ changelog is the diary; `goal.md` is the plan.
   (`~132-178 ms`). Source defaults were unchanged; the next targets remain the
   GEMM-heavy forward, FC/FCProj backward, attention, QKV, and LM-head paths
   that still trail the cached cuBLASLt fallback.
+- Refreshed the current-source focused SM120 matmul benchmark against its
+  cuBLASLt variants to choose the next optimization target. Pure TK still wins
+  qkv and attention-projection dInput (`0.96x` and `0.97x` TK/cuBLASLt) and
+  FC projection forward (`0.96x`), but trails every dWeight row: qkv dW
+  `1246.45 us` versus `988.08 us` (`1.26x`), attention-projection dW
+  `484.88 us` versus `327.25 us` (`1.48x`), FC dW `1493.59 us` versus
+  `1305.05 us` (`1.14x`), FC projection dW `1551.31 us` versus `1309.12 us`
+  (`1.19x`), and LM-head dW `22997.94 us` versus `20981.42 us` (`1.10x`).
+  LM-head forward remains a large gap (`25961.09 us` versus `22183.41 us`,
+  `1.17x`). The next source work should prioritize TN/dWeight scheduling and
+  the huge-N forward route.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
