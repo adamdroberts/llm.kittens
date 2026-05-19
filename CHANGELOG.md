@@ -8,6 +8,16 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Promoted `-Xptxas=-dlcm=ca` for SM120 pure-TK builds. The explicit compiler
+  cache-policy probe passed `test_matmul` (`10/10`) and `test_attention` (all
+  three smoke shapes), then averaged `2654.23 ms` over 3 TinyStories steps
+  with steps `2649.17`, `2651.59`, and `2656.86 ms`. After promoting the flag
+  into the Makefile's SM120 pure-TK defaults, the no-override rebuild passed
+  `test_attention`; the first `test_matmul` hit the intermittent MLP-up row but
+  an immediate rerun passed `10/10`. No-override TinyStories validation
+  averaged `2654.56 ms` with steps `2649.19`, `2654.38`, and `2654.74 ms`,
+  a small improvement over the previous `2654.93 ms` source default while the
+  backward cuBLASLt fallback target remains open.
 - Rejected the narrower SM120 TK LayerNorm forward-only probe that kept the
   CUDA backward helper on `warpReduceSum` instead of the TK warp reduction.
   The build again passed `test_matmul` (`10/10`) and `test_attention` (all

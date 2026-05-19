@@ -79,6 +79,11 @@ NVCC_FLAGS += -ftemplate-backtrace-limit=0
 NVCC_FLAGS += -I$(TK_ROOT)/include -I$(TK_ROOT)/prototype
 NVCC_FLAGS += $(KITTENS_ARCH_DEFINE) $(CUDA_GENCODE)
 NVCC_FLAGS += -DENABLE_BF16
+ifeq ($(DEVICE_ARCH),SM120)
+  ifeq ($(SM120_USE_CUBLASLT_GEMM),0)
+    NVCC_FLAGS += -Xptxas=-dlcm=ca
+  endif
+endif
 NVCC_FLAGS += $(EXTRA_NVCC_FLAGS)
 
 NVCC_LDFLAGS = -lrt -lpthread -ldl -lcuda -lcudadevrt -lcudart_static
