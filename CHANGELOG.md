@@ -8,6 +8,18 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected a temporary huge-N `256x192x32` forward tile selector,
+  `LLMK_SM120_HUGE_N_N192=1`, for LM-head-style SM120 forward GEMMs. The
+  source candidate passed `test_attention` and `test_matmul` (`10/10`). The
+  macro benchmark slightly improved LM-head forward to `24550.62 us`, and the
+  no-override promotion check measured `24516.15 us`, but both still missed
+  cuBLASLt (`22201.70 us` and `22295.02 us` respectively). The candidate did
+  not improve end-to-end training: macro TinyStories 3-step validation
+  averaged `2622.19 ms` with steps `2616.01`, `2618.70`, and `2625.68 ms`,
+  while the no-override default check averaged `2623.57 ms` with steps
+  `2616.12`, `2620.90`, and `2626.23 ms`. Since the trainer path did not beat
+  the current pure-TK rebaseline, the temporary tile selector was removed and
+  huge-N forward remains on the `256x128x32` tile.
 - Rejected a temporary fused-forward-only swizzle hook,
   `LLMK_SM120_FORWARD_GELU_SUPER_M=8`, scoped to the `*_nt_bias_gelu` aliases
   while leaving plain forward, dInput, and dWeight aliases on their accepted
