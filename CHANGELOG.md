@@ -8,6 +8,16 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected a current-stack forward-only cuBLASLt fallback refresh at the smoke
+  gate. The diagnostic build used
+  `LLMK_SM120_CUBLASLT_FORWARD_FALLBACK=1` with explicit cuBLASLt linkage on
+  top of the promoted K32 huge-N source, and `test_attention` passed all three
+  smoke shapes. `test_matmul` failed before training, however: the accumulated
+  dWeight row reported max diff `3.1250` versus the `0.50` tolerance, leaving
+  only `9/10` rows passing. No TinyStories 3-step validation was run for this
+  invalid fallback binary; the pure-TK default remains the last valid
+  `2663.76 ms` source baseline, still chasing the cached full cuBLASLt
+  fallback near `2623 ms`.
 - Rejected deferring the LM-head dWeight side-stream wait past the first
   FC-projection backward. The temporary
   `LLMK_SM120_DEFER_LMHEAD_DWEIGHT_PAST_FCPROJ=1` hook avoided reusing
