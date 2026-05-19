@@ -8,6 +8,12 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected the opposite SM120 cuBLASLt fallback selector,
+  `LLMK_SM120_CUBLASLT_SELECT_MAX_WAVES=1`. The cached fallback build passed
+  `test_matmul` (`10/10`) and `test_attention` (all three smoke shapes), but
+  TinyStories 3-step validation regressed to `3319.89 ms` with steps
+  `3314.09`, `3315.91`, and `3323.87 ms`. The promoted fallback default
+  therefore remains the lower-wave selector.
 - Promoted the faster SM120 cuBLASLt fallback heuristic policy. The fallback
   helper now requests 8 cuBLASLt heuristic results by default and, unless an
   explicit heuristic index or max-wave selector is provided, chooses the
