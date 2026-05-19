@@ -8,6 +8,12 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rebaselined the current pure SM120 TK source default with the Makefile's
+  actual `-O3` setting (`DEVICE_ARCH=SM120`, `SM120_USE_CUBLASLT_GEMM=0`,
+  no `FORCE_NVCC_O=0`). The build passed `test_matmul` (`10/10`) and
+  `test_attention` (all three smoke shapes). TinyStories 3-step validation
+  averaged `2623.57 ms` with steps `2615.57`, `2621.21`, and `2625.93 ms`,
+  matching the prior `2623.34 ms` default within normal short-run noise.
 - Rejected disabling the SM120 huge-N 256x128 forward tile after the TN direct
   B-column promotion. The pure-TK macro build
   (`LLMK_SM120_HUGE_N_M256=0`, `SM120_USE_CUBLASLT_GEMM=0`) passed
