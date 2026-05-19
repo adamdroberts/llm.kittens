@@ -8,6 +8,18 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected a temporary SM120 async pipeline depth hook. The all-kernel
+  `LLMK_SM120_PIPE_STAGES=3` build failed at ptxas because 256x64 NN/TN
+  kernels used `0x1e000` bytes of shared memory versus the `0x18c00` limit.
+  A scoped NT-forward-only retry with `LLMK_SM120_NT_PIPE_STAGES=3` built,
+  passed `test_matmul` (`10/10`) and `test_attention` (all three smoke
+  shapes), and the focused benchmark produced small qkv/attention forward
+  wins (`1069.02 us` versus `1074.15 us`, and `373.96 us` versus
+  `376.92 us`). It still left fused FC, FC-projection, and LM-head forward
+  behind cuBLASLt, with LM-head forward `25069.19 us` TK versus `22119.27 us`.
+  TinyStories 3-step validation averaged `2625.18 ms` with steps `2620.81`,
+  `2622.52`, and `2627.84 ms`, so the diagnostic hook was removed and the
+  source pipeline depth remains two stages.
 - Rejected huge-N forward swizzle override
   `LLMK_SM120_HUGE_N_FORWARD_SUPER_M=1`. The macro build passed
   `test_matmul` (`10/10`) and `test_attention` (all three smoke shapes), but
