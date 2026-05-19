@@ -8,6 +8,17 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected pure SM120 TK codegen with
+  `-Xptxas=--allow-expensive-optimizations=false`. The build passed
+  `test_attention` and `test_matmul` (`10/10`). The focused benchmark showed
+  the disabled ptxas pass is not a useful tradeoff: qkv forward regressed to
+  `1123.54 us` versus cuBLASLt `1090.06 us`, attention-projection dInput
+  regressed to `378.94 us` versus `367.83 us`, FC-projection dInput remained
+  `1476.43 us` versus `1365.09 us`, and LM-head forward remained
+  `24991.15 us` versus `22097.84 us`. TinyStories 3-step validation averaged
+  `2625.11 ms` with steps `2618.85`, `2621.20`, and `2629.01 ms`, slower than
+  the current pure-TK rebaseline, so pure SM120 TK keeps the existing ptxas
+  optimization policy.
 - Rejected a temporary forward-only swizzle hook,
   `LLMK_SM120_FORWARD_SUPER_M=6`, that kept backward aliases on the accepted
   swizzles while retesting a scoped variant of the previously rejected global
