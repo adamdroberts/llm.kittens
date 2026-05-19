@@ -221,6 +221,13 @@ changelog is the diary; `goal.md` is the plan.
   `test_attention` (all three smoke shapes), but TinyStories 3-step validation
   regressed to `2679.05 ms` with steps `2675.91`, `2676.53`, and `2681.57 ms`,
   so SM120 packed-QKV attention backward remains on the 16-row tile.
+- Rejected a current-stack split-K dWeight partial-reducer block-size probe
+  with `LLMK_SM120_DWEIGHT_REDUCE_BLOCK_SIZE=128`. The temporary hook passed
+  `test_matmul` (`10/10`) and `test_attention` (all three smoke shapes), but
+  the focused benchmark worsened qkv dWeight to `1292.81 us` (`1279.07 us`
+  accumulated) and TinyStories 3-step validation regressed to `2669.82 ms`
+  with steps `2667.56`, `2668.57`, and `2671.07 ms`. The reducer launch
+  remains the fixed 256-thread default.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
