@@ -74,6 +74,13 @@ constexpr int LOAD_BAR = 0;
 #ifndef LLMK_SM120_HUGE_N_FORWARD_WARPS4
 #define LLMK_SM120_HUGE_N_FORWARD_WARPS4 0
 #endif
+#ifndef LLMK_SM120_HUGE_N_FORWARD_WARPS
+#if LLMK_SM120_HUGE_N_FORWARD_WARPS4
+#define LLMK_SM120_HUGE_N_FORWARD_WARPS 4
+#else
+#define LLMK_SM120_HUGE_N_FORWARD_WARPS 8
+#endif
+#endif
 
 #ifndef LLMK_SM120_GRAD_K_TILE
 #define LLMK_SM120_GRAD_K_TILE 64
@@ -198,11 +205,7 @@ using traits_256x64  = kernel_traits<256,  64, LLMK_SM120_K_TILE, 8>;
 using traits_128x128 = kernel_traits<128, 128, LLMK_SM120_HUGE_N_K_TILE, 4>;
 using traits_256x128 = kernel_traits<256, 128, LLMK_SM120_HUGE_N_K_TILE, 8>;
 using traits_huge_n_forward_256x128 =
-#if LLMK_SM120_HUGE_N_FORWARD_WARPS4
-    kernel_traits<256, 128, LLMK_SM120_HUGE_N_K_TILE, 4>;
-#else
-    kernel_traits<256, 128, LLMK_SM120_HUGE_N_K_TILE, 8>;
-#endif
+    kernel_traits<256, 128, LLMK_SM120_HUGE_N_K_TILE, LLMK_SM120_HUGE_N_FORWARD_WARPS>;
 using traits_dweight_128x128 = kernel_traits<128, 128, LLMK_SM120_DWEIGHT_N128_K_TILE, 4>;
 using traits_grad_128x64 = kernel_traits<128, 64, LLMK_SM120_GRAD_K_TILE, 4>;
 using traits_grad_128x96 = kernel_traits<128, 96, LLMK_SM120_GRAD_K_TILE, 4>;
