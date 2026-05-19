@@ -8,6 +8,12 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected retesting `LLMK_SM120_DWEIGHT_SUPER_M=4` on top of the promoted TN
+  direct B-column dWeight source. The macro build passed `test_matmul`
+  (`10/10`) and `test_attention` (all three smoke shapes), but TinyStories
+  3-step validation averaged `2625.32 ms` with steps `2617.10`, `2622.08`,
+  and `2628.55 ms`, slower than the `2623.34 ms` source default. The dWeight
+  swizzle remains `LLMK_SM120_DWEIGHT_SUPER_M=2`.
 - Rejected retesting `LLMK_SM120_DWEIGHT_SUPER_M=3` on top of the promoted TN
   direct B-column dWeight source. The macro build passed `test_matmul`
   (`10/10`) and `test_attention` (all three smoke shapes), but TinyStories
