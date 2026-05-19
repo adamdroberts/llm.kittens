@@ -8,6 +8,17 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected a temporary M=768 dWeight 128x64 K16 route at the smoke gate. The
+  guarded `LLMK_SM120_DWEIGHT_M768_N64_K16=1` probe sent M=768, N%64 TN
+  dWeight rows through a 128x64 tile to target attention-projection and
+  FC-projection dWeight. The focused benchmark improved some dWeight rows
+  versus the promoted default, including FC-projection dWeight (`1464.28 us`
+  TK versus `1373.98 us` cuBLASLt) and qkv dWeight (`1240.12 us` versus
+  `987.21 us`), but worsened accumulated attention-projection dWeight
+  (`521.40 us` versus `329.94 us`) and remained behind cuBLASLt overall.
+  `test_attention` passed all three smoke shapes, but `test_matmul` failed the
+  GPT-2 MLP-up forward row (`6.4688` max diff versus `0.50` tolerance), so no
+  TinyStories validation was run and the temporary route was removed.
 - Rejected a temporary non-qkv dWeight split-K cap-16 hook at the smoke gate.
   The candidate added a guarded `LLMK_SM120_NON_QKV_DWEIGHT_SPLIT_K_CAP=16`
   path and resized trainer/benchmark scratch so attention-projection, FC, and
