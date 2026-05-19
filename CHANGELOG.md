@@ -8,6 +8,12 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected serializing SM120 split-K dWeight partial launches onto the main
+  stream. The pure-TK macro build (`LLMK_SM120_DWEIGHT_SPLIT_K_STREAMS=0`)
+  passed `test_matmul` (`10/10`) and `test_attention` (all three smoke shapes),
+  but TinyStories 3-step validation averaged `3021.54 ms` with steps
+  `3012.40`, `3020.36`, and `3022.72 ms`, far slower than the `2623.57 ms`
+  O3 source default. Split-K dWeight keeps its nonblocking side-stream fanout.
 - Rejected retesting pure SM120 TK codegen with `-Xptxas=-dlcm=cg` under the
   O3 source-default stack. The build warned that the explicit `cg` value
   overrode the default `-dlcm=ca`, passed `test_attention`, and passed
