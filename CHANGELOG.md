@@ -8,6 +8,13 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected overriding the promoted SM120 pure-TK cache policy with
+  `-Xptxas=-dlcm=cg`. The override build emitted the expected ptxas warning
+  that the later `cg` value won over the default `ca`, passed `test_matmul`
+  (`10/10`) and `test_attention` (all three smoke shapes), but TinyStories
+  3-step validation regressed sharply to `3314.65 ms` with steps `3311.07`,
+  `3310.12`, and `3319.19 ms`. The source default remains
+  `-Xptxas=-dlcm=ca` for SM120 pure-TK builds.
 - Promoted `-Xptxas=-dlcm=ca` for SM120 pure-TK builds. The explicit compiler
   cache-policy probe passed `test_matmul` (`10/10`) and `test_attention` (all
   three smoke shapes), then averaged `2654.23 ms` over 3 TinyStories steps
