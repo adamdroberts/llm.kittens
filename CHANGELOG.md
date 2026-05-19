@@ -98,6 +98,13 @@ changelog is the diary; `goal.md` is the plan.
   trailed cuBLASLt at `1365.63 us`. TinyStories 3-step validation regressed to
   `2669.49 ms` with steps `2665.80`, `2668.16`, and `2670.81 ms`, so the
   temporary FCProj direct route was removed.
+- Rejected a fused-dGELU FC dInput direct B-column probe at the smoke gate.
+  The temporary `LLMK_SM120_DINP_DIRECT_BCOL_DGELU_FC=1` alias targeted only
+  the GPT-2 MLP-up backward shape (`N == 768`, `K == 3072`), but its guarded
+  `test_matmul` row failed with max diff `0.7500` versus the `0.50` tolerance.
+  No benchmark or TinyStories validation was run for the numerically unsafe
+  candidate, and the temporary alias, dispatch hook, and smoke row were
+  removed.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
