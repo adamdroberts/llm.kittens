@@ -166,6 +166,12 @@ changelog is the diary; `goal.md` is the plan.
   TinyStories 3-step validation regressed to `2684.10 ms` with steps
   `2678.84`, `2682.91`, and `2685.30 ms`, so the huge-N forward route remains
   on the 256x128 tile rather than the 256x64 wide tile.
+- Rejected a forward-only `LLMK_SM120_HUGE_N_FORWARD_K_TILE=32` probe that
+  tried to keep LM-head forward's earlier K32 improvement while leaving dWeight
+  N128 on the accepted K16 route. The candidate failed the matmul smoke gate
+  twice on the accumulated dWeight row (`3.6250` then `1.5938` max diff versus
+  the `0.50` tolerance), so no benchmark or TinyStories validation was run and
+  the temporary forward-only trait split was removed.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
