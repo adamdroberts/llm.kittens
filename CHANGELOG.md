@@ -8,6 +8,14 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected a temporary streaming cache-policy hook for the SM120 split-K
+  dWeight partial reducer. The macro build
+  (`LLMK_SM120_REDUCE_PARTIALS_STREAMING=1`) used streaming 128-bit loads for
+  partials and `store128cg` for the final write, passed `test_attention`, and
+  passed `test_matmul` on rerun after a transient MLP-up forward row. TinyStories
+  3-step validation averaged `2628.73 ms` with steps `2620.31`, `2626.60`, and
+  `2630.86 ms`, slower than the `2623.57 ms` O3 source default, so the hook was
+  removed.
 - Rejected raising the SM120 huge-N threshold to force LM-head forward off the
   huge-N tile. The pure-TK macro build
   (`LLMK_SM120_HUGE_N_THRESHOLD=65536`) passed `test_attention`, but
