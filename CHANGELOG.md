@@ -151,6 +151,14 @@ changelog is the diary; `goal.md` is the plan.
   remained behind cuBLASLt. TinyStories 3-step validation regressed to
   `2669.86 ms` with steps `2667.80`, `2669.73`, and `2669.98 ms`, so qkv
   dWeight stays on the 8-way split-K default.
+- Rejected a large-K dInput wide direct B-column probe that combined the
+  promoted large-K direct-B-column route with the 256x64 dInput tile. The
+  candidate build passed `test_matmul` (`11/11`, including the guarded wide
+  large-K row) and `test_attention` (all three smoke shapes), but the focused
+  benchmark worsened LM-head dInput to `25860.78 us` versus `21034.51 us`
+  cuBLASLt. TinyStories 3-step validation regressed to `2682.03 ms` with steps
+  `2677.86`, `2678.98`, and `2685.07 ms`, so the temporary wide direct
+  B-column alias, dispatch hook, and smoke row were removed.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
