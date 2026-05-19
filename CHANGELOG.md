@@ -8,6 +8,16 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected a temporary qkv-forward-only swizzle route with
+  `LLMK_SM120_QKV_FORWARD_SUPER_M=6`. The hook routed only regular qkv
+  forward GEMMs (`N == 3*K`) through a dedicated `matmul_qkv_nt_bias` alias
+  while leaving FC fused, projection, and huge-N forward aliases unchanged. The
+  source candidate passed `test_attention` and `test_matmul` (`10/10`), but the
+  focused benchmark regressed the target row: qkv forward was `1152.60 us`
+  versus cuBLASLt `1062.89 us`. TinyStories 3-step validation averaged
+  `2645.98 ms` with steps `2639.88`, `2642.41`, and `2649.55 ms`, slower than
+  the current pure-TK rebaseline, so the temporary alias and dispatch hook were
+  removed.
 - Rejected a temporary huge-N `256x192x32` forward tile selector,
   `LLMK_SM120_HUGE_N_N192=1`, for LM-head-style SM120 forward GEMMs. The
   source candidate passed `test_attention` and `test_matmul` (`10/10`). The
