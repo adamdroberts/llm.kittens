@@ -8,6 +8,13 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected the combined dWeight macro probe
+  `LLMK_SM120_DWEIGHT_SUPER_M=1` with `LLMK_SM120_DWEIGHT_SPLIT_K=16`. The
+  combination was meant to pair the lower dWeight swizzle with the qkv-only
+  16-way split-K path. It compiled and `test_attention` passed all three smoke
+  shapes, but `test_matmul` failed the GPT-2 MLP-up forward row twice
+  (`8.0938` then `5.4609` max diff versus the `0.50` tolerance). No focused
+  benchmark or TinyStories validation was run for the invalid candidate.
 - Rejected a scoped qkv-only direct-Bcol dInput swizzle split. The temporary
   source route used `SUPER_M=3` only for the qkv-shaped direct-Bcol dInput GEMM
   (`N == 768`, `K == 2304`) and left attention-projection, FC, and LM-head on
