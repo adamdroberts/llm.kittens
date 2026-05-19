@@ -8,6 +8,17 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected dWeight split-K fanout `LLMK_SM120_DWEIGHT_SPLIT_K=12`. The macro
+  build passed `test_matmul` (`10/10`) and `test_attention` (all three smoke
+  shapes), but the split planner requires an exact K divisor and the GPT-2
+  dWeight K dimension `65536` made this request fall back to the existing
+  8-way fanout. The focused benchmark still left attention-projection dWeight
+  (`481.97 us` versus `396.20 us`), fcproj dWeight (`1588.68 us` versus
+  `1580.32 us`), and LM-head dWeight (`22887.46 us` versus `21771.92 us`)
+  behind cuBLASLt. TinyStories 3-step validation regressed to `2776.63 ms`
+  average with steps `2771.95`, `2775.19`, and `2778.08 ms`, so the source
+  default remains `LLMK_SM120_DWEIGHT_SPLIT_K=8`; valid higher qkv-only fanout
+  probes still need exact divisors such as 16 or 32.
 - Added `LLMK_SM120_ATTN_BWD_DQ_FIRST` as a default-off hook for launching the
   non-atomic SM120 attention backward dQ pass before the dK/dV pass. Rejected
   `LLMK_SM120_ATTN_BWD_DQ_FIRST=1`: the macro build passed `test_attention`
