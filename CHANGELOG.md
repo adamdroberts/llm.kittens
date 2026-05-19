@@ -8,6 +8,14 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Refreshed the focused SM120 matmul benchmark after promoting the pure-TK
+  compiler defaults. The run confirmed the new defaults improve overall step
+  time but do not close the remaining GEMM gaps: qkv dWeight stayed
+  `1250.10 us` TK versus `987.96 us` cuBLASLt, attention-projection dWeight
+  `475.81 us` versus `327.49 us`, FC dWeight `1542.57 us` versus
+  `1308.14 us`, FC-projection dWeight `1509.03 us` versus `1352.25 us`, and
+  LM-head forward/dInput/dWeight stayed around `1.07x` to `1.13x` slower than
+  cuBLASLt. Backward GEMM and LM-head scheduling remain the active targets.
 - Promoted `--extra-device-vectorization` alongside the SM120 pure-TK
   `-Xptxas=-dlcm=ca` default. The explicit override build passed
   `test_matmul` (`10/10`) and `test_attention` (all three smoke shapes), then
