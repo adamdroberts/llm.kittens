@@ -8,6 +8,14 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Added `LLMK_SM120_HUGE_N_FORWARD_WARPS4` as a default-off hook that changes
+  only the huge-N forward 256x128 tile from 8 warps to 4 warps. Rejected
+  `LLMK_SM120_HUGE_N_FORWARD_WARPS4=1`: the macro build passed
+  `test_attention`, but `test_matmul` failed the LM-head forward row with max
+  diff `19.9062` versus tolerance `0.50`, so no training run was attempted for
+  the numerically invalid kernel. The no-override source build passed
+  `test_attention` and `test_matmul` (`10/10`), leaving the default huge-N
+  forward tile on 8 warps.
 - Rejected huge-N forward swizzle override
   `LLMK_SM120_HUGE_N_FORWARD_SUPER_M=16`. The macro build passed
   `test_attention` and `test_matmul` (`10/10`), but the focused benchmark
