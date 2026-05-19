@@ -8,6 +8,13 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected enabling the SM120 backward N96 route for 768-wide dInput/dWeight
+  rows. The pure-TK macro build (`LLMK_SM120_BACKWARD_N96=1`) passed
+  `test_attention`; the first `test_matmul` hit the known transient MLP-up row
+  and the immediate rerun passed `10/10`. TinyStories 3-step validation
+  averaged `2721.11 ms` with steps `2711.96`, `2719.10`, and `2723.12 ms`,
+  much slower than the `2623.57 ms` O3 source default, so
+  `LLMK_SM120_BACKWARD_N96` remains disabled.
 - Refreshed the focused SM120 matmul benchmark for the current pure-TK `-O3`
   source default. The benchmark still shows the remaining cuBLASLt gaps:
   qkv dW `1233.01 us` versus `987.85 us`, attention-projection dW
