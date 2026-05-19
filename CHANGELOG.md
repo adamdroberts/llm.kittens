@@ -8,6 +8,12 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected retesting the SM120 huge-N K64 tile under the O3 source-default
+  stack. The pure-TK macro build (`LLMK_SM120_HUGE_N_K_TILE=64`) passed
+  `test_matmul` (`10/10`) and `test_attention` (all three smoke shapes), but
+  TinyStories 3-step validation averaged `2627.45 ms` with steps `2617.26`,
+  `2625.20`, and `2629.70 ms`, slower than the `2623.57 ms` O3 source
+  default. Huge-N forward keeps `LLMK_SM120_HUGE_N_K_TILE=32`.
 - Rejected serializing SM120 split-K dWeight partial launches onto the main
   stream. The pure-TK macro build (`LLMK_SM120_DWEIGHT_SPLIT_K_STREAMS=0`)
   passed `test_matmul` (`10/10`) and `test_attention` (all three smoke shapes),
