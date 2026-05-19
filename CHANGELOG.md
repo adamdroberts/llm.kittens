@@ -8,6 +8,19 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Promoted decoupled SM120 huge-N forward K32 tiling while keeping N128
+  dWeight on K16. A previous shared `LLMK_SM120_HUGE_N_K_TILE=32` test had
+  improved LM-head forward but also changed dWeight N128 tiling; the new
+  `LLMK_SM120_DWEIGHT_N128_K_TILE=16` default isolates dWeight from the
+  forward huge-N K tile. The macro probe passed `test_matmul` (`10/10`) and
+  `test_attention` (all three smoke shapes), improved LM-head forward to
+  `24804.11 us`, and validated at `2661.68 ms` total average over 3
+  TinyStories steps. After promoting `LLMK_SM120_HUGE_N_K_TILE=32` as the
+  source default, the no-override build passed `test_matmul` (`10/10`) and
+  `test_attention`, benchmarked LM-head forward at `24882.34 us` versus
+  `21984.87 us` cuBLASLt, and validated at `2663.76 ms` with steps `2657.78`,
+  `2662.50`, and `2665.01 ms`. This improves the pure-TK default but still
+  trails the cached cuBLASLt fallback near `2623 ms`.
 - Rejected a scoped LM-head dWeight 128x64 K16 tile probe
   (`LLMK_SM120_DWEIGHT_LMHEAD_N64_K16=1`) after it improved the focused
   LM-head dWeight benchmark but regressed end-to-end training. The temporary
