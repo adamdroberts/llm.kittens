@@ -187,6 +187,14 @@ changelog is the diary; `goal.md` is the plan.
   LM-head dInput effectively unchanged; TinyStories 3-step validation regressed
   to `2668.82 ms` with steps `2667.20`, `2667.51`, and `2670.14 ms`, so the
   dInput swizzle remains `8`.
+- Rejected scoped direct-B-column dInput swizzle
+  `LLMK_SM120_DINP_DIRECT_BCOL_SUPER_M=6`. The first `test_matmul` pass hit
+  the known accumulated dWeight transient, the immediate rerun passed `10/10`,
+  and `test_attention` passed all three smoke shapes. The focused benchmark
+  worsened qkv dInput (`1069.06 us` versus `1007.53 us` cuBLASLt) while
+  improving some FC/FCProj forward timings, and TinyStories 3-step validation
+  regressed to `2668.37 ms` with steps `2665.33`, `2666.32`, and `2670.43 ms`.
+  The direct-B-column route keeps inheriting `LLMK_SM120_DINP_SUPER_M=8`.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
