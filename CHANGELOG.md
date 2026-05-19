@@ -113,6 +113,15 @@ changelog is the diary; `goal.md` is the plan.
   3-step validation regressed to `2668.04 ms` with steps `2668.98`,
   `2666.50`, and `2669.59 ms`, so the temporary large-K swizzle alias was
   removed.
+- Refreshed the SM120 per-step profile after promoting the large-K dInput
+  direct B-column route. The `LLMK_SM120_PROFILE_TRAIN_STEP=1` build completed
+  the required TinyStories 3-step validation with steps `2712.55`, `2711.10`,
+  and `2713.60 ms` (`2712.35 ms` total average), with expected profiling
+  overhead versus the unprofiled `2665.06 ms` default. The dominant buckets
+  remained forward (`~813 ms`), FC projection backward (`~345 ms`), FC backward
+  (`~329 ms`), attention backward (`~284 ms`), QKV backward (`~240 ms`), and
+  LM-head backward (`~202-252 ms`), so the next optimization focus remains
+  dense GEMM and attention-backward work rather than optimizer/update overhead.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
