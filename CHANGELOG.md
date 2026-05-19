@@ -8,6 +8,12 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected retesting `LLMK_SM120_DWEIGHT_SPLIT_K=16` on top of the promoted
+  SM120 pure-TK compiler defaults. The build passed `test_matmul` (`10/10`)
+  and `test_attention` (all three smoke shapes), but TinyStories 3-step
+  validation averaged `2656.41 ms` with steps `2649.44`, `2653.55`, and
+  `2659.27 ms`, slower than the new no-override source default
+  (`2653.36 ms`). dWeight split-K remains `8`.
 - Refreshed the focused SM120 matmul benchmark after promoting the pure-TK
   compiler defaults. The run confirmed the new defaults improve overall step
   time but do not close the remaining GEMM gaps: qkv dWeight stayed
