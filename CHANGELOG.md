@@ -9,6 +9,15 @@ changelog is the diary; `goal.md` is the plan.
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
 - Rejected fused FC forward GeLU K-tile override
+  `LLMK_SM120_FORWARD_GELU_N96_K_TILE=24` at compile time. ThunderKittens BF16
+  shared/register tile constraints require the K tile columns to be divisible
+  by the base tile dimensions, and the build failed static assertions such as
+  `Cols must be divisible by the tile dimension`, `Subtile cols must be
+  divisible by the base tile col dimension`, and `Columns must be divisible by
+  the tile size` while instantiating `matmul_n96_nt_bias_gelu`. No smoke,
+  benchmark, or TinyStories validation was possible; the fused GeLU N96 route
+  stays on the default K32 tile.
+- Rejected fused FC forward GeLU K-tile override
   `LLMK_SM120_FORWARD_GELU_N96_K_TILE=48`. The macro build passed
   `test_matmul` (`10/10`) and `test_attention` (all three smoke shapes), but
   `bench_sm120_matmul` faulted on the first fused FC GeLU benchmark row with
