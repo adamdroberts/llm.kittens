@@ -8,6 +8,15 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected a temporary 256x64 FC-projection dInput direct B-column route
+  (`LLMK_SM120_DINP_FCPROJ_WIDE_DIRECT_BCOL=1`). The macro build passed
+  `test_attention` and `test_matmul` (`11/11`, including the guarded FCProj
+  wide direct-Bcol row), but the focused benchmark worsened FCProj dInput to
+  `1654.04 us` versus cuBLASLt `1388.00 us` and left all material dWeight and
+  LM-head rows behind cuBLASLt. TinyStories 3-step validation averaged
+  `2623.74 ms` with steps `2618.41`, `2622.08`, and `2625.39 ms`, essentially
+  tied with the `2623.57 ms` O3 source default but not a kernel win. The
+  temporary alias, dispatch hook, and smoke row were removed.
 - Profiled the selective SM120 cuBLASLt dInput+dWeight fallback with
   `LLMK_SM120_CUBLASLT_DINP_FALLBACK=1`,
   `LLMK_SM120_CUBLASLT_DWEIGHT_FALLBACK=1`, and
