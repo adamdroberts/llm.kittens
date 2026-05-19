@@ -8,6 +8,15 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected deferring the LM-head dWeight side-stream wait past the first
+  FC-projection backward. The temporary
+  `LLMK_SM120_DEFER_LMHEAD_DWEIGHT_PAST_FCPROJ=1` hook avoided reusing
+  `acts.output` as the first FCProj dbias scratch buffer, then waited after
+  that FCProj backward to overlap more of the LM-head TN dWeight work. The
+  macro build passed `test_matmul` (`10/10`) and `test_attention` (all three
+  smoke shapes), but TinyStories 3-step validation regressed to `2667.49 ms`
+  total average with steps `2666.27`, `2665.81`, and `2669.16 ms`. The
+  temporary scheduling hook was removed.
 - Refreshed current-default SM120 per-step profiling after the decoupled K32
   huge-N promotion. The `LLMK_SM120_PROFILE_TRAIN_STEP=1` build completed the
   required TinyStories 3-step validation with steps `2709.38`, `2709.39`, and
