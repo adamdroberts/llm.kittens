@@ -8,6 +8,17 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected a temporary qkv-forward-only swizzle route with
+  `LLMK_SM120_QKV_FORWARD_SUPER_M=5`. The source hook routed only regular
+  qkv forward GEMMs (`N == 3*K`) through a dedicated N96 alias while leaving
+  other forward, dInput, and dWeight routes unchanged. The candidate passed
+  `test_matmul` (`10/10`) and `test_attention` (all three smoke shapes), and
+  the focused benchmark showed an isolated qkv forward win (`1118.45 us` TK
+  versus `1130.19 us` cuBLASLt). Broader rows still trailed or regressed,
+  including qkv dWeight (`1258.24 us` versus `1165.54 us`) and LM-head forward
+  (`26228.37 us` versus `23419.03 us`). TinyStories 3-step validation
+  regressed to `2762.85 ms` average with steps `2735.48`, `2763.47`, and
+  `2762.22 ms`, so the temporary qkv route was removed.
 - Rejected qkv-only dWeight split-K fanout
   `LLMK_SM120_DWEIGHT_SPLIT_K=128`. The first `test_matmul` run showed
   instability with the MLP-up forward row failing at max diff `6.0000`
