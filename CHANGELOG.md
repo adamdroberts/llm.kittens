@@ -8,6 +8,18 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected the corrected selective cuBLASLt fallback diagnostic for dInput and
+  dWeight only, built with
+  `LLMK_SM120_CUBLASLT_DINP_FALLBACK=1` and
+  `LLMK_SM120_CUBLASLT_DWEIGHT_FALLBACK=1` while leaving forward GEMMs on the
+  SM120 path. The corrected link command passed cuBLASLt explicitly through
+  `NVCC_LDLIBS` so it did not define full `LLMK_SM120_USE_CUBLASLT_GEMM`. The
+  build passed `test_attention` and `test_matmul` (`10/10`). TinyStories
+  3-step validation averaged `2612.23 ms` with steps `2614.42`, `2609.52`,
+  and `2614.93 ms`: faster than the current pure-TK rebaseline but still well
+  behind the full cuBLASLt fallback selector (`2532.28 ms`). This confirms the
+  remaining optimization target is not solved by only replacing backward GEMMs;
+  forward and LM-head-side SM120 kernels still need work.
 - Rejected disabling the small-K SM120 direct-Bcol dInput route with
   `LLMK_SM120_DINP_DIRECT_BCOL_SMALLK=0`. The macro build passed
   `test_attention`; the first `test_matmul` hit the known intermittent MLP-up
