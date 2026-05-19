@@ -136,6 +136,13 @@ changelog is the diary; `goal.md` is the plan.
   `20872.77 us` cuBLASLt. TinyStories 3-step validation regressed to
   `2679.57 ms` with steps `2675.70`, `2678.06`, and `2681.09 ms`, so the
   huge-N/N128 K tile remains `16`.
+- Rejected retesting current pure-TK codegen with `FORCE_NVCC_O=2` after the
+  large-K dInput promotion. The O2 build passed `test_matmul` (`10/10`) and
+  `test_attention` (all three smoke shapes), but the focused benchmark worsened
+  several rows, including qkv dInput (`1109.59 us` versus `1007.46 us`
+  cuBLASLt) and attention-projection forward (`425.04 us` versus `371.09 us`).
+  TinyStories 3-step validation averaged `2666.73 ms` with steps `2664.26`,
+  `2665.24`, and `2668.21 ms`, slightly slower than the O3 source default.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
