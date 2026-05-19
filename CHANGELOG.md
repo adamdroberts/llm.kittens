@@ -8,6 +8,15 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected fused dInput+dGELU swizzle override
+  `LLMK_SM120_DINP_DGELU_SUPER_M=12`. The macro build passed `test_matmul`
+  (`10/10`) and `test_attention` (all three smoke shapes), but the focused
+  FC-projection dInput+dGELU benchmark was effectively flat to slightly worse
+  than the promoted superM11 default (`1766.68 us` TK versus `1797.30 us`
+  cuBLASLt), while qkv, attproj dWeight, fcproj dInput, and LM-head rows still
+  trailed cuBLASLt. TinyStories 3-step validation regressed to `2722.78 ms`
+  average with steps `2608.88`, `2793.52`, and `2652.05 ms`, so the SM120
+  default stays on `LLMK_SM120_DINP_DGELU_SUPER_M=11`.
 - Promoted scoped fused dInput+dGELU swizzle
   `LLMK_SM120_DINP_DGELU_SUPER_M=11` for SM120. The macro probe passed
   `test_matmul` (`10/10`) and `test_attention` (all three smoke shapes), moved
