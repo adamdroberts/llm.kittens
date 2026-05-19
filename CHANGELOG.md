@@ -8,6 +8,15 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected direct-Bcol dInput swizzle
+  `LLMK_SM120_DINP_DIRECT_BCOL_SUPER_M=15`. The macro build passed
+  `test_attention` and `test_matmul` (`10/10`). The focused benchmark kept qkv
+  dInput competitive (`1019.40 us` versus cuBLASLt `1052.73 us`) but regressed
+  attention-projection dInput to `378.92 us` versus `367.94 us`, left
+  FC/FC-projection/LM-head dInput behind cuBLASLt, and did not close forward or
+  dWeight gaps. TinyStories 3-step validation averaged `2626.81 ms` with steps
+  `2620.20`, `2623.29`, and `2630.34 ms`, slower than the current pure-TK
+  rebaseline, so direct-Bcol dInput keeps `SUPER_M=8`.
 - Rejected dWeight swizzle `LLMK_SM120_DWEIGHT_SUPER_M=20`. The macro build
   passed `test_attention` and `test_matmul` (`10/10`). The focused benchmark
   improved qkv dWeight relative to several rejected high-swizzle probes but
