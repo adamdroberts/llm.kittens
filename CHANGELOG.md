@@ -8,6 +8,13 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected the narrower SM120 TK LayerNorm forward-only probe that kept the
+  CUDA backward helper on `warpReduceSum` instead of the TK warp reduction.
+  The build again passed `test_matmul` (`10/10`) and `test_attention` (all
+  three smoke shapes), and the LayerNorm forward/fused-forward values stayed
+  within tolerance. `test_layernorm` still failed the backward `dbias` row at
+  the same `0.496948` max diff versus the `0.120` tolerance, so the temporary
+  SM120 opt-in gate was removed and no TinyStories validation was run.
 - Rejected enabling the existing TK LayerNorm forward wrapper for SM120 behind
   an opt-in `LLMK_SM120_TK_LAYERNORM=1` gate. The probe built cleanly and the
   LayerNorm smoke showed the SM120 TK forward outputs were within tolerance
