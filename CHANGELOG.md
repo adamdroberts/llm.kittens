@@ -8,6 +8,12 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected fused FC forward GeLU K-tile override
+  `LLMK_SM120_FORWARD_GELU_N96_K_TILE=96` at the matmul smoke gate. The macro
+  build completed, but `test_matmul` failed the GPT-2 MLP-up forward row twice
+  (`6.7891` then `6.2188` max diff versus the `0.50` tolerance). No focused
+  benchmark or TinyStories validation was run for the invalid candidate, so
+  the fused GeLU N96 route stays on the default K32 tile.
 - Rejected packed-QKV attention prep launch `LLMK_SM120_DPREP_WARPS=11`.
   The macro build passed `test_matmul` (`10/10`) and `test_attention` (all
   three smoke shapes including the packed-QKV fast path), but the focused
