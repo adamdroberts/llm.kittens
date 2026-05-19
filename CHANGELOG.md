@@ -8,6 +8,11 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected `LLMK_SM120_DWEIGHT_N128_K_TILE=128` at the compile gate. The
+  candidate is shape-divisible for the smoke and GPT-2 dWeight rows, but ptxas
+  rejected the instantiated SM120 N128 TN kernels because they use `0x20000`
+  bytes of shared data while the reported maximum is `0x18c00`. No smoke,
+  benchmark, or TinyStories validation was possible.
 - Rejected `LLMK_SM120_DWEIGHT_N128_K_TILE=48` at the matmul smoke gate. The
   macro build completed, but `test_matmul` aborted in the SM120 N128 TN dWeight
   launch because the smoke dWeight shape uses `K=1024`, which is not divisible
