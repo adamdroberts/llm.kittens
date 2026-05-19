@@ -8,6 +8,18 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Validated a current full SM120 cuBLASLt fallback diagnostic with cached plans
+  and wider heuristic selection:
+  `LLMK_SM120_USE_CUBLASLT_GEMM=1`, `LLMK_SM120_CACHE_CUBLASLT_PLANS=1`,
+  `LLMK_SM120_CUBLASLT_HEURISTIC_RESULTS=8`, and
+  `LLMK_SM120_CUBLASLT_SELECT_MIN_WAVES=1`. The build passed
+  `test_matmul` (`10/10`) and `test_attention` (all three smoke shapes).
+  TinyStories 3-step validation averaged `2533.40 ms` with steps `2538.23`,
+  `2531.50`, and `2535.30 ms`, about `10.1%` faster than the supplied
+  llm.c baseline average (`2818.23 ms`). This is a fallback ceiling, not a
+  pure-TK promotion: the focused pure-TK benchmark still shows the material
+  dWeight and LM-head rows behind cuBLASLt, so the kernel-outperformance goal
+  remains open.
 - Rejected direct-Bcol dInput `LLMK_SM120_DINP_DIRECT_BCOL_SUPER_M=2` under
   the O3 source-default stack. The macro build passed `test_attention` and
   `test_matmul` (`10/10`), but the focused benchmark showed only isolated
