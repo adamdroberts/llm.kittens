@@ -8,6 +8,19 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Profiled the selective SM120 cuBLASLt dInput+dWeight fallback with
+  `LLMK_SM120_CUBLASLT_DINP_FALLBACK=1`,
+  `LLMK_SM120_CUBLASLT_DWEIGHT_FALLBACK=1`, and
+  `LLMK_SM120_PROFILE_TRAIN_STEP=1`. The 3-step TinyStories run averaged
+  `2640.63 ms` with steps `2815.33`, `2639.21`, and `2642.04 ms`; the first
+  profiled step paid extra fallback setup cost. Step-3 phase timings were:
+  forward `805.23 ms`, FC-projection backward `326.01 ms`, FC backward
+  `307.98 ms`, attention backward `283.61 ms`, qkv backward `231.32 ms`,
+  LM-head backward `225.17 ms`, final-LayerNorm backward `146.55 ms`,
+  classifier backward `86.23 ms`, and attention-projection backward
+  `80.85 ms`. Compared with the pure-TK profile, the fallback mainly reduced
+  FC-projection and attention-projection backward, while the forward bucket
+  stayed dominant.
 - Rejected an FC-only SM120 M3072/N128 dWeight swizzle route
   (`LLMK_SM120_DWEIGHT_M3072_SUPER_M=4`). The source candidate passed
   `test_attention`; the first `test_matmul` run hit the known transient
