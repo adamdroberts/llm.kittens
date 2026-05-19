@@ -8,6 +8,13 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected lowering dWeight split-K to 4 on top of the promoted TN direct
+  B-column source. The pure-TK macro build
+  (`LLMK_SM120_DWEIGHT_SPLIT_K=4`, `SM120_USE_CUBLASLT_GEMM=0`) passed
+  `test_matmul` (`10/10`) and `test_attention` (all three smoke shapes), but
+  TinyStories 3-step validation averaged `2637.24 ms` with steps `2635.10`,
+  `2633.56`, and `2640.91 ms`, slower than the `2623.34 ms` source default.
+  The source keeps the accepted dWeight split-K default.
 - Rejected retesting qkv dWeight split-K 16 on top of the promoted TN direct
   B-column source. The pure-TK macro build
   (`LLMK_SM120_DWEIGHT_SPLIT_K=16`, `SM120_USE_CUBLASLT_GEMM=0`) passed
