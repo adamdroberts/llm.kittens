@@ -8,6 +8,17 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected a scoped LM-head dWeight 128x64 K16 tile probe
+  (`LLMK_SM120_DWEIGHT_LMHEAD_N64_K16=1`) after it improved the focused
+  LM-head dWeight benchmark but regressed end-to-end training. The temporary
+  route used a 128x64 K16 TN tile for large `OC x C` dWeight rows with
+  `C == 768`, and the macro build passed `test_matmul` (`11/11`, including the
+  guarded large-OC/C=768 row) plus `test_attention` (all three smoke shapes).
+  The focused benchmark moved LM-head dWeight from the refreshed default
+  `22997.94 us` to `22556.60 us`, but it still trailed cuBLASLt at
+  `21171.98 us`. TinyStories 3-step validation regressed to `2684.95 ms` with
+  steps `2680.53`, `2682.84`, and `2687.06 ms`, so the temporary alias,
+  dispatch hook, and smoke row were removed.
 - Promoted a scoped SM120 dInput direct B-column register-load route for the
   small-K GPT-2 qkv/attention-projection backward GEMMs
   (`LLMK_SM120_DINP_DIRECT_BCOL_SMALLK=1`). The route leaves fused dGELU,
