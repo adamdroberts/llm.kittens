@@ -888,9 +888,18 @@ inline void matmul_dispatch_tk_ab(floatX* out, const floatX* a, const floatX* b,
 #ifndef LLMK_SM120_DINP_DIRECT_BCOL_K_CAP
 #define LLMK_SM120_DINP_DIRECT_BCOL_K_CAP (3 * 768)
 #endif
+#ifndef LLMK_SM120_DINP_DIRECT_BCOL_LARGEK
+#define LLMK_SM120_DINP_DIRECT_BCOL_LARGEK 0
+#endif
+#ifndef LLMK_SM120_DINP_DIRECT_BCOL_LARGEK_MIN
+#define LLMK_SM120_DINP_DIRECT_BCOL_LARGEK_MIN 8192
+#endif
     const bool direct_bcol_smallk = !apply_dgelu && (LLMK_SM120_DINP_DIRECT_BCOL_SMALLK != 0) &&
                                     !huge_n && !n96 && (N == 768) &&
                                     (K <= LLMK_SM120_DINP_DIRECT_BCOL_K_CAP);
+    const bool direct_bcol_largek = !apply_dgelu && (LLMK_SM120_DINP_DIRECT_BCOL_LARGEK != 0) &&
+                                    !huge_n && !n96 && (N == 768) &&
+                                    (K >= LLMK_SM120_DINP_DIRECT_BCOL_LARGEK_MIN);
     if (apply_dgelu) {
         assert(P != nullptr && "matmul_dispatch_tk_ab: dGELU fusion requires pre_gelu");
         if (huge_n) {
@@ -908,7 +917,7 @@ inline void matmul_dispatch_tk_ab(floatX* out, const floatX* a, const floatX* b,
         llmk::gemm::launch<llmk::gemm::matmul_huge_n>(A, B, C, M, N, K, stream);
     } else if (n96) {
         llmk::gemm::launch<llmk::gemm::matmul_n96>(A, B, C, M, N, K, stream);
-    } else if (direct_bcol_smallk) {
+    } else if (direct_bcol_smallk || direct_bcol_largek) {
         llmk::gemm::launch<llmk::gemm::matmul_default_direct_bcol>(A, B, C, M, N, K, stream);
     } else if (wide) {
         llmk::gemm::launch<llmk::gemm::matmul_wide>(A, B, C, M, N, K, stream);

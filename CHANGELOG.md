@@ -69,6 +69,17 @@ changelog is the diary; `goal.md` is the plan.
   were unchanged; the next optimization targets remain the GEMM-heavy forward,
   FC/FCProj backward, QKV/attention backward, and LM-head rows that still trail
   cuBLASLt.
+- Added a disabled-by-default `LLMK_SM120_DINP_DIRECT_BCOL_LARGEK` probe for
+  the LM-head-style large-K dInput route (`N == 768`, `K >= 8192`) plus a
+  guarded smoke row. With the macro enabled, `test_matmul` passed `10/10`
+  including the new large-K row and `test_attention` passed all three smoke
+  shapes. The focused benchmark improved LM-head dInput to `22255.96 us`
+  versus the accepted-source `23698.07 us`, but it still trailed cuBLASLt at
+  `21038.20 us`. TinyStories 3-step validation improved to `2666.27 ms` with
+  steps `2662.65`, `2663.99`, and `2668.56 ms`, faster than the accepted
+  pure-TK rebaseline but still behind the cached cuBLASLt fallback near
+  `2623 ms`. The macro remains off by default until a promotion run confirms
+  it as the best source default.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
