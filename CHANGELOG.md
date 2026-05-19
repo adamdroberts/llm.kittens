@@ -8,6 +8,16 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected non-direct dInput swizzle `LLMK_SM120_DINP_SUPER_M=1`. The macro
+  build passed `test_attention` and `test_matmul` (`10/10`). The focused
+  benchmark improved qkv dInput in that run (`1019.07 us` versus cuBLASLt
+  `1076.31 us`) but still missed the broader target: FC dInput was
+  `1408.10 us` versus `1341.31 us`, FC-projection dInput was `1477.03 us`
+  versus `1416.01 us`, LM-head dInput was `22170.99 us` versus `21627.76 us`,
+  and forward plus several dWeight rows remained behind cuBLASLt. TinyStories
+  3-step validation averaged `2625.47 ms` with steps `2619.91`, `2622.00`,
+  and `2628.95 ms`, slower than the current pure-TK rebaseline, so dInput
+  keeps `LLMK_SM120_DINP_SUPER_M=8`.
 - Rejected a temporary large-K-only direct-Bcol dInput swizzle split with
   `LLMK_SM120_DINP_DIRECT_BCOL_LARGEK_SUPER_M=7`. The hook routed only
   LM-head-style large-K direct-Bcol dInput through a separate alias while
