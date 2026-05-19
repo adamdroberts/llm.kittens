@@ -8,6 +8,16 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected removing the runtime `bias_present` guard from the SM120 NT
+  forward bias epilogue. The source candidate passed `test_attention` and
+  `test_matmul` (`10/10`). The focused benchmark was mixed: attention-projection
+  forward won in that noisy run (`376.31 us` versus cuBLASLt `396.95 us`), but
+  qkv forward still trailed (`1070.75 us` versus `1040.88 us`), FC fused
+  forward stayed behind (`1537.55 us` versus `1493.35 us`), FC-projection
+  forward stayed behind (`1418.96 us` versus `1388.13 us`), and LM-head forward
+  was unchanged because it has no bias. TinyStories 3-step validation averaged
+  `2645.17 ms` with steps `2639.19`, `2640.39`, and `2649.95 ms`, slower than
+  the current pure-TK rebaseline, so the epilogue keeps the runtime guard.
 - Rejected a temporary qkv-forward-only swizzle route with
   `LLMK_SM120_QKV_FORWARD_SUPER_M=6`. The hook routed only regular qkv
   forward GEMMs (`N == 3*K`) through a dedicated `matmul_qkv_nt_bias` alias
