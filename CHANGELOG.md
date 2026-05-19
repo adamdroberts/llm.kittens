@@ -9,6 +9,14 @@ changelog is the diary; `goal.md` is the plan.
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
 - Rejected dWeight N128 K-tile override
+  `LLMK_SM120_DWEIGHT_N128_K_TILE=8` at compile time. ThunderKittens' BF16
+  shared/register tile types require rows divisible by the base tile dimension,
+  and the TN instantiation fails for `st<bf16, 8, 128>` /
+  `rt<bf16, 8, ...>` with static assertions before any runnable binary is
+  produced. No smoke tests or 3-step TinyStories validation were run for this
+  candidate because the build failed; the source default remains
+  `LLMK_SM120_DWEIGHT_N128_K_TILE=16`.
+- Rejected dWeight N128 K-tile override
   `LLMK_SM120_DWEIGHT_N128_K_TILE=32`. The macro build passed
   `test_attention`; the first `test_matmul` run hit the known intermittent
   MLP-up forward row, and the rerun passed `10/10`. The focused benchmark
