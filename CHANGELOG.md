@@ -8,6 +8,12 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected disabling the SM120 forward N96 route under the O3 source-default
+  stack. The pure-TK macro build (`LLMK_SM120_FORWARD_N96=0`) passed
+  `test_matmul` (`10/10`) and `test_attention` (all three smoke shapes), but
+  TinyStories 3-step validation averaged `2679.16 ms` with steps `2672.93`,
+  `2677.94`, and `2680.38 ms`, slower than the `2623.57 ms` O3 source
+  default. The source keeps `LLMK_SM120_FORWARD_N96=1`.
 - Rejected retesting the SM120 huge-N K64 tile under the O3 source-default
   stack. The pure-TK macro build (`LLMK_SM120_HUGE_N_K_TILE=64`) passed
   `test_matmul` (`10/10`) and `test_attention` (all three smoke shapes), but
