@@ -8,6 +8,16 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected dWeight N128 K-tile override
+  `LLMK_SM120_DWEIGHT_N128_K_TILE=32`. The macro build passed
+  `test_attention`; the first `test_matmul` run hit the known intermittent
+  MLP-up forward row, and the rerun passed `10/10`. The focused benchmark
+  regressed the dWeight rows the override targets: qkv dW was `1311.20 us`
+  versus cuBLASLt `1109.56 us`, attproj dW was `489.35 us` versus
+  `372.24 us`, and LM-head dW was `23017.65 us` versus `20851.61 us`, all
+  worse than the accepted K16 default. TinyStories 3-step validation averaged
+  `2662.43 ms` with steps `2652.65`, `2659.05`, and `2665.82 ms`, so the
+  source default remains `LLMK_SM120_DWEIGHT_N128_K_TILE=16`.
 - Added `LLMK_SM120_HUGE_N_FORWARD_SUPER_M` as a default-preserving hook for
   only the huge-N forward NT aliases. The source default inherits
   `LLMK_SM120_SUPER_M=7`, leaving qkv, FC, dInput, and dWeight aliases on
