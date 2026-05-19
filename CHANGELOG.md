@@ -208,6 +208,14 @@ changelog is the diary; `goal.md` is the plan.
   accumulated dWeight rows behind cuBLASLt and worsened several rows. TinyStories
   3-step validation regressed to `2668.92 ms` with steps `2666.92`, `2666.94`,
   and `2670.89 ms`, so accumulated dWeight keeps the direct-accumulate default.
+- Rejected qkv-only dWeight `LLMK_SM120_DWEIGHT_SPLIT_K=32` on the current
+  large-K dInput source. The first `test_matmul` pass hit recurring transient
+  MLP-up and accumulated dWeight row failures, the immediate rerun passed
+  `10/10`, and `test_attention` passed all three smoke shapes. The focused
+  benchmark improved qkv dWeight to `1194.99 us` (`1156.77 us` accumulated),
+  but it still trailed cuBLASLt and TinyStories 3-step validation regressed to
+  `2674.53 ms` with steps `2673.69`, `2673.01`, and `2676.05 ms`, so qkv
+  dWeight remains on the 8-way split-K default.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
