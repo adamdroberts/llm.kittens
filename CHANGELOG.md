@@ -8,6 +8,14 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected SM120 `LLMK_SM120_HUGE_N_K_TILE=24` at compile time for the huge-N
+  LM-head forward tile. ThunderKittens BF16 shared/register tile constraints
+  require rows/columns to be divisible by the base tile dimensions, and the
+  K24 build failed static assertions such as `Cols must be divisible by the
+  tile dimension`, `Rows must be divisible by the tile dimension`, and
+  `Columns must be divisible by the tile size` while instantiating the
+  `matmul_huge_n_*` aliases. No smoke or TinyStories validation was possible,
+  so huge-N forward stays on `LLMK_SM120_HUGE_N_K_TILE=32`.
 - Rejected a qkv-only SM120 M2304/N128 dWeight swizzle route
   (`LLMK_SM120_DWEIGHT_M2304_SUPER_M=3`). The source candidate passed
   `test_attention` and `test_matmul`, but the focused benchmark worsened qkv
