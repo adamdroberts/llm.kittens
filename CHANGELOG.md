@@ -8,6 +8,13 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected packed-QKV attention prep launch `LLMK_SM120_DPREP_WARPS=10`.
+  The macro build passed `test_matmul` (`10/10`) and `test_attention`
+  (all three smoke shapes including the packed-QKV fast path), but
+  TinyStories 3-step validation averaged `2619.66 ms` with steps
+  `2619.01`, `2617.52`, and `2621.81 ms`. That is slower than the promoted
+  source default and CUDA fallback diagnostics, so the SM120 attention prep
+  launch remains on `LLMK_SM120_DPREP_WARPS=3`.
 - Rejected a temporary qkv-forward-only swizzle route with
   `LLMK_SM120_QKV_FORWARD_SUPER_M=3`. The guarded hook routed only regular
   GPT-2 qkv forward GEMMs (`N == 3*K`) through a dedicated N96 alias while
