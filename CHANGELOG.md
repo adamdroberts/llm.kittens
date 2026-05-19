@@ -8,6 +8,14 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected retesting SM120 dWeight N128 K-tile 32 on top of the promoted TN
+  direct B-column source. The pure-TK macro build
+  (`LLMK_SM120_DWEIGHT_N128_K_TILE=32`, `SM120_USE_CUBLASLT_GEMM=0`) passed
+  `test_attention`; the first `test_matmul` run hit the known transient MLP-up
+  row and the immediate rerun passed `10/10`. TinyStories 3-step validation
+  averaged `2645.25 ms` with steps `2635.58`, `2643.76`, and `2646.74 ms`,
+  slower than the `2623.34 ms` source default, so N128 dWeight remains on
+  `LLMK_SM120_DWEIGHT_N128_K_TILE=16`.
 - Rejected a temporary SM120 TN direct A-column register-load hook for
   dWeight. The pure-TK macro build
   (`LLMK_SM120_TN_DIRECT_A_COL=1`, `SM120_USE_CUBLASLT_GEMM=0`) passed
