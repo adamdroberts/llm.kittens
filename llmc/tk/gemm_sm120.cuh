@@ -53,6 +53,9 @@ constexpr int LOAD_BAR = 0;
 #ifndef LLMK_SM120_K_TILE
 #define LLMK_SM120_K_TILE 32
 #endif
+#ifndef LLMK_SM120_FORWARD_GELU_N96_K_TILE
+#define LLMK_SM120_FORWARD_GELU_N96_K_TILE LLMK_SM120_K_TILE
+#endif
 
 #ifndef LLMK_SM120_SUPER_M
 #define LLMK_SM120_SUPER_M 7
@@ -170,6 +173,7 @@ struct kernel_traits {
 // Concrete presets used by the public mmt aliases.
 using traits_128x64  = kernel_traits<128,  64, LLMK_SM120_K_TILE, 4>;
 using traits_128x96  = kernel_traits<128,  96, LLMK_SM120_K_TILE, 4>;
+using traits_gelu_128x96 = kernel_traits<128,  96, LLMK_SM120_FORWARD_GELU_N96_K_TILE, 4>;
 using traits_256x64  = kernel_traits<256,  64, LLMK_SM120_K_TILE, 8>;
 using traits_128x128 = kernel_traits<128, 128, LLMK_SM120_HUGE_N_K_TILE, 4>;
 using traits_256x128 = kernel_traits<256, 128, LLMK_SM120_HUGE_N_K_TILE, 8>;
@@ -537,7 +541,7 @@ using matmul_wide_nt_bias_gelu       = matmul_template<2, 4, LLMK_SM120_SUPER_M,
 
 using matmul_n96_nt                  = matmul_template<2, 4, LLMK_SM120_SUPER_M, false, true,  false, false, false, sm120_detail::traits_128x96>;
 using matmul_n96_nt_bias             = matmul_template<2, 4, LLMK_SM120_SUPER_M, false, true,  true,  false, false, sm120_detail::traits_128x96>;
-using matmul_n96_nt_bias_gelu        = matmul_template<2, 4, LLMK_SM120_SUPER_M, false, true,  true,  true,  true,  sm120_detail::traits_128x96>;
+using matmul_n96_nt_bias_gelu        = matmul_template<2, 4, LLMK_SM120_SUPER_M, false, true,  true,  true,  true,  sm120_detail::traits_gelu_128x96>;
 
 #if LLMK_SM120_HUGE_N_M256
 using matmul_huge_n_nt               = matmul_template<2, 4, LLMK_SM120_SUPER_M, false, true,  false, false, false, sm120_detail::traits_256x128>;

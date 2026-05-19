@@ -8,6 +8,23 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Added `LLMK_SM120_FORWARD_GELU_N96_K_TILE` as a default-preserving hook for
+  the fused `N % 96 == 0` forward GeLU alias only. The source default inherits
+  `LLMK_SM120_K_TILE=32`, so qkv forward and the accepted default fused-forward
+  path are unchanged unless a test build overrides the hook. Rejected
+  `LLMK_SM120_FORWARD_GELU_N96_K_TILE=64`: the macro build passed
+  `test_attention`, but `test_matmul` failed the GPT-2 124M MLP-up forward row
+  with max diff `5.7500` versus tolerance `0.50`, so the numerically invalid
+  override was not run through training. The no-override source build passed
+  `test_attention` and `test_matmul` (`10/10`). Its default benchmark still
+  showed the main remaining cuBLASLt gaps: FC fused forward `1583.87 us`
+  versus `1473.19 us`, qkv forward `1073.36 us` versus `1048.84 us`,
+  attproj forward `411.02 us` versus `370.86 us`, fcproj forward `1521.67 us`
+  versus `1399.02 us`, and LM-head forward `24930.15 us` versus `22394.16 us`.
+  TinyStories 3-step default validation averaged `2643.75 ms` with steps
+  `2649.37`, `2640.64`, and `2646.86 ms`, slower than the current pure-TK
+  rebaseline, so the hook remains diagnostic-only and the source default stays
+  at the accepted K32 tile.
 - Rejected scoped fused dInput+dGELU swizzle
   `LLMK_SM120_DINP_DGELU_SUPER_M=9`. The macro build passed `test_attention`
   and `test_matmul` (`10/10`). The focused benchmark showed the new
