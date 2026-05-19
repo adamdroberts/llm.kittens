@@ -105,6 +105,14 @@ changelog is the diary; `goal.md` is the plan.
   No benchmark or TinyStories validation was run for the numerically unsafe
   candidate, and the temporary alias, dispatch hook, and smoke row were
   removed.
+- Rejected a large-K-only direct B-column swizzle probe with
+  `LLMK_SM120_DINP_DIRECT_BCOL_LARGEK_SUPER_M=16`. The macro build passed
+  `test_matmul` (`10/10`) and `test_attention` (all three smoke shapes), but
+  the focused benchmark did not improve LM-head dInput (`22255.55 us` versus
+  `21115.55 us` cuBLASLt) and worsened some unrelated rows. TinyStories
+  3-step validation regressed to `2668.04 ms` with steps `2668.98`,
+  `2666.50`, and `2669.59 ms`, so the temporary large-K swizzle alias was
+  removed.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
