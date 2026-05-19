@@ -8,6 +8,13 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected fused FC forward GeLU K-tile override
+  `LLMK_SM120_FORWARD_GELU_N96_K_TILE=48`. The macro build passed
+  `test_matmul` (`10/10`) and `test_attention` (all three smoke shapes), but
+  `bench_sm120_matmul` faulted on the first fused FC GeLU benchmark row with
+  `an illegal memory access was encountered`, matching the K16 failure class.
+  No TinyStories run was attempted because the candidate is not
+  benchmark-stable; the fused GeLU N96 route stays on the default K32 tile.
 - Rejected a temporary qkv-forward-only swizzle route with
   `LLMK_SM120_QKV_FORWARD_SUPER_M=5`. The source hook routed only regular
   qkv forward GEMMs (`N == 3*K`) through a dedicated N96 alias while leaving
