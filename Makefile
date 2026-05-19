@@ -82,6 +82,7 @@ NVCC_FLAGS += -DENABLE_BF16
 ifeq ($(DEVICE_ARCH),SM120)
   ifeq ($(SM120_USE_CUBLASLT_GEMM),0)
     NVCC_FLAGS += -Xptxas=-dlcm=ca
+    NVCC_FLAGS += --extra-device-vectorization
   endif
 endif
 NVCC_FLAGS += $(EXTRA_NVCC_FLAGS)

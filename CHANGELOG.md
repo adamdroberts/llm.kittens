@@ -8,6 +8,15 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Promoted `--extra-device-vectorization` alongside the SM120 pure-TK
+  `-Xptxas=-dlcm=ca` default. The explicit override build passed
+  `test_matmul` (`10/10`) and `test_attention` (all three smoke shapes), then
+  averaged `2652.17 ms` over 3 TinyStories steps with steps `2647.16`,
+  `2651.45`, and `2652.88 ms`. After promoting the flag into the Makefile, the
+  no-override rebuild passed the same smokes and validated at `2653.36 ms`
+  with steps `2648.73`, `2649.81`, and `2656.92 ms`, improving the
+  `2654.56 ms` cache-policy-only default while still trailing the backward
+  cuBLASLt fallback target.
 - Rejected overriding the promoted SM120 pure-TK cache policy with
   `-Xptxas=-dlcm=cg`. The override build emitted the expected ptxas warning
   that the later `cg` value won over the default `ca`, passed `test_matmul`

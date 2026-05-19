@@ -72,8 +72,9 @@ same GPU cuBLASLt path as the full SM120 fallback build while leaving the other
 roles on TK; they are for A/B timing only and do not change pure-TK defaults.
 Full SM120 cuBLASLt fallback builds cache cuBLASLt plans by default to remove
 per-call descriptor and heuristic setup overhead from training measurements.
-Pure-TK SM120 builds also pass `-Xptxas=-dlcm=ca` by default after a bounded
-RTX 5090 A/B showed a small 3-step training improvement with unchanged smokes.
+Pure-TK SM120 builds also pass `-Xptxas=-dlcm=ca` and
+`--extra-device-vectorization` by default after bounded RTX 5090 A/B runs
+showed small 3-step training improvements with unchanged smokes.
 
 `matmul_template<M_BLOCK, N_BLOCK, SUPER_M, A_TRANSPOSED, B_TRANSPOSED,
 APPLY_BIAS, APPLY_GELU, STORE_PRE_GELU>` is ported from
