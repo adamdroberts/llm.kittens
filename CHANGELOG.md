@@ -228,6 +228,12 @@ changelog is the diary; `goal.md` is the plan.
   accumulated) and TinyStories 3-step validation regressed to `2669.82 ms`
   with steps `2667.56`, `2668.57`, and `2671.07 ms`. The reducer launch
   remains the fixed 256-thread default.
+- Rejected retesting packed-QKV attention prep with
+  `LLMK_SM120_DPREP_WARPS=4` on the current large-K dInput source. The macro
+  build passed `test_matmul` (`10/10`) and `test_attention` (all three smoke
+  shapes), but TinyStories 3-step validation regressed to `2669.68 ms` with
+  steps `2666.71`, `2667.35`, and `2672.02 ms`, so dprep remains at the
+  3-warp default.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
