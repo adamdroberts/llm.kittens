@@ -8,6 +8,18 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 baseline restoration
 
+- Rebuilt the tracked `train_gpt2cu` and `bench_sm120_matmul` binaries for the
+  restored SM120 cuBLASLt-backed baseline after the checked-out executable was
+  found to be stale: it printed `use_master_weights enabled`, `gelu_fusion 0`,
+  and then failed on RTX 5090 with `no kernel image is available for execution
+  on the device`. The rebuilt `train_gpt2cu` was validated with the user's
+  TinyStories command capped by `-x 3`; it printed `use_master_weights
+  disabled`, `gelu_fusion 1`, and averaged `2507.69 ms` with steps `2509.58`,
+  `2505.10`, and `2510.28 ms`. `test_matmul` passed `8/8`, and
+  `test_attention` passed all three smoke shapes including packed-QKV. The
+  rebuilt `bench_sm120_matmul` ran on RTX 5090 and still showed cuBLASLt ahead
+  on the material backward rows; the worst refreshed gap was
+  attention-projection dWeight at `1.65x`.
 - Restored the SM120 source, trainer, matmul benchmark, matmul smoke harness,
   and kernel CLI/reference docs to the fastest pre-per-round baseline captured
   in commit `2255fcd4`, plus the later SM120 no-master default from `d818239`
