@@ -8,6 +8,13 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected lowering the direct B-column dInput cap back to
+  `LLMK_SM120_DINP_DIRECT_BCOL_K_CAP=2304` after the SM120 compiler default
+  promotions. The macro build passed `test_matmul` (`10/10`) and
+  `test_attention` (all three smoke shapes), but TinyStories 3-step validation
+  regressed to `2665.76 ms` with steps `2661.76`, `2663.80`, and `2667.72 ms`
+  and shifted the early norm trace. The source keeps the accepted `3072` cap so
+  FC-projection dInput remains on the direct B-column route.
 - Rejected a temporary large-K-only direct B-column dInput swizzle split with
   `LLMK_SM120_DINP_DIRECT_BCOL_LARGEK_SUPER_M=6`. The source hook added a
   separate LM-head-style large-K direct-B-column alias while leaving small-K
