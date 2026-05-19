@@ -8,6 +8,15 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Refreshed the current-stack SM120 dWeight-only cuBLASLt fallback diagnostic.
+  The build used `LLMK_SM120_CUBLASLT_DWEIGHT_FALLBACK=1` with explicit
+  cuBLASLt linkage while leaving forward and dInput on the promoted pure-TK
+  stack. It passed `test_matmul` (`10/10`) and `test_attention` (all three
+  smoke shapes), then TinyStories 3-step validation averaged `2626.98 ms` with
+  steps `2637.50`, `2625.68`, and `2628.28 ms`. This beats the current
+  pure-TK source baseline (`2663.76 ms`) and lands close to the cached full
+  cuBLASLt fallback near `2623 ms`, confirming dWeight as the highest-value
+  SM120 kernel target after the K32 huge-N promotion.
 - Rejected a current-stack forward-only cuBLASLt fallback refresh at the smoke
   gate. The diagnostic build used
   `LLMK_SM120_CUBLASLT_FORWARD_FALLBACK=1` with explicit cuBLASLt linkage on
