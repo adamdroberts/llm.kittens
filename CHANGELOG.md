@@ -159,6 +159,13 @@ changelog is the diary; `goal.md` is the plan.
   cuBLASLt. TinyStories 3-step validation regressed to `2682.03 ms` with steps
   `2677.86`, `2678.98`, and `2685.07 ms`, so the temporary wide direct
   B-column alias, dispatch hook, and smoke row were removed.
+- Rejected a current-stack retest of `LLMK_SM120_HUGE_N_FORWARD_WIDE=1` after
+  the large-K dInput promotion. The macro build passed `test_matmul` (`10/10`)
+  and `test_attention` (all three smoke shapes), but the focused benchmark
+  worsened LM-head forward to `26907.90 us` versus `22207.25 us` cuBLASLt.
+  TinyStories 3-step validation regressed to `2684.10 ms` with steps
+  `2678.84`, `2682.91`, and `2685.30 ms`, so the huge-N forward route remains
+  on the 256x128 tile rather than the 256x64 wide tile.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
