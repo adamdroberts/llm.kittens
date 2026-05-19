@@ -8,6 +8,13 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected disabling the SM120 huge-N 256x128 forward tile after the TN direct
+  B-column promotion. The pure-TK macro build
+  (`LLMK_SM120_HUGE_N_M256=0`, `SM120_USE_CUBLASLT_GEMM=0`) passed
+  `test_attention`, but `test_matmul` failed the LM-head forward row on the
+  first pass and failed both MLP-up and LM-head forward on the immediate rerun.
+  No TinyStories validation was run for the invalid output candidate; huge-N
+  forward stays on `LLMK_SM120_HUGE_N_M256=1`.
 - Rejected lowering dWeight split-K to 4 on top of the promoted TN direct
   B-column source. The pure-TK macro build
   (`LLMK_SM120_DWEIGHT_SPLIT_K=4`, `SM120_USE_CUBLASLT_GEMM=0`) passed
