@@ -9,6 +9,17 @@ changelog is the diary; `goal.md` is the plan.
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
 - Rejected a temporary FC-projection-forward-only swizzle hook with
+  `LLMK_SM120_FCPROJ_FORWARD_SUPER_M=3`. The source hook routed only GPT-2
+  FC-projection forward (`N == 768`, `K == 3072`) through a separate N96
+  forward+bias alias while leaving qkv, fused FC, LM-head, dInput, and dWeight
+  dispatch unchanged. The candidate passed `test_attention` (all three smoke
+  shapes) and `test_matmul` on rerun after the known intermittent MLP-up row,
+  but the focused benchmark worsened the target row to `1410.76 us` TK versus
+  `1355.83 us` cuBLASLt and regressed several adjacent rows. TinyStories
+  3-step validation averaged `2618.91 ms` with steps `2616.57`, `2618.05`,
+  and `2619.76 ms`, slower than the promoted source default and CUDA fallback
+  diagnostics, so the temporary hook was removed.
+- Rejected a temporary FC-projection-forward-only swizzle hook with
   `LLMK_SM120_FCPROJ_FORWARD_SUPER_M=2`. The source hook routed only GPT-2
   FC-projection forward (`N == 768`, `K == 3072`) through a separate N96
   forward+bias alias while leaving qkv, fused FC, LM-head, dInput, and dWeight
