@@ -271,6 +271,13 @@ changelog is the diary; `goal.md` is the plan.
   or TinyStories validation. The temporary `LLMK_SM120_HUGE_N_FORWARD_N96`
   trait and aliases were removed; huge-N forward remains on the 256x128x16
   source default.
+- Rejected a temporary SM120 LayerNorm backward block-size hook. A 256-thread
+  `LLMK_SM120_LAYERNORM_BWD_BLOCK_SIZE` build compiled, but `test_layernorm`
+  failed the backward `dbias` check (`1.510559` max diff versus `0.120`
+  tolerance). A 1024-thread rebuild failed at launch with `invalid argument`.
+  No TinyStories validation was run for either smoke-gate failure, and the
+  temporary hook was removed; LayerNorm backward keeps the fixed 512-thread
+  launch.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
