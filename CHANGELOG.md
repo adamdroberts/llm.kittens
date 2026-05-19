@@ -8,6 +8,16 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected shared SM120 grid swizzle `LLMK_SM120_SUPER_M=4`. The macro build
+  passed `test_matmul` (`10/10`) and `test_attention` (all three smoke shapes),
+  and the focused benchmark gave an isolated attention-projection forward win
+  (`374.40 us` TK versus `413.11 us` cuBLASLt). It still regressed qkv forward
+  (`1115.64 us` versus `1033.36 us`), left FC and FC-projection forward behind,
+  and left LM-head forward at `24949.76 us` TK versus `22110.11 us` cuBLASLt.
+  TinyStories 3-step validation averaged `2623.35 ms` with steps `2619.79`,
+  `2621.68`, and `2625.01 ms`, which is still slower than the best source
+  validation and the CUDA fallback diagnostic, so the shared source swizzle
+  remains `LLMK_SM120_SUPER_M=7`.
 - Rejected shared SM120 grid swizzle `LLMK_SM120_SUPER_M=13`. The macro build
   passed `test_matmul` (`10/10`) and `test_attention` (all three smoke shapes),
   but the focused benchmark regressed the shared forward/dInput routes: qkv
