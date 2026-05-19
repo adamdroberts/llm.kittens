@@ -33,13 +33,15 @@ MAKEFILE_REQUIRED = [
     "CUDA_GENCODE := -gencode arch=compute_120a,code=sm_120a",
     "NVCC_FLAGS += $(KITTENS_ARCH_DEFINE) $(CUDA_GENCODE)",
     "-DENABLE_BF16",
+    "SM120_USE_CUBLASLT_GEMM ?= 1",
+    "ifeq ($(SM120_USE_CUBLASLT_GEMM),1)",
+    "NVCC_FLAGS += -DLLMK_SM120_USE_CUBLASLT_GEMM",
+    "NVCC_LDLIBS += -lcublasLt -lcublas",
 ]
 
 MAKEFILE_FORBIDDEN = [
     "-DENABLE_FP16",
     "-DENABLE_FP32",
-    "-lcublas",
-    "-lcublasLt",
     "-lcudnn",
 ]
 

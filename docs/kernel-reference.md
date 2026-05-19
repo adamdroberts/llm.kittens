@@ -58,27 +58,6 @@ namespace llmk::gemm {
 }
 ```
 
-The SM120-specific wrapper uses the same template surface but tunes its
-Blackwell cp.async kernels separately: the shared `LLMK_SM120_SUPER_M` swizzle
-defaults to `7` after RTX 5090 3-step validation. dInput uses a separate
-`LLMK_SM120_DINP_SUPER_M=8` default, while dWeight keeps its separate
-`LLMK_SM120_DWEIGHT_SUPER_M=2` default and routes supported TN dWeight shapes
-through a 128x128 tile by default (`LLMK_SM120_DWEIGHT_N128=1`). The TN
-dWeight kernel loads B tiles directly into column-layout registers by default
-(`LLMK_SM120_TN_DIRECT_B_COL=1`) after RTX 5090 validation showed it removes
-layout-swap overhead from the remaining dWeight-heavy path.
-Disabled-by-default SM120 diagnostic fallbacks
-(`LLMK_SM120_CUBLASLT_FORWARD_FALLBACK`,
-`LLMK_SM120_CUBLASLT_DINP_FALLBACK`,
-`LLMK_SM120_CUBLASLT_DWEIGHT_FALLBACK`) can route one GEMM role through the
-same GPU cuBLASLt path as the full SM120 fallback build while leaving the other
-roles on TK; they are for A/B timing only and do not change pure-TK defaults.
-Full SM120 cuBLASLt fallback builds cache cuBLASLt plans by default to remove
-per-call descriptor and heuristic setup overhead from training measurements.
-Pure-TK SM120 builds also pass `-Xptxas=-dlcm=ca` and
-`--extra-device-vectorization` by default after bounded RTX 5090 A/B runs
-showed small 3-step training improvements with unchanged smokes.
-
 `matmul_template<M_BLOCK, N_BLOCK, SUPER_M, A_TRANSPOSED, B_TRANSPOSED,
 APPLY_BIAS, APPLY_GELU, STORE_PRE_GELU>` is ported from
 `ThunderKittens/kernels/gemm/bf16_h100/bf16_h100_gemm.cu` (lines 1-106). It uses
@@ -126,15 +105,7 @@ faster than explicit CUDA GELU on the current pure-TK path.
 The SM120 pure-TK forward dispatcher also enables `LLMK_SM120_FORWARD_N96=1`
 by default so GPT-2 widths divisible by 96 use the 128x96 tile instead of the
 older 256x64/128x64 choices; `LLMK_SM120_FORWARD_N96=0` remains an A/B escape
-hatch. The GPT-2 LM-head huge-N forward route defaults to a 256x128 tile
-(`LLMK_SM120_HUGE_N_M256=1`) after current RTX 5090 validation improved the
-source-default pure-TK 3-step run; `LLMK_SM120_HUGE_N_M256=0` keeps the older
-128x128 tile available for A/B tests. The huge-N forward K tile is now
-`LLMK_SM120_HUGE_N_K_TILE=32`, while N128 dWeight keeps its separate
-`LLMK_SM120_DWEIGHT_N128_K_TILE=16` trait so LM-head forward can use the
-larger-K tile without regressing TN dWeight. The shared SM120
-forward/huge-N tile swizzle now uses `LLMK_SM120_SUPER_M=7` by default;
-the old `8`, `9`, and `10` values remain useful A/B references.
+hatch.
 
 ### Backward signature (M3)
 
@@ -151,48 +122,16 @@ inline void matmul_backward(floatX* dinp, floatX* dweight, floatX* dbias,
 Current status:
 
 1. `dinp (B*T, C) = dout (B*T, OC) · weight(OC, C)` — wired through the existing TK `A*B` GEMM.
-   SM120 dInput uses `LLMK_SM120_DINP_SUPER_M=8` after a focused A/B on top
-   of the K-tile 16 stack improved current 3-step timing.
-   The pure-SM120 small-K GPT-2 qkv/attention-projection and FC-projection
-   dInput rows
-   (`N == 768`, `K <= LLMK_SM120_DINP_DIRECT_BCOL_K_CAP`, default cap `3072`)
-   use `LLMK_SM120_DINP_DIRECT_BCOL_SMALLK=1` by default, directly loading the
-   shared B tile into column-major registers instead of row-loading and
-   swapping. This keeps fused dGELU FC and LM-head dInput on the existing
-   row-load path. The scoped direct-load route uses
-   `LLMK_SM120_DINP_DIRECT_BCOL_SUPER_M=8` by default after the FC-projection
-   cap promotion and adjacent swizzle retest beat the prior K32 pure-TK
-   baseline in 3-step validation.
    On SM120 pure-TK builds, `LLMK_SM120_FUSE_DGELU=1` is now the default when
    the trainer uses `-ge 1`, fusing the MLP GELU backward into the `fcproj`
    dInput GEMM. The fused SM120 path uses in-place register-layout swaps and
    an approximate dGELU tanh (`LLMK_SM120_APPROX_DGELU_TANH=1`) by default
-   after RTX 5090 smoke and 3-step validation. It uses a scoped
-   `LLMK_SM120_DINP_DGELU_SUPER_M=11` swizzle, separate from the plain dInput
-   `LLMK_SM120_DINP_SUPER_M=8`, after the fused dGELU row and 3-step trainer
-   both improved. Both dGELU knobs remain explicit A/B fallbacks.
-2. `dweight (OC, C) = doutᵀ (OC, B*T) · inp (B*T, C)` — wired through TK `A^T*B`. For accumulated micro-steps, the product lands in the caller-provided aligned scratch buffer and a small add kernel applies `dweight += scratch`. SM120 pure-TK defaults to `LLMK_SM120_DWEIGHT_SPLIT_K=8` after the reduced LM-head scratch regime made the lower qkv split faster in 3-step training; larger non-QKV dWeight shapes remain capped at 8-way split-K inside the wrapper because larger splits regressed them.
-   Supported SM120 TN dWeight shapes now use the 128x128 tile
-   (`LLMK_SM120_DWEIGHT_N128=1`) after the current pure-TK stack improved the
-   TinyStories 3-step run below the supplied llm.c baseline. The trainer keeps
-   qkv split-K scratch at the normal `LLMK_SM120_DWEIGHT_SPLIT_K` depth but
-   defaults LM-head-sized dWeight scratch to one part
-   (`LLMK_SM120_LARGE_DWEIGHT_SPLIT_K=1`); larger LM-head scratch fanout
-   increased activation residency enough to dominate the pure-TK step time.
-   The SM120 TN
-   swizzle now defaults to `LLMK_SM120_DWEIGHT_SUPER_M=2` after the K-tile 16
-   route made it faster in 3-step validation; `1` fails smoke, while `4` and
-   higher tested values were slower or mixed. The TN inner loop keeps the A
-   layout swap but skips the B-side register-layout swap on SM120 by loading B
-   directly as column-layout registers. Eligible split-K dWeight rows start on
-   their nonblocking part streams before the same `matmul_backward()` call
-   launches dInput and bias-grad on the main stream, then reduce after those
-   independent kernels are enqueued. One-part direct dWeight rows use the same
-   overlap pattern through a single nonblocking dWeight stream. Both routes
-   keep the external wrapper contract unchanged. GPT-2's tied LM-head dWeight
-   path defers that direct dWeight wait until after final LayerNorm backward so
-   it can overlap with the immediately following independent work while still
-   completing before token-embedding gradients can accumulate into `grads.wte`.
+   after RTX 5090 smoke and 3-step validation; both knobs remain explicit A/B
+   fallbacks.
+2. `dweight (OC, C) = doutᵀ (OC, B*T) · inp (B*T, C)` — wired through TK `A^T*B`. For accumulated micro-steps, the product lands in the caller-provided aligned scratch buffer and a small add kernel applies `dweight += scratch`. SM120 pure-TK defaults to 8-way split-K (`LLMK_SM120_DWEIGHT_SPLIT_K=8`) after the current N96+dGELU trainer rerun favored fewer qkv part launches.
+   The SM120 TN swizzle now defaults to `LLMK_SM120_DWEIGHT_SUPER_M=2`; `1`
+   fails smoke, while `3`, `4`, and higher tested values were slower or mixed
+   in 3-step validation.
 3. `dbias (OC) = column-sum of dout over B*T` — `matmul_backward_bias_kernel9` followed by `reduce_add_sum_kernel` when `dbias_buffer` is available. Both kernels are verbatim from llm.c. SM120 keeps the same kernels but uses a 512-thread launch block by default (`LLMK_SM120_BIAS_BLOCK_SIZE`) after RTX 5090 timing showed it faster than the H100-derived 768-thread choice.
 
 The slow CUDA dWeight kernel remains only as a fallback for unsupported TK shapes
@@ -225,9 +164,6 @@ unsupported backward shapes fall back to the existing recompute CUDA baseline.
   `LLMK_SM120_ATTN_BWD_BLOCK`, or the shorthand `LLMK_SM120_ATTN_BLOCK` can be
   used for controlled experiments; 64-row tiles are correct but slower on RTX
   5090 GPT-2 training.
-- SM120 attention backward prep uses a 3-warp CUDA launch
-  (`LLMK_SM120_DPREP_WARPS=3`) after RTX 5090 validation found it faster than
-  the earlier 4-warp default and the rejected 2-warp variant.
 - BF16 only (same as the rest of v1).
 
 ### Layout glue

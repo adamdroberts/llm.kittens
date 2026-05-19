@@ -31,14 +31,7 @@ M=4096 N=V_padded=50304 K=768 the small-N fallback is selected automatically.
 #include <type_traits>
 #include "cuda_common.h"
 #include "cuda_utils.cuh"
-#if defined(KITTENS_SM120) && (defined(LLMK_SM120_USE_CUBLASLT_GEMM) || \
-    LLMK_SM120_CUBLASLT_FORWARD_FALLBACK || LLMK_SM120_CUBLASLT_DINP_FALLBACK || \
-    LLMK_SM120_CUBLASLT_DWEIGHT_FALLBACK)
-#define LLMK_SM120_HAS_CUBLASLT_GEMM 1
-#else
-#define LLMK_SM120_HAS_CUBLASLT_GEMM 0
-#endif
-#if LLMK_SM120_HAS_CUBLASLT_GEMM
+#if defined(LLMK_SM120_USE_CUBLASLT_GEMM)
 #include <cublasLt.h>
 #include <cublas_v2.h>
 #include <vector>
@@ -53,7 +46,7 @@ M=4096 N=V_padded=50304 K=768 the small-N fallback is selected automatically.
 #define LLMK_USE_TK_GEMM 0
 #endif
 
-#if LLMK_SM120_HAS_CUBLASLT_GEMM
+#if defined(LLMK_SM120_USE_CUBLASLT_GEMM)
 namespace llmk::cublaslt_sm120 {
 
 #ifndef LLMK_SM120_CUBLASLT_WORKSPACE_MB
@@ -65,7 +58,7 @@ static cublasLtHandle_t handle = nullptr;
 static cublasComputeType_t compute_type = CUBLAS_COMPUTE_32F;
 
 #ifndef LLMK_SM120_CUBLASLT_HEURISTIC_RESULTS
-#define LLMK_SM120_CUBLASLT_HEURISTIC_RESULTS 8
+#define LLMK_SM120_CUBLASLT_HEURISTIC_RESULTS 1
 #endif
 static_assert(LLMK_SM120_CUBLASLT_HEURISTIC_RESULTS >= 1 &&
               LLMK_SM120_CUBLASLT_HEURISTIC_RESULTS <= 64,
@@ -147,7 +140,7 @@ inline int select_heuristic(const cublasLtMatmulHeuristicResult_t* heuristics, i
     best = LLMK_SM120_CUBLASLT_HEURISTIC_INDEX;
     if (best < 0) best = 0;
     if (best >= returnedResults) best = returnedResults - 1;
-#elif defined(LLMK_SM120_CUBLASLT_SELECT_MIN_WAVES) || !defined(LLMK_SM120_CUBLASLT_SELECT_MAX_WAVES)
+#elif defined(LLMK_SM120_CUBLASLT_SELECT_MIN_WAVES)
     for (int i = 1; i < returnedResults; ++i) {
         if (heuristics[i].wavesCount < heuristics[best].wavesCount) {
             best = i;
@@ -434,12 +427,6 @@ inline void matmul(floatX* d, const floatX* a, const floatX* b, const floatX* bi
 #ifndef LLMK_SM120_HUGE_N_FORWARD_WIDE
 #define LLMK_SM120_HUGE_N_FORWARD_WIDE 0
 #endif
-#ifndef LLMK_SM120_DWEIGHT_N128
-#define LLMK_SM120_DWEIGHT_N128 1
-#endif
-#ifndef LLMK_SM120_DWEIGHT_DIRECT_ACCUM
-#define LLMK_SM120_DWEIGHT_DIRECT_ACCUM 1
-#endif
 inline bool matmul_sm120_use_huge_n_tile(int N) {
     return (N >= LLMK_SM120_HUGE_N_THRESHOLD) && (N % 128 == 0);
 }
@@ -630,7 +617,7 @@ inline void matmul_forward(floatX* out, const floatX* inp, const floatX* weight,
     const int N = OC;
     const int K = C;
 
-#if defined(KITTENS_SM120) && (defined(LLMK_SM120_USE_CUBLASLT_GEMM) || LLMK_SM120_CUBLASLT_FORWARD_FALLBACK)
+#if defined(LLMK_SM120_USE_CUBLASLT_GEMM) && defined(KITTENS_SM120)
     llmk::cublaslt_sm120::matmul(
         out, weight, inp, bias, N, M, K, stream,
         /*transA=*/true, /*transB=*/false,
@@ -802,21 +789,6 @@ __global__ void matmul_reduce_bf16_partials_kernel(floatX* dst, const floatX* sr
     store128(dst + idx, out);
 }
 
-struct MatmulSplitKJob {
-    bool active = false;
-    floatX* out = nullptr;
-    const floatX* partials = nullptr;
-    const cudaEvent_t* done_events = nullptr;
-    size_t out_elements = 0;
-    int parts = 0;
-    bool accumulate = false;
-};
-
-struct MatmulAsyncJob {
-    bool active = false;
-    cudaEvent_t done_event = nullptr;
-};
-
 inline bool matmul_tk_shape_ok(int M, int N, int K) {
 #if LLMK_USE_TK_GEMM
     return M % 128 == 0 && K % 64 == 0 && N % 128 == 0;
@@ -848,7 +820,7 @@ inline bool matmul_forward_gelu_supported(int B, int T, int C, int OC) {
 }
 
 inline bool matmul_backward_gelu_fusion_supported() {
-#if defined(KITTENS_SM120) && (defined(LLMK_SM120_USE_CUBLASLT_GEMM) || LLMK_SM120_CUBLASLT_DINP_FALLBACK)
+#if defined(LLMK_SM120_USE_CUBLASLT_GEMM) && defined(KITTENS_SM120)
     return true;
 #elif defined(KITTENS_SM120)
 #ifndef LLMK_SM120_FUSE_DGELU
@@ -882,24 +854,6 @@ inline void matmul_dispatch_tk_ab(floatX* out, const floatX* a, const floatX* b,
 #else
     const bool n96 = false;
 #endif
-#ifndef LLMK_SM120_DINP_DIRECT_BCOL_SMALLK
-#define LLMK_SM120_DINP_DIRECT_BCOL_SMALLK 1
-#endif
-#ifndef LLMK_SM120_DINP_DIRECT_BCOL_K_CAP
-#define LLMK_SM120_DINP_DIRECT_BCOL_K_CAP (4 * 768)
-#endif
-#ifndef LLMK_SM120_DINP_DIRECT_BCOL_LARGEK
-#define LLMK_SM120_DINP_DIRECT_BCOL_LARGEK 1
-#endif
-#ifndef LLMK_SM120_DINP_DIRECT_BCOL_LARGEK_MIN
-#define LLMK_SM120_DINP_DIRECT_BCOL_LARGEK_MIN 8192
-#endif
-    const bool direct_bcol_smallk = !apply_dgelu && (LLMK_SM120_DINP_DIRECT_BCOL_SMALLK != 0) &&
-                                    !huge_n && !n96 && (N == 768) &&
-                                    (K <= LLMK_SM120_DINP_DIRECT_BCOL_K_CAP);
-    const bool direct_bcol_largek = !apply_dgelu && (LLMK_SM120_DINP_DIRECT_BCOL_LARGEK != 0) &&
-                                    !huge_n && !n96 && (N == 768) &&
-                                    (K >= LLMK_SM120_DINP_DIRECT_BCOL_LARGEK_MIN);
     if (apply_dgelu) {
         assert(P != nullptr && "matmul_dispatch_tk_ab: dGELU fusion requires pre_gelu");
         if (huge_n) {
@@ -917,8 +871,6 @@ inline void matmul_dispatch_tk_ab(floatX* out, const floatX* a, const floatX* b,
         llmk::gemm::launch<llmk::gemm::matmul_huge_n>(A, B, C, M, N, K, stream);
     } else if (n96) {
         llmk::gemm::launch<llmk::gemm::matmul_n96>(A, B, C, M, N, K, stream);
-    } else if (direct_bcol_smallk || direct_bcol_largek) {
-        llmk::gemm::launch<llmk::gemm::matmul_default_direct_bcol>(A, B, C, M, N, K, stream);
     } else if (wide) {
         llmk::gemm::launch<llmk::gemm::matmul_wide>(A, B, C, M, N, K, stream);
     } else if (N % 256 == 0) {
@@ -949,8 +901,7 @@ inline void matmul_dispatch_tk_ab(floatX* out, const floatX* a, const floatX* b,
 }
 
 inline void matmul_dispatch_tk_atb(floatX* out, const floatX* a, const floatX* b,
-                                   int M, int N, int K, cudaStream_t stream,
-                                   bool accumulate = false) {
+                                   int M, int N, int K, cudaStream_t stream) {
 #if LLMK_USE_TK_GEMM
     auto* A = llmk::to_bf16(const_cast<floatX*>(a));
     auto* B = llmk::to_bf16(const_cast<floatX*>(b));
@@ -969,19 +920,15 @@ inline void matmul_dispatch_tk_atb(floatX* out, const floatX* a, const floatX* b
     const bool n96 = false;
 #endif
     if (huge_n) {
-        llmk::gemm::launch<llmk::gemm::matmul_huge_n_tn>(A, B, C, M, N, K, stream, nullptr, nullptr, accumulate);
-#if LLMK_SM120_DWEIGHT_N128
-    } else if (N % 128 == 0) {
-        llmk::gemm::launch<llmk::gemm::matmul_n128_tn>(A, B, C, M, N, K, stream, nullptr, nullptr, accumulate);
-#endif
+        llmk::gemm::launch<llmk::gemm::matmul_huge_n_tn>(A, B, C, M, N, K, stream);
     } else if (n96) {
-        llmk::gemm::launch<llmk::gemm::matmul_n96_tn>(A, B, C, M, N, K, stream, nullptr, nullptr, accumulate);
+        llmk::gemm::launch<llmk::gemm::matmul_n96_tn>(A, B, C, M, N, K, stream);
     } else if (wide) {
-        llmk::gemm::launch<llmk::gemm::matmul_wide_tn>(A, B, C, M, N, K, stream, nullptr, nullptr, accumulate);
+        llmk::gemm::launch<llmk::gemm::matmul_wide_tn>(A, B, C, M, N, K, stream);
     } else if (N % 256 == 0) {
-        llmk::gemm::launch<llmk::gemm::matmul_default_tn>(A, B, C, M, N, K, stream, nullptr, nullptr, accumulate);
+        llmk::gemm::launch<llmk::gemm::matmul_default_tn>(A, B, C, M, N, K, stream);
     } else {
-        llmk::gemm::launch<llmk::gemm::matmul_small_n_tn>(A, B, C, M, N, K, stream, nullptr, nullptr, accumulate);
+        llmk::gemm::launch<llmk::gemm::matmul_small_n_tn>(A, B, C, M, N, K, stream);
     }
 #else
     if (N % 256 == 0) {
@@ -999,44 +946,15 @@ inline void matmul_dispatch_tk_atb(floatX* out, const floatX* a, const floatX* b
     (void)N;
     (void)K;
     (void)stream;
-    (void)accumulate;
     assert(false && "matmul_dispatch_tk_atb called without TK GEMM support");
 #endif
 }
-
-inline bool matmul_dispatch_tk_atb_splitk_start(MatmulSplitKJob* job,
-                                                floatX* out, const floatX* a, const floatX* b,
-                                                int M, int N, int K, cudaStream_t stream,
-                                                bool accumulate,
-                                                floatX* partials,
-                                                size_t partial_elements);
-inline void matmul_dispatch_tk_atb_splitk_finish(const MatmulSplitKJob& job, cudaStream_t stream);
-inline bool matmul_dispatch_tk_atb_async_start(MatmulAsyncJob* job,
-                                               floatX* out, const floatX* a, const floatX* b,
-                                               int M, int N, int K, cudaStream_t stream,
-                                               bool accumulate);
-inline void matmul_dispatch_tk_atb_async_finish(const MatmulAsyncJob& job, cudaStream_t stream);
 
 inline bool matmul_dispatch_tk_atb_splitk(floatX* out, const floatX* a, const floatX* b,
                                           int M, int N, int K, cudaStream_t stream,
                                           bool accumulate,
                                           floatX* partials,
                                           size_t partial_elements) {
-    MatmulSplitKJob job;
-    if (!matmul_dispatch_tk_atb_splitk_start(&job, out, a, b, M, N, K, stream,
-                                             accumulate, partials, partial_elements)) {
-        return false;
-    }
-    matmul_dispatch_tk_atb_splitk_finish(job, stream);
-    return true;
-}
-
-inline bool matmul_dispatch_tk_atb_splitk_start(MatmulSplitKJob* job,
-                                                floatX* out, const floatX* a, const floatX* b,
-                                                int M, int N, int K, cudaStream_t stream,
-                                                bool accumulate,
-                                                floatX* partials,
-                                                size_t partial_elements) {
 #if LLMK_USE_TK_GEMM && defined(KITTENS_SM120)
 #ifndef LLMK_SM120_DWEIGHT_SPLIT_K
 #define LLMK_SM120_DWEIGHT_SPLIT_K 8
@@ -1059,13 +977,6 @@ inline bool matmul_dispatch_tk_atb_splitk_start(MatmulSplitKJob* job,
     if (partials == nullptr || parts <= 1) return false;
 
     const int split_k = K / parts;
-    *job = {};
-    job->active = true;
-    job->out = out;
-    job->partials = partials;
-    job->out_elements = out_elements;
-    job->parts = parts;
-    job->accumulate = accumulate;
 #if LLMK_SM120_DWEIGHT_SPLIT_K_STREAMS
     static bool initialized = false;
     static cudaStream_t part_streams[LLMK_SM120_DWEIGHT_SPLIT_K];
@@ -1090,7 +1001,9 @@ inline bool matmul_dispatch_tk_atb_splitk_start(MatmulSplitKJob* job,
             M, N, split_k, part_streams[part]);
         cudaCheck(cudaEventRecord(done_events[part], part_streams[part]));
     }
-    job->done_events = done_events;
+    for (int part = 0; part < parts; ++part) {
+        cudaCheck(cudaStreamWaitEvent(stream, done_events[part], 0));
+    }
 #else
     for (int part = 0; part < parts; ++part) {
         const int k0 = part * split_k;
@@ -1101,9 +1014,13 @@ inline bool matmul_dispatch_tk_atb_splitk_start(MatmulSplitKJob* job,
             M, N, split_k, stream);
     }
 #endif
+    const int block = 256;
+    const int grid = CEIL_DIV(out_elements, block * x128::size);
+    matmul_reduce_bf16_partials_kernel<<<grid, block, 0, stream>>>(
+        out, partials, out_elements, parts, accumulate);
+    cudaCheck(cudaGetLastError());
     return true;
 #else
-    (void)job;
     (void)out;
     (void)a;
     (void)b;
@@ -1115,72 +1032,6 @@ inline bool matmul_dispatch_tk_atb_splitk_start(MatmulSplitKJob* job,
     (void)partials;
     (void)partial_elements;
     return false;
-#endif
-}
-
-inline void matmul_dispatch_tk_atb_splitk_finish(const MatmulSplitKJob& job, cudaStream_t stream) {
-#if LLMK_USE_TK_GEMM && defined(KITTENS_SM120)
-    if (!job.active) return;
-#if LLMK_SM120_DWEIGHT_SPLIT_K_STREAMS
-    for (int part = 0; part < job.parts; ++part) {
-        cudaCheck(cudaStreamWaitEvent(stream, job.done_events[part], 0));
-    }
-#endif
-    const int block = 256;
-    const int grid = CEIL_DIV(job.out_elements, block * x128::size);
-    matmul_reduce_bf16_partials_kernel<<<grid, block, 0, stream>>>(
-        job.out, job.partials, job.out_elements, job.parts, job.accumulate);
-    cudaCheck(cudaGetLastError());
-#else
-    (void)job;
-    (void)stream;
-#endif
-}
-
-inline bool matmul_dispatch_tk_atb_async_start(MatmulAsyncJob* job,
-                                               floatX* out, const floatX* a, const floatX* b,
-                                               int M, int N, int K, cudaStream_t stream,
-                                               bool accumulate) {
-#if LLMK_USE_TK_GEMM && defined(KITTENS_SM120)
-    static bool initialized = false;
-    static cudaStream_t dweight_stream;
-    static cudaEvent_t ready_event;
-    static cudaEvent_t done_event;
-    if (!initialized) {
-        cudaCheck(cudaStreamCreateWithFlags(&dweight_stream, cudaStreamNonBlocking));
-        cudaCheck(cudaEventCreateWithFlags(&ready_event, cudaEventDisableTiming));
-        cudaCheck(cudaEventCreateWithFlags(&done_event, cudaEventDisableTiming));
-        initialized = true;
-    }
-    *job = {};
-    cudaCheck(cudaEventRecord(ready_event, stream));
-    cudaCheck(cudaStreamWaitEvent(dweight_stream, ready_event, 0));
-    matmul_dispatch_tk_atb(out, a, b, M, N, K, dweight_stream, accumulate);
-    cudaCheck(cudaEventRecord(done_event, dweight_stream));
-    job->active = true;
-    job->done_event = done_event;
-    return true;
-#else
-    (void)job;
-    (void)out;
-    (void)a;
-    (void)b;
-    (void)M;
-    (void)N;
-    (void)K;
-    (void)stream;
-    (void)accumulate;
-    return false;
-#endif
-}
-
-inline void matmul_dispatch_tk_atb_async_finish(const MatmulAsyncJob& job, cudaStream_t stream) {
-#if LLMK_USE_TK_GEMM && defined(KITTENS_SM120)
-    if (!job.active) return;
-    cudaCheck(cudaStreamWaitEvent(stream, job.done_event, 0));
-#else
-    (void)job;
-    (void)stream;
 #endif
 }
 
@@ -1196,7 +1047,7 @@ inline void matmul_forward_gelu(floatX* out, floatX* pre_gelu,
     const int N = OC;
     const int K = C;
 
-#if defined(KITTENS_SM120) && (defined(LLMK_SM120_USE_CUBLASLT_GEMM) || LLMK_SM120_CUBLASLT_FORWARD_FALLBACK)
+#if defined(LLMK_SM120_USE_CUBLASLT_GEMM) && defined(KITTENS_SM120)
     llmk::cublaslt_sm120::matmul(
         out, weight, inp, bias, N, M, K, stream,
         /*transA=*/true, /*transB=*/false,
@@ -1301,39 +1152,8 @@ inline void matmul_backward(floatX* dinp, floatX* dweight, floatX* dbias,
     (void)block;
 #endif
 
-#if !(defined(LLMK_SM120_USE_CUBLASLT_GEMM) && defined(KITTENS_SM120)) && !LLMK_SM120_CUBLASLT_DWEIGHT_FALLBACK
-    MatmulSplitKJob dweight_split_job;
-    MatmulAsyncJob dweight_direct_job;
-    bool dweight_split_started = false;
-    bool dweight_direct_started = false;
-    bool dweight_split_finish_pending = false;
-    bool dweight_direct_finish_pending = false;
-#endif
-#if LLMK_USE_TK_GEMM && defined(KITTENS_SM120) && !defined(LLMK_SM120_USE_CUBLASLT_GEMM) && !LLMK_SM120_CUBLASLT_DWEIGHT_FALLBACK
-#ifndef LLMK_SM120_OVERLAP_DINP_DWEIGHT
-#define LLMK_SM120_OVERLAP_DINP_DWEIGHT 1
-#endif
-#ifndef LLMK_SM120_OVERLAP_DIRECT_DWEIGHT
-#define LLMK_SM120_OVERLAP_DIRECT_DWEIGHT 1
-#endif
-#if LLMK_SM120_OVERLAP_DINP_DWEIGHT
-    if (dweight != nullptr && matmul_tk_shape_ok(OC, C, M)) {
-        dweight_split_started = matmul_dispatch_tk_atb_splitk_start(
-            &dweight_split_job, dweight, dout, inp, OC, C, M, stream,
-            dweight_accumulate, dweight_accum_scratch, dweight_accum_scratch_elements);
-#if LLMK_SM120_OVERLAP_DIRECT_DWEIGHT
-        if (!dweight_split_started) {
-            dweight_direct_started = matmul_dispatch_tk_atb_async_start(
-                &dweight_direct_job, dweight, dout, inp, OC, C, M, stream,
-                dweight_accumulate);
-        }
-#endif
-    }
-#endif
-#endif
-
     if (dinp != nullptr) {
-#if defined(KITTENS_SM120) && (defined(LLMK_SM120_USE_CUBLASLT_GEMM) || LLMK_SM120_CUBLASLT_DINP_FALLBACK)
+#if defined(LLMK_SM120_USE_CUBLASLT_GEMM) && defined(KITTENS_SM120)
         llmk::cublaslt_sm120::matmul(
             dinp, weight, dout, nullptr, C, M, OC, stream,
             /*transA=*/false, /*transB=*/false,
@@ -1357,7 +1177,7 @@ inline void matmul_backward(floatX* dinp, floatX* dweight, floatX* dbias,
     }
     if (dweight != nullptr) {
         const size_t dweight_elements = (size_t)OC * C;
-#if defined(KITTENS_SM120) && (defined(LLMK_SM120_USE_CUBLASLT_GEMM) || LLMK_SM120_CUBLASLT_DWEIGHT_FALLBACK)
+#if defined(LLMK_SM120_USE_CUBLASLT_GEMM) && defined(KITTENS_SM120)
         (void)dweight_elements;
         llmk::cublaslt_sm120::matmul(
             dweight, inp, dout, nullptr, C, OC, M, stream,
@@ -1366,22 +1186,12 @@ inline void matmul_backward(floatX* dinp, floatX* dweight, floatX* dbias,
             /*accumulate=*/dweight_accumulate, /*pre_gelu=*/nullptr, /*backward=*/true);
 #else
         if (matmul_tk_shape_ok(OC, C, M)) {
-            if (dweight_split_started) {
-                dweight_split_finish_pending = true;
-            } else if (dweight_direct_started) {
-                dweight_direct_finish_pending = true;
-            } else if (matmul_dispatch_tk_atb_splitk(
+            if (matmul_dispatch_tk_atb_splitk(
                     dweight, dout, inp, OC, C, M, stream, dweight_accumulate,
                     dweight_accum_scratch, dweight_accum_scratch_elements)) {
                 // split-K path wrote or accumulated dweight directly
             } else if (!dweight_accumulate) {
                 matmul_dispatch_tk_atb(dweight, dout, inp, OC, C, M, stream);
-#if LLMK_SM120_DWEIGHT_DIRECT_ACCUM
-            } else {
-                matmul_dispatch_tk_atb(dweight, dout, inp, OC, C, M, stream,
-                                       /*accumulate=*/true);
-            }
-#else
             } else if (dweight_accum_scratch != nullptr &&
                        dweight_accum_scratch_elements >= dweight_elements) {
                 matmul_dispatch_tk_atb(dweight_accum_scratch, dout, inp, OC, C, M, stream);
@@ -1395,7 +1205,6 @@ inline void matmul_backward(floatX* dinp, floatX* dweight, floatX* dbias,
                     dweight, dout, inp, M, C, OC);
                 cudaCheck(cudaGetLastError());
             }
-#endif
         } else {
             int grid = CEIL_DIV(dweight_elements, block);
             matmul_backward_dweight_kernel<<<grid, block, 0, stream>>>(dweight, dout, inp, M, C, OC);
@@ -1406,12 +1215,4 @@ inline void matmul_backward(floatX* dinp, floatX* dweight, floatX* dbias,
     if (dbias != nullptr) {
         matmul_backward_bias(dbias, dout, dbias_buffer, B, T, OC, stream);
     }
-#if !(defined(LLMK_SM120_USE_CUBLASLT_GEMM) && defined(KITTENS_SM120)) && !LLMK_SM120_CUBLASLT_DWEIGHT_FALLBACK
-    if (dweight_split_finish_pending) {
-        matmul_dispatch_tk_atb_splitk_finish(dweight_split_job, stream);
-    }
-    if (dweight_direct_finish_pending) {
-        matmul_dispatch_tk_atb_async_finish(dweight_direct_job, stream);
-    }
-#endif
 }

@@ -723,16 +723,9 @@ inline void launch_backward_causal(bf16* q, bf16* k, bf16* v, bf16* o,
     if (!d_precomputed) {
         sm120_detail::bwd_prep_kernel<D><<<grid, ::kittens::WARP_THREADS, 0, stream>>>(g);
     }
+    sm120_detail::bwd_main_kernel<D, false, false><<<grid, ::kittens::WARP_THREADS, 0, stream>>>(g);
 #if !defined(LLMK_SM120_ATOMIC_DQ)
-#if defined(LLMK_SM120_ATTN_BWD_DQ_FIRST)
-    sm120_detail::bwd_dq_kernel<D, false, false><<<grid, ::kittens::WARP_THREADS, 0, stream>>>(g);
-    sm120_detail::bwd_main_kernel<D, false, false><<<grid, ::kittens::WARP_THREADS, 0, stream>>>(g);
-#else
-    sm120_detail::bwd_main_kernel<D, false, false><<<grid, ::kittens::WARP_THREADS, 0, stream>>>(g);
-    sm120_detail::bwd_dq_kernel<D, false, false><<<grid, ::kittens::WARP_THREADS, 0, stream>>>(g);
-#endif
-#else
-    sm120_detail::bwd_main_kernel<D, false, false><<<grid, ::kittens::WARP_THREADS, 0, stream>>>(g);
+    sm120_detail::bwd_dq_kernel  <D, false, false><<<grid, ::kittens::WARP_THREADS, 0, stream>>>(g);
 #endif
 }
 
@@ -771,13 +764,8 @@ inline void launch_backward_causal_packed_grads(bf16* q, bf16* k, bf16* v, bf16*
     if (!d_precomputed) {
         sm120_detail::bwd_prep_kernel<D><<<grid, ::kittens::WARP_THREADS, 0, stream>>>(g);
     }
-#if defined(LLMK_SM120_ATTN_BWD_DQ_FIRST)
-    sm120_detail::bwd_dq_kernel<D, true, false><<<grid, ::kittens::WARP_THREADS, 0, stream>>>(g);
-    sm120_detail::bwd_main_kernel<D, true, false><<<grid, ::kittens::WARP_THREADS, 0, stream>>>(g);
-#else
     sm120_detail::bwd_main_kernel<D, true, false><<<grid, ::kittens::WARP_THREADS, 0, stream>>>(g);
     sm120_detail::bwd_dq_kernel<D, true, false><<<grid, ::kittens::WARP_THREADS, 0, stream>>>(g);
-#endif
 }
 
 template <int D>
@@ -816,13 +804,8 @@ inline void launch_backward_causal_packed_qkv_packed_grads(bf16* qkv, bf16* o,
     if (!d_precomputed) {
         sm120_detail::bwd_prep_kernel<D><<<grid, ::kittens::WARP_THREADS, 0, stream>>>(g);
     }
-#if defined(LLMK_SM120_ATTN_BWD_DQ_FIRST)
-    sm120_detail::bwd_dq_kernel<D, true, true><<<grid, ::kittens::WARP_THREADS, 0, stream>>>(g);
-    sm120_detail::bwd_main_kernel<D, true, true><<<grid, ::kittens::WARP_THREADS, 0, stream>>>(g);
-#else
     sm120_detail::bwd_main_kernel<D, true, true><<<grid, ::kittens::WARP_THREADS, 0, stream>>>(g);
     sm120_detail::bwd_dq_kernel<D, true, true><<<grid, ::kittens::WARP_THREADS, 0, stream>>>(g);
-#endif
 }
 
 inline void launch_backward_causal_packed_grads(bf16* q, bf16* k, bf16* v, bf16* o,

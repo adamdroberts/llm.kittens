@@ -151,7 +151,7 @@ int main(int argc, char** argv) {
         printf("⚠ This smoke test targets H100 (sm_90); detected sm_%d%d. Continuing anyway.\n",
                deviceProp.major, deviceProp.minor);
     }
-#if LLMK_SM120_HAS_CUBLASLT_GEMM
+#if defined(LLMK_SM120_USE_CUBLASLT_GEMM)
     llmk::cublaslt_sm120::init();
 #endif
 
@@ -356,118 +356,6 @@ int main(int argc, char** argv) {
     }
 
     {
-        total_tests++;
-        Shape s = {1024, 768, 768, "dInp backward A*B (SM120 small-K direct B-col)"};
-        printf("\n──── %s  M=%d OC=%d C=%d ────\n", s.name, s.M, s.N, s.K);
-
-        size_t dout_bytes = (size_t)s.M * s.N * sizeof(__nv_bfloat16);
-        size_t w_bytes = (size_t)s.N * s.K * sizeof(__nv_bfloat16);
-        size_t dinp_bytes = (size_t)s.M * s.K * sizeof(__nv_bfloat16);
-
-        std::vector<__nv_bfloat16> hDout((size_t)s.M * s.N);
-        std::vector<__nv_bfloat16> hW((size_t)s.N * s.K);
-        std::vector<__nv_bfloat16> hDinp_tk((size_t)s.M * s.K);
-        std::vector<__nv_bfloat16> hDinp_ref((size_t)s.M * s.K);
-
-        fill_random_bf16(hDout, 51617, -0.75f, 0.75f);
-        fill_random_bf16(hW, 51618, -0.75f, 0.75f);
-
-        __nv_bfloat16 *dDout = nullptr, *dW = nullptr, *dDinp_tk = nullptr, *dDinp_ref = nullptr;
-        cudaCheck(cudaMalloc(&dDout, dout_bytes));
-        cudaCheck(cudaMalloc(&dW, w_bytes));
-        cudaCheck(cudaMalloc(&dDinp_tk, dinp_bytes));
-        cudaCheck(cudaMalloc(&dDinp_ref, dinp_bytes));
-
-        cudaCheck(cudaMemcpy(dDout, hDout.data(), dout_bytes, cudaMemcpyHostToDevice));
-        cudaCheck(cudaMemcpy(dW, hW.data(), w_bytes, cudaMemcpyHostToDevice));
-        cudaCheck(cudaMemset(dDinp_tk, 0, dinp_bytes));
-        cudaCheck(cudaMemset(dDinp_ref, 0, dinp_bytes));
-
-        matmul_backward(dDinp_tk, /*dweight=*/nullptr, /*dbias=*/nullptr,
-                        dDout, /*inp=*/nullptr, dW, /*dbias_buffer=*/nullptr,
-                        /*B=*/1, /*T=*/s.M, /*C=*/s.K, /*OC=*/s.N, /*stream=*/0,
-                        /*dweight_accumulate=*/false);
-        cudaCheck(cudaDeviceSynchronize());
-
-        dim3 block(16, 16);
-        dim3 grid(CEIL_DIV(s.K, 16), CEIL_DIV(s.M, 16));
-        naive_dinp_ref<<<grid, block>>>(dDout, dW, dDinp_ref, s.M, s.K, s.N);
-        cudaCheck(cudaDeviceSynchronize());
-
-        cudaCheck(cudaMemcpy(hDinp_tk.data(), dDinp_tk, dinp_bytes, cudaMemcpyDeviceToHost));
-        cudaCheck(cudaMemcpy(hDinp_ref.data(), dDinp_ref, dinp_bytes, cudaMemcpyDeviceToHost));
-
-        double max_diff = max_abs_diff(hDinp_tk, hDinp_ref);
-        double tolerance = 0.5;
-        bool ok = max_diff < tolerance;
-        printf("  max abs diff = %.4f  (tolerance %.2f)  %s\n",
-               max_diff, tolerance, ok ? "PASS" : "FAIL");
-        if (!ok) failures++;
-
-        cudaCheck(cudaFree(dDout));
-        cudaCheck(cudaFree(dW));
-        cudaCheck(cudaFree(dDinp_tk));
-        cudaCheck(cudaFree(dDinp_ref));
-    }
-
-#if LLMK_SM120_DINP_DIRECT_BCOL_LARGEK
-    {
-        total_tests++;
-        Shape s = {128, 8192, 768, "dInp backward A*B (SM120 large-K direct B-col probe)"};
-        printf("\n──── %s  M=%d OC=%d C=%d ────\n", s.name, s.M, s.N, s.K);
-
-        size_t dout_bytes = (size_t)s.M * s.N * sizeof(__nv_bfloat16);
-        size_t w_bytes = (size_t)s.N * s.K * sizeof(__nv_bfloat16);
-        size_t dinp_bytes = (size_t)s.M * s.K * sizeof(__nv_bfloat16);
-
-        std::vector<__nv_bfloat16> hDout((size_t)s.M * s.N);
-        std::vector<__nv_bfloat16> hW((size_t)s.N * s.K);
-        std::vector<__nv_bfloat16> hDinp_tk((size_t)s.M * s.K);
-        std::vector<__nv_bfloat16> hDinp_ref((size_t)s.M * s.K);
-
-        fill_random_bf16(hDout, 52617, -0.75f, 0.75f);
-        fill_random_bf16(hW, 52618, -0.75f, 0.75f);
-
-        __nv_bfloat16 *dDout = nullptr, *dW = nullptr, *dDinp_tk = nullptr, *dDinp_ref = nullptr;
-        cudaCheck(cudaMalloc(&dDout, dout_bytes));
-        cudaCheck(cudaMalloc(&dW, w_bytes));
-        cudaCheck(cudaMalloc(&dDinp_tk, dinp_bytes));
-        cudaCheck(cudaMalloc(&dDinp_ref, dinp_bytes));
-
-        cudaCheck(cudaMemcpy(dDout, hDout.data(), dout_bytes, cudaMemcpyHostToDevice));
-        cudaCheck(cudaMemcpy(dW, hW.data(), w_bytes, cudaMemcpyHostToDevice));
-        cudaCheck(cudaMemset(dDinp_tk, 0, dinp_bytes));
-        cudaCheck(cudaMemset(dDinp_ref, 0, dinp_bytes));
-
-        matmul_backward(dDinp_tk, /*dweight=*/nullptr, /*dbias=*/nullptr,
-                        dDout, /*inp=*/nullptr, dW, /*dbias_buffer=*/nullptr,
-                        /*B=*/1, /*T=*/s.M, /*C=*/s.K, /*OC=*/s.N, /*stream=*/0,
-                        /*dweight_accumulate=*/false);
-        cudaCheck(cudaDeviceSynchronize());
-
-        dim3 block(16, 16);
-        dim3 grid(CEIL_DIV(s.K, 16), CEIL_DIV(s.M, 16));
-        naive_dinp_ref<<<grid, block>>>(dDout, dW, dDinp_ref, s.M, s.K, s.N);
-        cudaCheck(cudaDeviceSynchronize());
-
-        cudaCheck(cudaMemcpy(hDinp_tk.data(), dDinp_tk, dinp_bytes, cudaMemcpyDeviceToHost));
-        cudaCheck(cudaMemcpy(hDinp_ref.data(), dDinp_ref, dinp_bytes, cudaMemcpyDeviceToHost));
-
-        double max_diff = max_abs_diff(hDinp_tk, hDinp_ref);
-        double tolerance = 0.5;
-        bool ok = max_diff < tolerance;
-        printf("  max abs diff = %.4f  (tolerance %.2f)  %s\n",
-               max_diff, tolerance, ok ? "PASS" : "FAIL");
-        if (!ok) failures++;
-
-        cudaCheck(cudaFree(dDout));
-        cudaCheck(cudaFree(dW));
-        cudaCheck(cudaFree(dDinp_tk));
-        cudaCheck(cudaFree(dDinp_ref));
-    }
-#endif
-
-    {
         Shape s = {1024, 1024, 1024, "dInp backward fused dGELU"};
         printf("\n──── %s  M=%d OC=%d C=%d ────\n", s.name, s.M, s.N, s.K);
         if (!matmul_backward_gelu_fusion_supported()) {
@@ -660,7 +548,7 @@ int main(int argc, char** argv) {
     if (failures == 0) {
         printf("test_matmul smoke OK\n");
     }
-#if LLMK_SM120_HAS_CUBLASLT_GEMM
+#if defined(LLMK_SM120_USE_CUBLASLT_GEMM)
     llmk::cublaslt_sm120::destroy();
 #endif
     return failures == 0 ? 0 : 1;

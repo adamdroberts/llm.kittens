@@ -6,6 +6,31 @@ milestone. Adds within a milestone are listed in chronological order.
 The canonical "what is done / what is left" is [`goal.md`](goal.md). The
 changelog is the diary; `goal.md` is the plan.
 
+## 2026-05-19 — SM120 RTX 5090 baseline restoration
+
+- Restored the SM120 source, trainer, matmul benchmark, matmul smoke harness,
+  and kernel CLI/reference docs to the fastest pre-per-round baseline captured
+  in commit `2255fcd4`, plus the later SM120 no-master default from `d818239`
+  that makes the user's command reproduce the fast path without an explicit
+  `-w 0`. This keeps the default SM120 path on the cuBLASLt-backed GEMM build
+  (`SM120_USE_CUBLASLT_GEMM=1`) with FP32 master weights disabled on SM120,
+  fused GELU enabled for the cuBLASLt trainer build, packed-QKV attention
+  enabled, and the 512-thread SM120 bias reduction default. Added
+  [`docs/sm120-rtx5090-baseline.md`](docs/sm120-rtx5090-baseline.md) as the
+  canonical baseline record: historical TinyStories `-x 3` average
+  `2525.99 ms` (`2529.42`, `2529.39`, `2522.60 ms`), about `10.4%` faster than
+  the supplied llm.c baseline average (`2818.23 ms`). Fresh verification after
+  the restore passed `test_matmul` `8/8`, passed `test_attention` all three
+  smoke shapes including packed-QKV, showed the material pure-TK dInput/dWeight
+  rows still behind cuBLASLt in `bench_sm120_matmul` with
+  attention-projection dWeight worst at `1.74x`, and validated the user
+  TinyStories command capped with `-x 3` at `2508.27 ms` (`2510.30`,
+  `2506.36`, `2510.18 ms`) with
+  `use_master_weights disabled` and `gelu_fusion 1`. Updated the build-contract
+  source guard to treat SM120-only cuBLASLt fallback linkage as intentional
+  while keeping the BF16/no-cuDNN contract. This is the speed baseline rather
+  than a pure-TK completion point.
+
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
 - Rejected packed-QKV attention prep launch `LLMK_SM120_DPREP_WARPS=12`.
