@@ -8,6 +8,22 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Promoted SM120 TN dWeight direct B-column register loads
+  (`LLMK_SM120_TN_DIRECT_B_COL=1`). The macro probe skipped the B-side
+  register-layout swap inside the `A^T*B` kernel, passed `test_matmul`
+  (`10/10`) and `test_attention` (all three smoke shapes), and improved
+  TinyStories 3-step validation to `2622.90 ms` with steps `2615.88`,
+  `2618.16`, and `2627.64 ms`. After promoting the macro as the source
+  default, the no-override rebuild passed `test_attention`; the first
+  `test_matmul` hit the known transient MLP-up row and the immediate rerun
+  passed `10/10`. No-override TinyStories validation averaged `2623.34 ms`
+  with steps `2616.50`, `2619.28`, and `2627.41 ms`, substantially improving
+  the previous `2653.36 ms` pure-TK source default. The focused benchmark
+  showed the intended dWeight gains, including qkv dW `1211.48 us` versus the
+  prior `1250.10 us`, FC dW `1451.95 us` versus `1542.57 us`, FC-projection
+  dW `1463.00 us` versus `1509.03 us`, and LM-head dW `22053.86 us` versus
+  `23072.15 us`; dWeight rows still trail cuBLASLt, so the SM120 optimization
+  goal remains open.
 - Rejected pure SM120 TK codegen with
   `-Xptxas=--allow-expensive-optimizations=true`. The build passed
   `test_attention` and eventually passed `test_matmul` (`10/10`) after two

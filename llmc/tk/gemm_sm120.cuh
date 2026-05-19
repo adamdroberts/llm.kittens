@@ -82,6 +82,10 @@ constexpr int LOAD_BAR = 0;
 #define LLMK_SM120_DWEIGHT_N128_K_TILE 16
 #endif
 
+#ifndef LLMK_SM120_TN_DIRECT_B_COL
+#define LLMK_SM120_TN_DIRECT_B_COL 1
+#endif
+
 #ifndef LLMK_SM120_DINP_DIRECT_BCOL_SUPER_M
 #define LLMK_SM120_DINP_DIRECT_BCOL_SUPER_M 8
 #endif
@@ -447,17 +451,28 @@ void kernel_tn(const __grid_constant__ typename T::globals_tn g)
 
         auto As_slice = As[stage].template subtile<T::K_TILE, T::WARP_M>({0, w});
         a_rt_row a_reg_row;
-        b_rt_row b_reg_row;
         ::kittens::warp::load(a_reg_row, As_slice);
-        ::kittens::warp::load(b_reg_row, Bs[stage]);
 #if LLMK_SM120_INPLACE_LAYOUT_SWAP
         auto& a_reg_col = ::kittens::warp::swap_layout_inplace(a_reg_row);
+#if LLMK_SM120_TN_DIRECT_B_COL
+        b_rt_col b_reg_col;
+        ::kittens::warp::load(b_reg_col, Bs[stage]);
+#else
+        b_rt_row b_reg_row;
+        ::kittens::warp::load(b_reg_row, Bs[stage]);
         auto& b_reg_col = ::kittens::warp::swap_layout_inplace(b_reg_row);
+#endif
 #else
         a_rt_col a_reg_col;
         b_rt_col b_reg_col;
+        b_rt_row b_reg_row;
         ::kittens::warp::swap_layout(a_reg_col, a_reg_row);
+#if LLMK_SM120_TN_DIRECT_B_COL
+        ::kittens::warp::load(b_reg_col, Bs[stage]);
+#else
+        ::kittens::warp::load(b_reg_row, Bs[stage]);
         ::kittens::warp::swap_layout(b_reg_col, b_reg_row);
+#endif
 #endif
         ::kittens::warp::mma_AtB(accum, a_reg_col, b_reg_col, accum);
     }
