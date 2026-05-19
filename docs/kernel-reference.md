@@ -154,9 +154,9 @@ Current status:
    shared B tile into column-major registers instead of row-loading and
    swapping. This keeps fused dGELU FC and LM-head dInput on the existing
    row-load path. The scoped direct-load route uses
-   `LLMK_SM120_DINP_DIRECT_BCOL_SUPER_M=7` by default after the FC-projection
-   cap promotion beat the prior inherited `LLMK_SM120_DINP_SUPER_M=8` route in
-   3-step validation.
+   `LLMK_SM120_DINP_DIRECT_BCOL_SUPER_M=8` by default after the FC-projection
+   cap promotion and adjacent swizzle retest beat the prior K32 pure-TK
+   baseline in 3-step validation.
    On SM120 pure-TK builds, `LLMK_SM120_FUSE_DGELU=1` is now the default when
    the trainer uses `-ge 1`, fusing the MLP GELU backward into the `fcproj`
    dInput GEMM. The fused SM120 path uses in-place register-layout swaps and

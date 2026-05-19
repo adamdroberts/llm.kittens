@@ -8,6 +8,14 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Promoted `LLMK_SM120_DINP_DIRECT_BCOL_SUPER_M=8` after retesting the
+  direct B-column dInput swizzle on top of the accepted `K_CAP=3072` source.
+  The macro retest passed `test_matmul` (`10/10`) and `test_attention` (all
+  three smoke shapes), then averaged `2653.53 ms` over 3 TinyStories steps.
+  After promoting the source default from `7` to `8`, the no-override build
+  passed the same smokes and validated at `2654.93 ms` with steps `2648.42`,
+  `2650.46`, and `2659.41 ms`, improving the previous source default
+  (`2657.45 ms`) while leaving the backward cuBLASLt fallback target open.
 - Rejected retesting `LLMK_SM120_DWEIGHT_SPLIT_K=16` on top of the promoted
   FC-projection dInput direct route. The macro build passed `test_matmul`
   (`10/10`) and `test_attention` (all three smoke shapes), but TinyStories
