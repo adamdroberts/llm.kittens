@@ -8,6 +8,16 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Promoted the SM120 direct B-column dInput route to cover the GPT-2
+  FC-projection dInput shape and use a dedicated `SUPER_M=7` swizzle. The
+  macro probe combined `LLMK_SM120_DINP_DIRECT_BCOL_K_CAP=3072` with
+  `LLMK_SM120_DINP_DIRECT_BCOL_SUPER_M=7`, passed `test_matmul` (`10/10`) and
+  `test_attention` (all three smoke shapes), and averaged `2656.69 ms` over 3
+  TinyStories steps. After promoting the defaults in source, the no-override
+  build passed the same smokes and validated at `2657.45 ms` with steps
+  `2650.13`, `2654.87`, and `2660.02 ms`, improving the pure-TK source
+  baseline from `2663.76 ms` while still leaving the combined backward
+  cuBLASLt fallback target at `2589.00 ms`.
 - Refreshed the combined current-stack SM120 dInput+dWeight cuBLASLt fallback
   diagnostic. The build used both `LLMK_SM120_CUBLASLT_DINP_FALLBACK=1` and
   `LLMK_SM120_CUBLASLT_DWEIGHT_FALLBACK=1`, leaving only forward GEMM on the

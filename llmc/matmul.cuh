@@ -886,7 +886,7 @@ inline void matmul_dispatch_tk_ab(floatX* out, const floatX* a, const floatX* b,
 #define LLMK_SM120_DINP_DIRECT_BCOL_SMALLK 1
 #endif
 #ifndef LLMK_SM120_DINP_DIRECT_BCOL_K_CAP
-#define LLMK_SM120_DINP_DIRECT_BCOL_K_CAP (3 * 768)
+#define LLMK_SM120_DINP_DIRECT_BCOL_K_CAP (4 * 768)
 #endif
 #ifndef LLMK_SM120_DINP_DIRECT_BCOL_LARGEK
 #define LLMK_SM120_DINP_DIRECT_BCOL_LARGEK 1

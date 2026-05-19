@@ -147,13 +147,16 @@ Current status:
 1. `dinp (B*T, C) = dout (B*T, OC) · weight(OC, C)` — wired through the existing TK `A*B` GEMM.
    SM120 dInput uses `LLMK_SM120_DINP_SUPER_M=8` after a focused A/B on top
    of the K-tile 16 stack improved current 3-step timing.
-   The pure-SM120 small-K GPT-2 qkv/attention-projection dInput rows
-   (`N == 768`, `K <= LLMK_SM120_DINP_DIRECT_BCOL_K_CAP`, default cap `2304`)
+   The pure-SM120 small-K GPT-2 qkv/attention-projection and FC-projection
+   dInput rows
+   (`N == 768`, `K <= LLMK_SM120_DINP_DIRECT_BCOL_K_CAP`, default cap `3072`)
    use `LLMK_SM120_DINP_DIRECT_BCOL_SMALLK=1` by default, directly loading the
    shared B tile into column-major registers instead of row-loading and
-   swapping. This keeps fused dGELU, FC, and LM-head dInput on the existing
-   row-load path. The scoped direct-load route inherits `LLMK_SM120_DINP_SUPER_M`
-   unless `LLMK_SM120_DINP_DIRECT_BCOL_SUPER_M` is defined for A/B testing.
+   swapping. This keeps fused dGELU FC and LM-head dInput on the existing
+   row-load path. The scoped direct-load route uses
+   `LLMK_SM120_DINP_DIRECT_BCOL_SUPER_M=7` by default after the FC-projection
+   cap promotion beat the prior inherited `LLMK_SM120_DINP_SUPER_M=8` route in
+   3-step validation.
    On SM120 pure-TK builds, `LLMK_SM120_FUSE_DGELU=1` is now the default when
    the trainer uses `-ge 1`, fusing the MLP GELU backward into the `fcproj`
    dInput GEMM. The fused SM120 path uses in-place register-layout swaps and
