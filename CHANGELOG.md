@@ -8,6 +8,13 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Refreshed the focused SM120 matmul benchmark for the current pure-TK `-O3`
+  source default. The benchmark still shows the remaining cuBLASLt gaps:
+  qkv dW `1233.01 us` versus `987.85 us`, attention-projection dW
+  `470.28 us` versus `327.40 us`, FC dW `1451.49 us` versus `1351.60 us`,
+  FC-projection dW `1505.57 us` versus `1333.43 us`, LM-head forward
+  `24737.11 us` versus `22250.03 us`, and LM-head dInput `22408.23 us`
+  versus `21037.82 us`. These rows remain the next optimization targets.
 - Rebaselined the current pure SM120 TK source default with the Makefile's
   actual `-O3` setting (`DEVICE_ARCH=SM120`, `SM120_USE_CUBLASLT_GEMM=0`,
   no `FORCE_NVCC_O=0`). The build passed `test_matmul` (`10/10`) and
