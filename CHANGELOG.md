@@ -8,6 +8,14 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected huge-N forward swizzle override
+  `LLMK_SM120_HUGE_N_FORWARD_SUPER_M=16`. The macro build passed
+  `test_attention` and `test_matmul` (`10/10`), but the focused benchmark
+  regressed LM-head forward to `28423.27 us` versus cuBLASLt `25690.76 us` and
+  slowed the broader run. TinyStories 3-step validation averaged `2929.79 ms`
+  with steps `2929.92`, `2923.36`, and `2936.23 ms`, worse than both the
+  current pure-TK path and the llm.c baseline. The source default remains
+  `LLMK_SM120_HUGE_N_FORWARD_SUPER_M=7`.
 - Rejected a temporary fcproj-forward-only wide-tile selector,
   `LLMK_SM120_FCPROJ_FORWARD_WIDE=1`, that routed only `N == 768 && K == 3072`
   forward GEMMs through `matmul_wide_nt[_bias]` while leaving qkv, attproj,
