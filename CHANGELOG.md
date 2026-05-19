@@ -8,6 +8,12 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected direct-Bcol dInput swizzle `LLMK_SM120_DINP_DIRECT_BCOL_SUPER_M=14`
+  at the matmul smoke gate. The macro build passed `test_attention`, but
+  `test_matmul` failed the GPT-2 MLP-up forward row twice (`5.2422` then
+  `6.1094` max diff versus the `0.50` tolerance). No focused benchmark or
+  TinyStories 3-step validation was run for the invalid candidate, and the
+  source keeps direct-Bcol dInput `SUPER_M=8`.
 - Rejected shared SM120 grid swizzle `LLMK_SM120_SUPER_M=14`. The macro build
   passed `test_attention` and `test_matmul` (`10/10`), but the focused
   benchmark stayed short of the per-kernel target: qkv forward was
