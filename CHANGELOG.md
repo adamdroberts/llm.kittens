@@ -8,6 +8,17 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected a temporary SM120 TN direct A-column register-load hook for
+  dWeight. The pure-TK macro build
+  (`LLMK_SM120_TN_DIRECT_A_COL=1`, `SM120_USE_CUBLASLT_GEMM=0`) passed
+  `test_matmul` (`10/10`) and `test_attention` (all three smoke shapes), but
+  TinyStories 3-step validation regressed to `2689.56 ms` with steps
+  `2679.82`, `2684.98`, and `2694.15 ms`, slower than the `2623.34 ms`
+  source default. The focused benchmark also left material dWeight rows behind
+  cuBLASLt (for example qkv dW `1376.42 us` versus `987.99 us` and
+  attention-projection dW `528.20 us` versus `329.12 us`), so the hook was
+  removed. An earlier `DEVICE_ARCH=SM120` trainer run averaged `2507.56 ms`
+  but was excluded because the Makefile default enabled cuBLASLt GEMM dispatch.
 - Rejected retesting `LLMK_SM120_DWEIGHT_SUPER_M=4` on top of the promoted TN
   direct B-column dWeight source. The macro build passed `test_matmul`
   (`10/10`) and `test_attention` (all three smoke shapes), but TinyStories
