@@ -8,6 +8,17 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Added `LLMK_SM120_APPROX_GELU_TANH` as a default-off hook for replacing the
+  fused forward GeLU epilogue's `tanhf` with the same clamped rational
+  approximation shape used by the dGELU experiment path. Rejected
+  `LLMK_SM120_APPROX_GELU_TANH=1`: the macro build passed `test_attention`
+  and `test_matmul` (`10/10`), but the focused benchmark still left FC fused
+  forward behind cuBLASLt (`1561.29 us` versus `1535.00 us`) and TinyStories
+  3-step validation regressed to `2658.70 ms` average with steps `2650.23`,
+  `2655.09`, and `2662.31 ms`. The no-override source build passed
+  `test_attention`; its first `test_matmul` run hit the known intermittent
+  MLP-up forward row and the rerun passed `10/10`, so the hook stays
+  diagnostic-only and source-default GeLU keeps full `tanhf`.
 - Rejected dWeight N128 K-tile override
   `LLMK_SM120_DWEIGHT_N128_K_TILE=8` at compile time. ThunderKittens' BF16
   shared/register tile types require rows divisible by the base tile dimension,

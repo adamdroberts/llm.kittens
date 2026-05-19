@@ -108,9 +108,23 @@ constexpr int LOAD_BAR = 0;
 #define LLMK_SM120_FAST_DGELU 1
 #endif
 
+#ifndef LLMK_SM120_APPROX_GELU_TANH
+#define LLMK_SM120_APPROX_GELU_TANH 0
+#endif
+
 #ifndef LLMK_SM120_APPROX_DGELU_TANH
 #define LLMK_SM120_APPROX_DGELU_TANH 1
 #endif
+
+__device__ static inline float sm120_gelu_tanh(float x) {
+#if LLMK_SM120_APPROX_GELU_TANH
+    float x2 = x * x;
+    float y = x * (27.0f + x2) / (27.0f + 9.0f * x2);
+    return fminf(1.0f, fmaxf(-1.0f, y));
+#else
+    return tanhf(x);
+#endif
+}
 
 __device__ static inline float sm120_dgelu_tanh(float x) {
 #if LLMK_SM120_APPROX_DGELU_TANH
@@ -291,8 +305,8 @@ void kernel_nt(const __grid_constant__ typename T::globals_nt g)
                     float x1 = tile.data[e].y;
                     float c0 = k1 * x0 * x0 * x0;
                     float c1 = k1 * x1 * x1 * x1;
-                    tile.data[e].x = 0.5f * x0 * (1.0f + tanhf(k0 * (x0 + c0)));
-                    tile.data[e].y = 0.5f * x1 * (1.0f + tanhf(k0 * (x1 + c1)));
+                    tile.data[e].x = 0.5f * x0 * (1.0f + sm120_gelu_tanh(k0 * (x0 + c0)));
+                    tile.data[e].y = 0.5f * x1 * (1.0f + sm120_gelu_tanh(k0 * (x1 + c1)));
                 }
             }
         }
