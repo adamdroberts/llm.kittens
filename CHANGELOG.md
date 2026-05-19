@@ -278,6 +278,14 @@ changelog is the diary; `goal.md` is the plan.
   No TinyStories validation was run for either smoke-gate failure, and the
   temporary hook was removed; LayerNorm backward keeps the fixed 512-thread
   launch.
+- Rejected a temporary forward-only huge-N K-tile split that tried to route
+  the SM120 LM-head forward aliases through 256x128x32 while leaving dWeight
+  N128 on the existing 128x128x16 path. The candidate compiled, but
+  `test_matmul` failed the GPT-2 MLP-up forward row twice (`7.1562` and
+  `7.6562` max diff versus `0.50` tolerance) before benchmarking or
+  TinyStories validation. The temporary `LLMK_SM120_HUGE_N_FORWARD_K_TILE`
+  hook was removed; huge-N forward and dWeight continue to share the K16
+  source default.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
