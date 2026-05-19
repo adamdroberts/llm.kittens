@@ -216,6 +216,11 @@ changelog is the diary; `goal.md` is the plan.
   but it still trailed cuBLASLt and TinyStories 3-step validation regressed to
   `2674.53 ms` with steps `2673.69`, `2673.01`, and `2676.05 ms`, so qkv
   dWeight remains on the 8-way split-K default.
+- Rejected retesting `LLMK_SM120_ATTN_BWD_BLOCK=32` on the current large-K
+  dInput source. The macro build passed `test_matmul` (`10/10`) and
+  `test_attention` (all three smoke shapes), but TinyStories 3-step validation
+  regressed to `2679.05 ms` with steps `2675.91`, `2676.53`, and `2681.57 ms`,
+  so SM120 packed-QKV attention backward remains on the 16-row tile.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
