@@ -8,6 +8,21 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Added a focused `bench_sm120_matmul` row for the FC-projection backward
+  fused dInput+dGELU path and introduced
+  `LLMK_SM120_DINP_DGELU_SUPER_M` as a default-preserving hook for fused dGELU
+  dInput aliases. The default hook inherits `LLMK_SM120_DINP_SUPER_M=8`, so
+  source-default behavior is unchanged unless a test build overrides it.
+  Rejected `LLMK_SM120_DINP_DGELU_SUPER_M=7`: the macro build passed
+  `test_attention` and `test_matmul` (`10/10`), but the new benchmark row
+  measured FC-projection dInput+dGELU at `1818.06 us` versus cuBLASLt
+  `1800.93 us`, and TinyStories 3-step validation averaged `2644.83 ms` with
+  steps `2638.32`, `2642.12`, and `2647.55 ms`. The no-override source build
+  passed `test_attention`; the first `test_matmul` hit the known intermittent
+  MLP-up row and the rerun passed `10/10`. Its diagnostic benchmark measured
+  the default FC-projection dInput+dGELU row at `1794.23 us` versus cuBLASLt
+  `1882.68 us` in that run, so the hook stays available for scoped retests
+  but the source default remains `SUPER_M=8`.
 - Rejected removing the runtime `bias_present` guard from the SM120 NT
   forward bias epilogue. The source candidate passed `test_attention` and
   `test_matmul` (`10/10`). The focused benchmark was mixed: attention-projection

@@ -42,6 +42,7 @@ struct Shape {
     int K;
     bool bias;
     bool gelu;
+    bool dgelu_bwd;
 };
 
 static void fill_bytes(void* ptr, size_t bytes, int value) {
@@ -178,6 +179,11 @@ static void tk_dinp(floatX* out, const floatX* dout, const floatX* weight,
     matmul_dispatch_tk_ab(out, dout, weight, s.M, s.K, s.N, stream);
 }
 
+static void tk_dinp_dgelu(floatX* out, const floatX* dout, const floatX* weight,
+                          const floatX* pre_gelu, const Shape& s, cudaStream_t stream) {
+    matmul_dispatch_tk_ab(out, dout, weight, s.M, s.K, s.N, stream, pre_gelu, true);
+}
+
 static void cublaslt_dinp(floatX* out, const floatX* dout, const floatX* weight,
                           const Shape& s, cudaStream_t stream) {
     llmk::cublaslt_sm120::matmul(
@@ -185,6 +191,15 @@ static void cublaslt_dinp(floatX* out, const floatX* dout, const floatX* weight,
         /*transA=*/false, /*transB=*/false,
         /*batch_count=*/0, /*strideA=*/0, /*strideB=*/0, /*strideOut=*/0,
         /*accumulate=*/false, /*pre_gelu=*/nullptr, /*backward=*/true);
+}
+
+static void cublaslt_dinp_dgelu(floatX* out, const floatX* dout, const floatX* weight,
+                                const floatX* pre_gelu, const Shape& s, cudaStream_t stream) {
+    llmk::cublaslt_sm120::matmul(
+        out, weight, dout, nullptr, s.K, s.M, s.N, stream,
+        /*transA=*/false, /*transB=*/false,
+        /*batch_count=*/0, /*strideA=*/0, /*strideB=*/0, /*strideOut=*/0,
+        /*accumulate=*/false, /*pre_gelu=*/const_cast<floatX*>(pre_gelu), /*backward=*/true);
 }
 
 static void tk_dweight(floatX* out, const floatX* dout, const floatX* inp,
@@ -256,13 +271,14 @@ static void bench_shape(const Shape& s) {
     if (Bias != nullptr) fill_bytes(Bias, bias_bytes, 3);
 
     floatX* PreGelu = nullptr;
-    if (s.gelu) {
-        cudaCheck(cudaMalloc(&PreGelu, out_bytes));
-        fill_bytes(PreGelu, out_bytes, 0);
+    if (s.gelu || s.dgelu_bwd) {
+        const size_t pre_gelu_bytes = s.gelu ? out_bytes : a_bytes;
+        cudaCheck(cudaMalloc(&PreGelu, pre_gelu_bytes));
+        fill_bytes(PreGelu, pre_gelu_bytes, 0);
     }
 
-    printf("\n%-12s M=%d N=%d K=%d bias=%d gelu=%d\n", s.name, s.M, s.N, s.K,
-           s.bias ? 1 : 0, s.gelu ? 1 : 0);
+    printf("\n%-12s M=%d N=%d K=%d bias=%d gelu=%d dgelu_bwd=%d\n", s.name, s.M, s.N, s.K,
+           s.bias ? 1 : 0, s.gelu ? 1 : 0, s.dgelu_bwd ? 1 : 0);
     if (s.gelu) {
         float tk_fused = bench_us([&] { tk_forward_gelu(O, PreGelu, A, W, Bias, s, 0); }, warmup, iters);
         float tk_explicit = bench_us([&] { tk_forward_explicit_gelu(O, PreGelu, A, W, Bias, s, 0); }, warmup, iters);
@@ -283,6 +299,14 @@ static void bench_shape(const Shape& s) {
     float cb_di = bench_us([&] { cublaslt_dinp(DInp, O, W, s, 0); }, warmup, iters);
     printf("  dInp   TK %9.2f us | cuBLASLt %9.2f us | TK/cuBLASLt %.2fx\n",
            tk_di, cb_di, tk_di / cb_di);
+    if (s.dgelu_bwd) {
+        fill_bytes(DInp, a_bytes, 0);
+        float tk_di_dgelu = bench_us([&] { tk_dinp_dgelu(DInp, O, W, PreGelu, s, 0); }, warmup, iters);
+        fill_bytes(DInp, a_bytes, 0);
+        float cb_di_dgelu = bench_us([&] { cublaslt_dinp_dgelu(DInp, O, W, PreGelu, s, 0); }, warmup, iters);
+        printf("  dInp+dGELU TK %9.2f us | cuBLASLt %9.2f us | TK/cuBLASLt %.2fx\n",
+               tk_di_dgelu, cb_di_dgelu, tk_di_dgelu / cb_di_dgelu);
+    }
     cudaCheck(cudaFree(DInp));
 
     floatX* DW = nullptr;
@@ -330,11 +354,11 @@ int main() {
 
     const int M = 64 * 1024;
     Shape shapes[] = {
-        {"qkv", M, 3 * 768, 768, true, false},
-        {"attproj", M, 768, 768, true, false},
-        {"fc", M, 4 * 768, 768, true, true},
-        {"fcproj", M, 768, 4 * 768, true, false},
-        {"lmhead", M, 50304, 768, false, false},
+        {"qkv", M, 3 * 768, 768, true, false, false},
+        {"attproj", M, 768, 768, true, false, false},
+        {"fc", M, 4 * 768, 768, true, true, false},
+        {"fcproj", M, 768, 4 * 768, true, false, true},
+        {"lmhead", M, 50304, 768, false, false, false},
     };
     for (const Shape& s : shapes) {
         bench_shape(s);

@@ -74,6 +74,10 @@ constexpr int LOAD_BAR = 0;
 #define LLMK_SM120_DINP_SUPER_M 8
 #endif
 
+#ifndef LLMK_SM120_DINP_DGELU_SUPER_M
+#define LLMK_SM120_DINP_DGELU_SUPER_M LLMK_SM120_DINP_SUPER_M
+#endif
+
 #ifndef LLMK_SM120_DWEIGHT_SUPER_M
 #define LLMK_SM120_DWEIGHT_SUPER_M 2
 #endif
@@ -552,10 +556,10 @@ using matmul_n96                     = matmul_template<2, 4, LLMK_SM120_DINP_SUP
 using matmul_wide                    = matmul_template<2, 4, LLMK_SM120_DINP_SUPER_M, false, false, false, false, false, sm120_detail::traits_grad_256x64>;
 using matmul_huge_n                  = matmul_template<2, 4, LLMK_SM120_SUPER_M, false, false, false, false, false, sm120_detail::traits_128x128>;
 using matmul_default_direct_bcol     = matmul_template<2, 4, LLMK_SM120_DINP_DIRECT_BCOL_SUPER_M, false, false, false, false, false, sm120_detail::traits_grad_128x64, true>;
-using matmul_default_dgelu           = matmul_template<2, 4, LLMK_SM120_DINP_SUPER_M, false, false, false, true,  false, sm120_detail::traits_grad_128x64>;
-using matmul_small_n_dgelu           = matmul_template<2, 2, LLMK_SM120_DINP_SUPER_M, false, false, false, true,  false, sm120_detail::traits_grad_128x64>;
-using matmul_n96_dgelu               = matmul_template<2, 4, LLMK_SM120_DINP_SUPER_M, false, false, false, true,  false, sm120_detail::traits_grad_128x96>;
-using matmul_wide_dgelu              = matmul_template<2, 4, LLMK_SM120_DINP_SUPER_M, false, false, false, true,  false, sm120_detail::traits_grad_256x64>;
+using matmul_default_dgelu           = matmul_template<2, 4, LLMK_SM120_DINP_DGELU_SUPER_M, false, false, false, true,  false, sm120_detail::traits_grad_128x64>;
+using matmul_small_n_dgelu           = matmul_template<2, 2, LLMK_SM120_DINP_DGELU_SUPER_M, false, false, false, true,  false, sm120_detail::traits_grad_128x64>;
+using matmul_n96_dgelu               = matmul_template<2, 4, LLMK_SM120_DINP_DGELU_SUPER_M, false, false, false, true,  false, sm120_detail::traits_grad_128x96>;
+using matmul_wide_dgelu              = matmul_template<2, 4, LLMK_SM120_DINP_DGELU_SUPER_M, false, false, false, true,  false, sm120_detail::traits_grad_256x64>;
 using matmul_huge_n_dgelu            = matmul_template<2, 4, LLMK_SM120_SUPER_M, false, false, false, true,  false, sm120_detail::traits_128x128>;
 
 // --- dWeight (TN, C = Aᵀ · B) ---
