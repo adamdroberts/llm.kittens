@@ -8,6 +8,18 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Refreshed the current pure-TK SM120 phase profile after promoting
+  `LLMK_SM120_DINP_DGELU_SUPER_M=11`, using
+  `LLMK_SM120_PROFILE_TRAIN_STEP=1`. The profiling build completed the
+  required TinyStories 3-step validation at `2645.26 ms` average with steps
+  `2648.13`, `2645.42`, and `2645.10 ms`; profiler overhead makes this a
+  diagnostic run, not a source-default speed comparison. Step 3 still shows
+  the dominant buckets as forward `800.25 ms`, FC-projection backward
+  `337.78 ms`, FC backward `312.20 ms`, attention backward `282.81 ms`, qkv
+  backward `233.96 ms`, LM-head backward `202.61 ms`, final-LayerNorm backward
+  `166.06 ms`, classifier backward `85.99 ms`, and attention-projection
+  backward `86.62 ms`, so the remaining focus stays on forward and the broader
+  FC/qkv backward path rather than the now-scoped dGELU swizzle.
 - Rejected fused dInput+dGELU swizzle override
   `LLMK_SM120_DINP_DGELU_SUPER_M=12`. The macro build passed `test_matmul`
   (`10/10`) and `test_attention` (all three smoke shapes), but the focused
