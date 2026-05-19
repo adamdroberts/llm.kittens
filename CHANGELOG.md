@@ -8,6 +8,12 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected raising the SM120 huge-N threshold to force LM-head forward off the
+  huge-N tile. The pure-TK macro build
+  (`LLMK_SM120_HUGE_N_THRESHOLD=65536`) passed `test_attention`, but
+  `test_matmul` failed LM-head forward on both runs and also hit MLP-up forward
+  on the first run. No TinyStories validation was run for the invalid output
+  candidate; the huge-N threshold remains `8192`.
 - Rejected disabling the SM120 N128 dWeight TN tile route under the O3
   source-default stack. The pure-TK macro build (`LLMK_SM120_DWEIGHT_N128=0`)
   passed `test_matmul` (`10/10`) and `test_attention` (all three smoke shapes),
