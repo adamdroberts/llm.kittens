@@ -143,6 +143,14 @@ changelog is the diary; `goal.md` is the plan.
   cuBLASLt) and attention-projection forward (`425.04 us` versus `371.09 us`).
   TinyStories 3-step validation averaged `2666.73 ms` with steps `2664.26`,
   `2665.24`, and `2668.21 ms`, slightly slower than the O3 source default.
+- Rejected retesting qkv dWeight `LLMK_SM120_DWEIGHT_SPLIT_K=16` on the
+  current large-K dInput source. The first `test_matmul` pass hit the known
+  transient MLP-up forward row, the immediate rerun passed `10/10`, and
+  `test_attention` passed all three smoke shapes. The focused benchmark
+  improved qkv dWeight to `1165.80 us`, but qkv dInput and several other rows
+  remained behind cuBLASLt. TinyStories 3-step validation regressed to
+  `2669.86 ms` with steps `2667.80`, `2669.73`, and `2669.98 ms`, so qkv
+  dWeight stays on the 8-way split-K default.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
