@@ -8,6 +8,15 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected packed-QKV attention prep launch `LLMK_SM120_DPREP_WARPS=12`.
+  The macro build passed `test_matmul` (`10/10`) and `test_attention` (all
+  three smoke shapes including the packed-QKV fast path), but the focused
+  benchmark still left qkv forward/dInput/dWeight, attention-projection
+  dWeight, FC/FC-projection forward+dInput, and LM-head rows behind the CUDA
+  variants. TinyStories 3-step validation averaged `2621.07 ms` with steps
+  `2619.06`, `2619.62`, and `2622.51 ms`, slower than the promoted source
+  default and CUDA fallback diagnostics, so the SM120 attention prep launch
+  remains on `LLMK_SM120_DPREP_WARPS=3`.
 - Rejected fused FC forward GeLU K-tile override
   `LLMK_SM120_FORWARD_GELU_N96_K_TILE=128` at compile time. The candidate is
   shape-divisible for GPT-2's fused FC forward K dimension, but ptxas rejected
