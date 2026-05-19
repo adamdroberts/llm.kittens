@@ -8,6 +8,13 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected fused FC forward GeLU K-tile override
+  `LLMK_SM120_FORWARD_GELU_N96_K_TILE=16`. The macro build passed
+  `test_matmul` (`10/10`) and `test_attention` (all three smoke shapes), but
+  `bench_sm120_matmul` faulted on the first fused FC GeLU benchmark row with
+  `an illegal memory access was encountered` after qkv and attproj rows had
+  already shown remaining forward/dWeight deficits. No TinyStories run was
+  attempted because the candidate is not benchmark-stable.
 - Rejected scoped fused dInput+dGELU swizzle
   `LLMK_SM120_DINP_DGELU_SUPER_M=6`. The macro build passed `test_matmul`
   (`10/10`) and `test_attention` (all three smoke shapes), and the focused
