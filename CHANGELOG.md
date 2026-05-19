@@ -255,6 +255,16 @@ changelog is the diary; `goal.md` is the plan.
   LM-head forward remains a large gap (`25961.09 us` versus `22183.41 us`,
   `1.17x`). The next source work should prioritize TN/dWeight scheduling and
   the huge-N forward route.
+- Rejected retesting global `LLMK_SM120_DWEIGHT_SUPER_M=3` on the current
+  large-K dInput source. The macro build passed `test_matmul` (`10/10`) and
+  `test_attention` (all three smoke shapes), but the focused benchmark was
+  mixed and left material dWeight rows behind cuBLASLt: qkv dW `1247.25 us`
+  versus `986.60 us`, attention-projection dW `491.61 us` versus `327.42 us`,
+  FC dW `1516.47 us` versus `1307.88 us`, FC projection dW `1513.73 us`
+  versus `1352.15 us`, and LM-head dW `22824.92 us` versus `20880.55 us`.
+  TinyStories 3-step validation regressed to `2673.15 ms` with steps
+  `2669.15`, `2671.66`, and `2674.64 ms`, so dWeight keeps the
+  `LLMK_SM120_DWEIGHT_SUPER_M=2` default.
 
 ## 2026-05-18 — SM120 RTX 5090 pure-TK rejection rounds
 
