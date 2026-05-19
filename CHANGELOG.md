@@ -8,6 +8,17 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected qkv-only exact-divisor dWeight split-K fanout
+  `LLMK_SM120_DWEIGHT_SPLIT_K=64`. The macro build passed `test_matmul`
+  (`10/10`) and `test_attention` (all three smoke shapes), but the focused
+  benchmark did not close the target qkv dWeight gap (`1271.96 us` TK versus
+  `1188.43 us` cuBLASLt) and worsened LM-head forward/dWeight
+  (`26526.63 us` versus `23354.55 us`, `23101.49 us` versus `21800.27 us`).
+  TinyStories 3-step validation averaged `2771.87 ms` with steps `2769.18`,
+  `2767.07`, and `2776.67 ms`, slower than the current pure-TK source default
+  and the CUDA/cuBLASLt fallback measurements. The source default remains
+  `LLMK_SM120_DWEIGHT_SPLIT_K=8`, with previously tested exact fanouts 16 and
+  32 still rejected.
 - Rejected dWeight split-K fanout `LLMK_SM120_DWEIGHT_SPLIT_K=12`. The macro
   build passed `test_matmul` (`10/10`) and `test_attention` (all three smoke
   shapes), but the split planner requires an exact K divisor and the GPT-2
