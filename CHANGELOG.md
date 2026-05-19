@@ -8,6 +8,17 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected a temporary forward-only swizzle hook,
+  `LLMK_SM120_FORWARD_SUPER_M=5`, scoped to NT forward aliases while preserving
+  the accepted dInput and dWeight swizzles. The source candidate passed
+  `test_attention` and `test_matmul` (`10/10`). The focused benchmark did not
+  close the CUDA target: qkv forward was `1073.94 us` versus cuBLASLt
+  `1041.26 us`, FC fused forward was `1587.64 us` versus `1472.77 us`,
+  FC-projection forward was `1466.91 us` versus `1343.42 us`, and LM-head
+  forward was `24962.38 us` versus `22101.15 us`. TinyStories 3-step
+  validation averaged `2628.15 ms` with steps `2620.61`, `2625.19`, and
+  `2631.12 ms`, slower than the current pure-TK rebaseline, so the temporary
+  hook was removed.
 - Rejected pure SM120 TK codegen with
   `-Xptxas=--allow-expensive-optimizations=false`. The build passed
   `test_attention` and `test_matmul` (`10/10`). The focused benchmark showed
