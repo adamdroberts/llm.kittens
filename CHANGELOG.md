@@ -8,6 +8,11 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected an O3 retest of SM120 `LLMK_SM120_HUGE_N_K_TILE=16` for the
+  huge-N LM-head routes. The macro build passed `test_attention` and
+  `test_matmul`, then TinyStories 3-step validation averaged `2633.06 ms`
+  with steps `2627.45`, `2630.26`, and `2635.86 ms`, slower than the
+  `2623.57 ms` O3 source default, so the huge-N K tile stays at `32`.
 - Rejected routing the SM120 huge-N dWeight TN alias through
   `LLMK_SM120_DWEIGHT_SUPER_M` instead of the global `LLMK_SM120_SUPER_M`.
   The source candidate passed `test_attention` and `test_matmul`, then
