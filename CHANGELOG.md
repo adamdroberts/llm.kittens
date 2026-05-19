@@ -9,6 +9,18 @@ changelog is the diary; `goal.md` is the plan.
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
 - Rejected a temporary forward-only swizzle hook,
+  `LLMK_SM120_FORWARD_SUPER_M=6`, that kept backward aliases on the accepted
+  swizzles while retesting a scoped variant of the previously rejected global
+  `SUPER_M=6` setting. The source candidate passed `test_attention` and
+  `test_matmul` (`10/10`). The focused benchmark still missed the broad target:
+  qkv forward was ahead (`1073.78 us` versus cuBLASLt `1088.53 us`), but FC
+  fused forward was `1582.01 us` versus `1470.55 us`, FC-projection forward
+  was `1469.53 us` versus `1343.15 us`, LM-head forward was `24756.56 us`
+  versus `22209.70 us`, and several dInput/dWeight rows remained slower than
+  cuBLASLt. TinyStories 3-step validation averaged `2626.06 ms` with steps
+  `2620.08`, `2621.40`, and `2630.73 ms`, slower than the current pure-TK
+  rebaseline, so the temporary hook was removed.
+- Rejected a temporary forward-only swizzle hook,
   `LLMK_SM120_FORWARD_SUPER_M=4`, that routed all NT forward aliases through a
   separate swizzle while leaving dInput and dWeight aliases on their existing
   defaults. The source candidate passed `test_attention` and `test_matmul`
