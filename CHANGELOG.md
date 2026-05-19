@@ -8,6 +8,18 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rebaselined the current pure-TK SM120 source after promoting the faster
+  cuBLASLt fallback selector. The pure-TK build passed `test_attention` (all
+  three smoke shapes) and `test_matmul` (`10/10`). The focused benchmark now
+  compares against the stronger cuBLASLt selector: FC dWeight was nearly tied
+  (`1482.14 us` versus `1474.01 us`), FC-projection dWeight was ahead
+  (`1453.56 us` versus `1530.79 us`), but qkv dWeight (`1221.61 us` versus
+  `1104.13 us`), attention-projection dWeight (`466.73 us` versus
+  `374.67 us`), FC-projection dInput (`1527.93 us` versus `1365.88 us`), and
+  LM-head forward/dInput/dWeight remained behind. TinyStories 3-step validation
+  averaged `2621.86 ms` with steps `2617.27`, `2618.90`, and `2624.82 ms`,
+  still faster than the supplied llm.c baseline but short of the per-kernel
+  CUDA-variant goal.
 - Rejected the opposite SM120 cuBLASLt fallback selector,
   `LLMK_SM120_CUBLASLT_SELECT_MAX_WAVES=1`. The cached fallback build passed
   `test_matmul` (`10/10`) and `test_attention` (all three smoke shapes), but
