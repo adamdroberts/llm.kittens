@@ -8,6 +8,15 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Validated a corrected forward-only cuBLASLt fallback diagnostic with
+  `LLMK_SM120_CUBLASLT_FORWARD_FALLBACK=1`, explicit cuBLASLt linkage through
+  `NVCC_LDLIBS`, and dInput/dWeight left on the SM120 TK paths. The build
+  passed `test_attention` and `test_matmul` (`10/10`). TinyStories 3-step
+  validation averaged `2564.07 ms` with steps `2558.60`, `2561.36`, and
+  `2566.79 ms`, much closer to the full cuBLASLt fallback selector
+  (`2532.28 ms`) than the pure-TK rebaseline (`2621.86 ms`). This points the
+  next kernel work at forward/large-N LM-head throughput rather than
+  backward-only GEMM replacement.
 - Rejected CUDA bias-gradient block size `LLMK_SM120_BIAS_BLOCK_SIZE=704`.
   This fills the gap between previously rejected 640- and 768-thread bias
   reduction launches. The macro build passed `test_attention` and
