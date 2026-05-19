@@ -65,7 +65,7 @@ static cublasLtHandle_t handle = nullptr;
 static cublasComputeType_t compute_type = CUBLAS_COMPUTE_32F;
 
 #ifndef LLMK_SM120_CUBLASLT_HEURISTIC_RESULTS
-#define LLMK_SM120_CUBLASLT_HEURISTIC_RESULTS 1
+#define LLMK_SM120_CUBLASLT_HEURISTIC_RESULTS 8
 #endif
 static_assert(LLMK_SM120_CUBLASLT_HEURISTIC_RESULTS >= 1 &&
               LLMK_SM120_CUBLASLT_HEURISTIC_RESULTS <= 64,
@@ -147,7 +147,7 @@ inline int select_heuristic(const cublasLtMatmulHeuristicResult_t* heuristics, i
     best = LLMK_SM120_CUBLASLT_HEURISTIC_INDEX;
     if (best < 0) best = 0;
     if (best >= returnedResults) best = returnedResults - 1;
-#elif defined(LLMK_SM120_CUBLASLT_SELECT_MIN_WAVES)
+#elif defined(LLMK_SM120_CUBLASLT_SELECT_MIN_WAVES) || !defined(LLMK_SM120_CUBLASLT_SELECT_MAX_WAVES)
     for (int i = 1; i < returnedResults; ++i) {
         if (heuristics[i].wavesCount < heuristics[best].wavesCount) {
             best = i;

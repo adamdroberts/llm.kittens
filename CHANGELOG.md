@@ -8,6 +8,17 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Promoted the faster SM120 cuBLASLt fallback heuristic policy. The fallback
+  helper now requests 8 cuBLASLt heuristic results by default and, unless an
+  explicit heuristic index or max-wave selector is provided, chooses the
+  lowest-wave algorithm. The normal `SM120_USE_CUBLASLT_GEMM=1` build passed
+  `test_matmul` (`10/10`) and `test_attention` (all three smoke shapes).
+  TinyStories 3-step validation averaged `2532.28 ms` with steps `2534.57`,
+  `2530.16`, and `2534.40 ms`, slightly faster than the explicit
+  `LLMK_SM120_CUBLASLT_HEURISTIC_RESULTS=8` diagnostic and about `10.15%`
+  faster than the supplied llm.c baseline average (`2818.23 ms`). This improves
+  the CUDA fallback ceiling only; pure-TK dWeight and LM-head kernels remain
+  the optimization target.
 - Validated a current full SM120 cuBLASLt fallback diagnostic with cached plans
   and wider heuristic selection:
   `LLMK_SM120_USE_CUBLASLT_GEMM=1`, `LLMK_SM120_CACHE_CUBLASLT_PLANS=1`,
