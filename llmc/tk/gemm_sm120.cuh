@@ -68,6 +68,9 @@ constexpr int LOAD_BAR = 0;
 #ifndef LLMK_SM120_HUGE_N_M256
 #define LLMK_SM120_HUGE_N_M256 1
 #endif
+#ifndef LLMK_SM120_HUGE_N_FORWARD_SUPER_M
+#define LLMK_SM120_HUGE_N_FORWARD_SUPER_M LLMK_SM120_SUPER_M
+#endif
 
 #ifndef LLMK_SM120_GRAD_K_TILE
 #define LLMK_SM120_GRAD_K_TILE 64
@@ -544,13 +547,13 @@ using matmul_n96_nt_bias             = matmul_template<2, 4, LLMK_SM120_SUPER_M,
 using matmul_n96_nt_bias_gelu        = matmul_template<2, 4, LLMK_SM120_SUPER_M, false, true,  true,  true,  true,  sm120_detail::traits_gelu_128x96>;
 
 #if LLMK_SM120_HUGE_N_M256
-using matmul_huge_n_nt               = matmul_template<2, 4, LLMK_SM120_SUPER_M, false, true,  false, false, false, sm120_detail::traits_256x128>;
-using matmul_huge_n_nt_bias          = matmul_template<2, 4, LLMK_SM120_SUPER_M, false, true,  true,  false, false, sm120_detail::traits_256x128>;
-using matmul_huge_n_nt_bias_gelu     = matmul_template<2, 4, LLMK_SM120_SUPER_M, false, true,  true,  true,  true,  sm120_detail::traits_256x128>;
+using matmul_huge_n_nt               = matmul_template<2, 4, LLMK_SM120_HUGE_N_FORWARD_SUPER_M, false, true,  false, false, false, sm120_detail::traits_256x128>;
+using matmul_huge_n_nt_bias          = matmul_template<2, 4, LLMK_SM120_HUGE_N_FORWARD_SUPER_M, false, true,  true,  false, false, sm120_detail::traits_256x128>;
+using matmul_huge_n_nt_bias_gelu     = matmul_template<2, 4, LLMK_SM120_HUGE_N_FORWARD_SUPER_M, false, true,  true,  true,  true,  sm120_detail::traits_256x128>;
 #else
-using matmul_huge_n_nt               = matmul_template<2, 4, LLMK_SM120_SUPER_M, false, true,  false, false, false, sm120_detail::traits_128x128>;
-using matmul_huge_n_nt_bias          = matmul_template<2, 4, LLMK_SM120_SUPER_M, false, true,  true,  false, false, sm120_detail::traits_128x128>;
-using matmul_huge_n_nt_bias_gelu     = matmul_template<2, 4, LLMK_SM120_SUPER_M, false, true,  true,  true,  true,  sm120_detail::traits_128x128>;
+using matmul_huge_n_nt               = matmul_template<2, 4, LLMK_SM120_HUGE_N_FORWARD_SUPER_M, false, true,  false, false, false, sm120_detail::traits_128x128>;
+using matmul_huge_n_nt_bias          = matmul_template<2, 4, LLMK_SM120_HUGE_N_FORWARD_SUPER_M, false, true,  true,  false, false, sm120_detail::traits_128x128>;
+using matmul_huge_n_nt_bias_gelu     = matmul_template<2, 4, LLMK_SM120_HUGE_N_FORWARD_SUPER_M, false, true,  true,  true,  true,  sm120_detail::traits_128x128>;
 #endif
 
 // --- dInp (NN, C = A · B) ---

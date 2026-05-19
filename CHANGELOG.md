@@ -8,6 +8,19 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Added `LLMK_SM120_HUGE_N_FORWARD_SUPER_M` as a default-preserving hook for
+  only the huge-N forward NT aliases. The source default inherits
+  `LLMK_SM120_SUPER_M=7`, leaving qkv, FC, dInput, and dWeight aliases on
+  their existing swizzles unless a test build overrides it. Rejected
+  `LLMK_SM120_HUGE_N_FORWARD_SUPER_M=9`: the macro build passed
+  `test_attention` and `test_matmul` (`10/10`), but the focused benchmark
+  regressed the LM-head forward target to `25121.87 us` versus cuBLASLt
+  `22100.63 us` and still trailed on LM-head dInput/dWeight. TinyStories
+  3-step validation averaged `2642.28 ms` with steps `2635.58`, `2639.29`,
+  and `2645.28 ms`, slower than the current pure-TK rebaseline. The
+  no-override source build passed `test_attention` and `test_matmul` (`10/10`),
+  so the hook stays diagnostic-only and the source default remains
+  `SUPER_M=7`.
 - Added `LLMK_SM120_FORWARD_GELU_N96_K_TILE` as a default-preserving hook for
   the fused `N % 96 == 0` forward GeLU alias only. The source default inherits
   `LLMK_SM120_K_TILE=32`, so qkv forward and the accepted default fused-forward
