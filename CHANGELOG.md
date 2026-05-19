@@ -9,6 +9,15 @@ changelog is the diary; `goal.md` is the plan.
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
 - Rejected huge-N forward swizzle override
+  `LLMK_SM120_HUGE_N_FORWARD_SUPER_M=5`. The macro build passed
+  `test_matmul` (`10/10`) and `test_attention` (all three smoke shapes), but
+  the focused benchmark left LM-head forward behind cuBLASLt (`26394.98 us`
+  TK versus `23228.09 us`) and still trailed on LM-head dInput/dWeight.
+  TinyStories 3-step validation averaged `2741.33 ms` with steps `2728.05`,
+  `2750.29`, and `2732.38 ms`, slower than the current pure-TK source default
+  and the CUDA/cuBLASLt fallback measurements. The source default remains
+  `LLMK_SM120_HUGE_N_FORWARD_SUPER_M=7`.
+- Rejected huge-N forward swizzle override
   `LLMK_SM120_HUGE_N_FORWARD_SUPER_M=4`. The macro build passed
   `test_matmul` (`10/10`) and `test_attention` (all three smoke shapes), but
   the focused benchmark left LM-head forward well behind cuBLASLt
