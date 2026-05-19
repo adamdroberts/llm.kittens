@@ -123,10 +123,10 @@ older 256x64/128x64 choices; `LLMK_SM120_FORWARD_N96=0` remains an A/B escape
 hatch. The GPT-2 LM-head huge-N forward route defaults to a 256x128 tile
 (`LLMK_SM120_HUGE_N_M256=1`) after current RTX 5090 validation improved the
 source-default pure-TK 3-step run; `LLMK_SM120_HUGE_N_M256=0` keeps the older
-128x128 tile available for A/B tests. The huge-N/N128 K tile is now
-`LLMK_SM120_HUGE_N_K_TILE=16` after the current dWeight N128 route made the
-smaller K tile's dWeight gains outweigh the LM-head forward slowdown in the
-3-step validation. The shared SM120
+128x128 tile available for A/B tests. The huge-N forward K tile is now
+`LLMK_SM120_HUGE_N_K_TILE=32`, while N128 dWeight keeps its separate
+`LLMK_SM120_DWEIGHT_N128_K_TILE=16` trait so LM-head forward can use the
+larger-K tile without regressing TN dWeight. The shared SM120
 forward/huge-N tile swizzle now uses `LLMK_SM120_SUPER_M=7` by default;
 the old `8`, `9`, and `10` values remain useful A/B references.
 

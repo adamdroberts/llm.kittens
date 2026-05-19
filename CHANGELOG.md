@@ -8,6 +8,16 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Refreshed current-default SM120 per-step profiling after the decoupled K32
+  huge-N promotion. The `LLMK_SM120_PROFILE_TRAIN_STEP=1` build completed the
+  required TinyStories 3-step validation with steps `2709.38`, `2709.39`, and
+  `2711.79 ms` (`2710.59 ms` total average); the extra profiling events
+  account for the overhead versus the unprofiled `2663.76 ms` source default.
+  The dominant steady-state buckets are forward (`~804 ms`), FC projection
+  backward (`~346 ms`), FC backward (`~330 ms`), attention backward
+  (`~284 ms`), QKV backward (`~241 ms`), LM-head backward (`~204 ms`), and
+  final LayerNorm backward (`~178 ms`). The next optimization focus remains
+  GEMM/attention-heavy work, not optimizer/update overhead.
 - Rejected `LLMK_SM120_FORWARD_N96=0` under the decoupled K32 default stack.
   The macro build passed `test_matmul` (`10/10`) and `test_attention` (all
   three smoke shapes), but the focused benchmark confirmed that the 128x96
