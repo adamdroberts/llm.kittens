@@ -8,6 +8,17 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected a temporary fused-forward-only swizzle hook,
+  `LLMK_SM120_FORWARD_GELU_SUPER_M=8`, scoped to the `*_nt_bias_gelu` aliases
+  while leaving plain forward, dInput, and dWeight aliases on their accepted
+  defaults. The source candidate passed `test_attention` and `test_matmul`
+  (`10/10`). The focused benchmark did not close the targeted FC fused-forward
+  gap: FC fused forward was `1534.92 us` versus cuBLASLt `1471.32 us`, while
+  qkv forward stayed `1072.70 us` versus `1038.62 us`, FC-projection forward
+  stayed `1465.95 us` versus `1342.56 us`, and LM-head forward stayed
+  `24738.24 us` versus `22115.12 us`. TinyStories 3-step validation averaged
+  `2626.14 ms` with steps `2618.47`, `2622.93`, and `2629.35 ms`, slower than
+  the current pure-TK rebaseline, so the temporary hook was removed.
 - Rejected non-direct dInput swizzle `LLMK_SM120_DINP_SUPER_M=1`. The macro
   build passed `test_attention` and `test_matmul` (`10/10`). The focused
   benchmark improved qkv dInput in that run (`1019.07 us` versus cuBLASLt
