@@ -8,6 +8,19 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected a deferred LM-head dWeight split-K scheduling route. The temporary
+  source hook kept the promoted LM-head dWeight side-stream deferral but tried
+  to start the tied LM-head dWeight as split-K partial streams when
+  `LLMK_SM120_LARGE_DWEIGHT_SPLIT_K=2` scratch was available. The macro build
+  passed `test_attention` and eventually passed `test_matmul` (`10/10`), but
+  repeated matmul smoke runs also showed transient MLP-up forward failures
+  (`5.8750`, then `7.0000`, versus the `0.50` tolerance). The standalone
+  benchmark still left the material LM-head rows behind cuBLASLt, while the
+  macro TinyStories run averaged `2600.61 ms`. Promoting the same route as the
+  no-override source default validated at only `2616.13 ms` average with steps
+  `2601.18`, `2630.95`, and `2601.31 ms`, still behind the CUDA fallback
+  measurements and too marginal for the extra scratch residency, so the hook
+  was removed and LM-head dWeight stays on the one-part deferred side stream.
 - Rejected fused FC forward GeLU K-tile override
   `LLMK_SM120_FORWARD_GELU_N96_K_TILE=24` at compile time. ThunderKittens BF16
   shared/register tile constraints require the K tile columns to be divisible
