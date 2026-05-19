@@ -8,6 +8,17 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected a temporary qkv-forward-only swizzle route with
+  `LLMK_SM120_QKV_FORWARD_SUPER_M=4`. The guarded source hook routed only
+  regular qkv forward GEMMs (`N == 3*K`) through a dedicated N96 alias while
+  leaving fused FC, LM-head, dInput, and dWeight dispatch unchanged. The macro
+  build passed `test_matmul` (`10/10`) and `test_attention` (all three smoke
+  shapes), and the focused benchmark moved qkv forward to parity with cuBLASLt
+  (`1068.43 us` TK versus `1068.55 us`). The broader goal still failed:
+  attproj dWeight, fcproj dInput, and LM-head rows remained behind cuBLASLt,
+  and TinyStories 3-step validation averaged `2612.06 ms` with steps
+  `2607.34`, `2608.90`, and `2615.23 ms`, slightly slower than the promoted
+  superM11 default, so the temporary qkv route was removed.
 - Refreshed the current pure-TK SM120 phase profile after promoting
   `LLMK_SM120_DINP_DGELU_SUPER_M=11`, using
   `LLMK_SM120_PROFILE_TRAIN_STEP=1`. The profiling build completed the
