@@ -8,6 +8,13 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected retesting pure SM120 TK codegen with `-Xptxas=-dlcm=cg` under the
+  O3 source-default stack. The build warned that the explicit `cg` value
+  overrode the default `-dlcm=ca`, passed `test_attention`, and passed
+  `test_matmul` on rerun after an LM-head forward smoke failure. TinyStories
+  3-step validation averaged `3285.68 ms` with steps `3280.19`, `3281.14`,
+  and `3290.23 ms`, far slower than the `2623.57 ms` O3 source default. The
+  SM120 pure-TK codegen default remains `-Xptxas=-dlcm=ca`.
 - Rejected disabling SM120 dWeight direct accumulation after the TN direct
   B-column promotion. The pure-TK macro build
   (`LLMK_SM120_DWEIGHT_DIRECT_ACCUM=0`) passed `test_matmul` (`10/10`) and
