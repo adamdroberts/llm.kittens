@@ -8,6 +8,12 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected `LLMK_SM120_ATTN_FWD_BLOCK=24` at compile time. The SM120
+  attention kernel explicitly restricts forward block sizes to 16, 32, or 64,
+  and the candidate also violates ThunderKittens tile divisibility constraints
+  for shared vectors and register tiles. No smoke, benchmark, or TinyStories
+  validation was possible, so attention forward stays on the default
+  `LLMK_SM120_ATTN_FWD_BLOCK=32`.
 - Rejected fused FC forward GeLU K-tile override
   `LLMK_SM120_FORWARD_GELU_N96_K_TILE=8` at compile time. ThunderKittens BF16
   shared/register tile constraints require the K tile columns to be divisible
