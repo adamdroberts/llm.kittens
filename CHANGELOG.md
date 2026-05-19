@@ -8,6 +8,17 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected scoped fused dInput+dGELU swizzle
+  `LLMK_SM120_DINP_DGELU_SUPER_M=10`. The macro build passed `test_matmul`
+  (`10/10`) and `test_attention` (all three smoke shapes), and the focused
+  benchmark moved FC-projection dInput+dGELU slightly ahead of the prior
+  superM6 note (`1880.66 us` versus `1884.96 us`) while remaining ahead of
+  cuBLASLt in that run (`1950.67 us`). Broader qkv, attproj, fc forward, and
+  LM-head gaps remained. TinyStories 3-step validation averaged `2682.59 ms`
+  with steps `2673.56`, `2646.20`, and `2718.98 ms`, beating the original
+  llm.c baseline but not the current pure-TK source default or the
+  CUDA/cuBLASLt fallback measurements, so the source default remains inherited
+  from `LLMK_SM120_DINP_SUPER_M=8`.
 - Rejected fused FC forward GeLU K-tile override
   `LLMK_SM120_FORWARD_GELU_N96_K_TILE=16`. The macro build passed
   `test_matmul` (`10/10`) and `test_attention` (all three smoke shapes), but
