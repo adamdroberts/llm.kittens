@@ -8,6 +8,12 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected routing the SM120 huge-N dWeight TN alias through
+  `LLMK_SM120_DWEIGHT_SUPER_M` instead of the global `LLMK_SM120_SUPER_M`.
+  The source candidate passed `test_attention` and `test_matmul`, then
+  TinyStories 3-step validation averaged `2623.71 ms` with steps `2616.50`,
+  `2620.19`, and `2627.22 ms`, a near tie but still slower than the
+  `2623.57 ms` O3 source default, so the huge-N TN swizzle stays unchanged.
 - Rejected SM120 `LLMK_SM120_DWEIGHT_N128_K_TILE=8` at compile time. The
   N128 dWeight K-tile shrink trips ThunderKittens shared/register tile static
   assertions because 8-row swizzled BF16 tiles are not divisible by the base
