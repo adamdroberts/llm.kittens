@@ -8,6 +8,17 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected a shape-specific SM120 M768/N128 dWeight swizzle route
+  (`LLMK_SM120_DWEIGHT_M768_SUPER_M=3`). The source candidate passed
+  `test_attention` and `test_matmul`, and TinyStories 3-step validation
+  averaged `2621.36 ms` with steps `2615.21`, `2618.79`, and `2623.94 ms`.
+  Focused kernel timings did not justify the route: attproj dWeight was
+  `466.96 us` versus cuBLASLt `347.29 us`, attproj dWeight accumulate was
+  `467.72 us` versus `330.04 us`, fcproj dWeight was `1452.33 us` versus
+  `1352.03 us`, and fcproj dWeight accumulate was `1457.80 us` versus
+  `1354.56 us`. The small trainer improvement was treated as noise because
+  the targeted kernels remained slower than both the source default and the
+  CUDA variants, so the route was removed.
 - Rejected SM120 `LLMK_SM120_DINP_SUPER_M=7` for the non-direct dInput and
   dGELU routes. The macro build passed `test_attention`, but `test_matmul`
   failed the default dInput A*B row with max abs diff `6.5547` against the
