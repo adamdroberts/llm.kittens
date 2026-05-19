@@ -8,6 +8,13 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected retesting `LLMK_SM120_DINP_DIRECT_BCOL_SUPER_M=7` after the
+  cache-policy and extra-device-vectorization promotions. The macro build
+  passed `test_matmul` (`10/10`) and `test_attention` (all three smoke
+  shapes), but TinyStories 3-step validation averaged `2654.74 ms` with
+  steps `2649.12`, `2651.13`, and `2658.35 ms`, slower than the `2653.36 ms`
+  source default. The direct B-column dInput route keeps
+  `LLMK_SM120_DINP_DIRECT_BCOL_SUPER_M=8`.
 - Rejected retesting pure SM120 TK codegen with `FORCE_NVCC_O=2` after the
   cache-policy and extra-device-vectorization promotions. The O2 build passed
   `test_matmul` (`10/10`) and `test_attention` (all three smoke shapes), but
