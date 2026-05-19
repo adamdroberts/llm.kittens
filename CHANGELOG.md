@@ -8,6 +8,17 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected a temporary non-qkv dWeight split-K cap-16 hook at the smoke gate.
+  The candidate added a guarded `LLMK_SM120_NON_QKV_DWEIGHT_SPLIT_K_CAP=16`
+  path and resized trainer/benchmark scratch so attention-projection, FC, and
+  FC-projection dWeight rows could actually launch 16 split-K parts while qkv
+  stayed at the source split. The focused benchmark was mixed and worsened the
+  targeted attention-projection dWeight row (`497.45 us` TK versus
+  `327.57 us` cuBLASLt) plus accumulated dWeight (`538.83 us` versus
+  `330.99 us`). `test_attention` passed all three smoke shapes, but
+  `test_matmul` failed the MLP-up forward row (`7.3281` max diff) and the
+  accumulated dWeight row (`2.6250` max diff), so no TinyStories validation was
+  run and the temporary hook was removed.
 - Promoted `LLMK_SM120_DINP_DIRECT_BCOL_SUPER_M=8` after retesting the
   direct B-column dInput swizzle on top of the accepted `K_CAP=3072` source.
   The macro retest passed `test_matmul` (`10/10`) and `test_attention` (all
