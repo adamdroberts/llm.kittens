@@ -8,6 +8,15 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected `LLMK_SM120_FORWARD_N96=0` under the decoupled K32 default stack.
+  The macro build passed `test_matmul` (`10/10`) and `test_attention` (all
+  three smoke shapes), but the focused benchmark confirmed that the 128x96
+  forward tile is still needed: qkv forward regressed to `1241.34 us`,
+  attention-projection forward to `435.84 us`, FC fused forward to
+  `1796.82 us`, FC projection forward to `1626.94 us`, and LM-head forward to
+  `25152.47 us`. TinyStories 3-step validation regressed to `2718.36 ms` total
+  average with steps `2717.12`, `2716.66`, and `2720.06 ms`, so
+  `LLMK_SM120_FORWARD_N96` stays enabled.
 - Rejected non-huge forward `LLMK_SM120_K_TILE=64` on top of the decoupled
   K32 huge-N default. The macro build passed `test_matmul` (`10/10`) and
   `test_attention` (all three smoke shapes), but the focused benchmark
