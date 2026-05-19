@@ -8,6 +8,13 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected CUDA bias-gradient block size `LLMK_SM120_BIAS_BLOCK_SIZE=704`.
+  This fills the gap between previously rejected 640- and 768-thread bias
+  reduction launches. The macro build passed `test_attention` and
+  `test_matmul` (`10/10`), but TinyStories 3-step validation averaged
+  `2626.37 ms` with steps `2620.43`, `2622.99`, and `2629.74 ms`, slower than
+  the current pure-TK rebaseline, so the source keeps the 512-thread bias
+  block.
 - Rejected direct-Bcol dInput swizzle `LLMK_SM120_DINP_DIRECT_BCOL_SUPER_M=14`
   at the matmul smoke gate. The macro build passed `test_attention`, but
   `test_matmul` failed the GPT-2 MLP-up forward row twice (`5.2422` then
