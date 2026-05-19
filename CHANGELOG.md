@@ -8,6 +8,12 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected retesting `LLMK_SM120_ATTN_BWD_BLOCK=32` after the SM120
+  cache-policy and extra-device-vectorization promotions. The macro build
+  passed `test_matmul` (`10/10`) and `test_attention` (all three smoke
+  shapes), but TinyStories 3-step validation regressed to `2664.34 ms` with
+  steps `2659.36`, `2661.76`, and `2666.92 ms`, slower than the `2653.36 ms`
+  source default. Packed-QKV attention backward remains on the 16-row tile.
 - Rejected retesting `LLMK_SM120_DINP_DIRECT_BCOL_SUPER_M=7` after the
   cache-policy and extra-device-vectorization promotions. The macro build
   passed `test_matmul` (`10/10`) and `test_attention` (all three smoke
