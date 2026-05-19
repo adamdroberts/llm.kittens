@@ -8,6 +8,13 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected `LLMK_SM120_DWEIGHT_N128_K_TILE=48` at the matmul smoke gate. The
+  macro build completed, but `test_matmul` aborted in the SM120 N128 TN dWeight
+  launch because the smoke dWeight shape uses `K=1024`, which is not divisible
+  by the candidate `K_TILE=48`; the runtime assertion was
+  `gemm_sm120: K must be a multiple of the kernel's K_TILE`. No benchmark or
+  TinyStories validation was run because the candidate is not shape-valid for
+  the existing dWeight coverage.
 - Rejected a temporary FC-projection-forward-only swizzle hook with
   `LLMK_SM120_FCPROJ_FORWARD_SUPER_M=4`. The source hook routed only GPT-2
   FC-projection forward (`N == 768`, `K == 3072`) through a separate N96
