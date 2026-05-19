@@ -8,6 +8,18 @@ changelog is the diary; `goal.md` is the plan.
 
 ## 2026-05-19 — SM120 RTX 5090 pure-TK optimization rounds
 
+- Rejected a large-K-only direct-Bcol dInput swizzle split with
+  `LLMK_SM120_DINP_DIRECT_BCOL_LARGEK_SUPER_M=4`. The temporary alias targeted
+  only LM-head-style large-K direct-Bcol dInput and left small-K direct-Bcol
+  GEMMs on the accepted `SUPER_M=8` route. The build passed `test_attention`;
+  the first `test_matmul` run hit the known transient MLP-up forward row, and
+  an immediate rerun passed `10/10`. The focused benchmark did not close the
+  targeted LM-head dInput gap (`22252.03 us` versus cuBLASLt `21668.04 us`) and
+  worsened attention-projection dInput (`406.75 us` versus `366.94 us`).
+  TinyStories 3-step validation averaged `2622.16 ms` with steps `2617.65`,
+  `2619.38`, and `2624.95 ms`, essentially tied but slower than the current
+  pure-TK rebaseline, so the temporary large-K alias and dispatch hook were
+  removed.
 - Rejected the combined dWeight macro probe
   `LLMK_SM120_DWEIGHT_SUPER_M=1` with `LLMK_SM120_DWEIGHT_SPLIT_K=16`. The
   combination was meant to pair the lower dWeight swizzle with the qkv-only
