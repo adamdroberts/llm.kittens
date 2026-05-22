@@ -4,13 +4,16 @@ SM120 GPT-2 matmul microbenchmark.
 Build with:
   make bench_sm120_matmul DEVICE_ARCH=SM120 NO_MULTI_GPU=1 NO_USE_MPI=1
 
-This compares the current pure ThunderKittens SM120 GEMM launch path against the
-SM120 cuBLASLt fallback for the GPT-2 124M shapes used by train_gpt2cu.
+This compares the current pure ThunderKittens SM120 GEMM launch path against
+cuBLASLt and cuBLAS for the GPT-2 124M shapes used by train_gpt2cu.
 */
 #include <cstdio>
 #include <cstdlib>
+#include <algorithm>
+#include <vector>
 #include <cuda_runtime.h>
 #include <cuda_bf16.h>
+#include <cublas_v2.h>
 
 #ifndef LLMK_SM120_USE_CUBLASLT_GEMM
 #define LLMK_SM120_USE_CUBLASLT_GEMM
@@ -18,6 +21,7 @@ SM120 cuBLASLt fallback for the GPT-2 124M shapes used by train_gpt2cu.
 #endif
 
 cudaDeviceProp deviceProp;
+static cublasHandle_t cublas_handle = nullptr;
 
 #include "llmc/matmul.cuh"
 #include "llmc/gelu.cuh"
@@ -42,10 +46,21 @@ struct Shape {
     int K;
     bool bias;
     bool gelu;
+    bool dgelu;
 };
 
 static void fill_bytes(void* ptr, size_t bytes, int value) {
     cudaCheck(cudaMemset(ptr, value, bytes));
+}
+
+static int bench_repeats() {
+    static int repeats = [] {
+        const char* env = std::getenv("LLMK_BENCH_REPEATS");
+        if (env == nullptr || env[0] == '\0') return 3;
+        int parsed = std::atoi(env);
+        return parsed > 0 ? parsed : 1;
+    }();
+    return repeats;
 }
 
 template <typename Fn>
@@ -55,20 +70,26 @@ static float bench_us(Fn&& fn, int warmup, int iters) {
     }
     cudaCheck(cudaDeviceSynchronize());
 
-    cudaEvent_t start, stop;
-    cudaCheck(cudaEventCreate(&start));
-    cudaCheck(cudaEventCreate(&stop));
-    cudaCheck(cudaEventRecord(start));
-    for (int i = 0; i < iters; ++i) {
-        fn();
+    std::vector<float> samples;
+    samples.reserve(bench_repeats());
+    for (int repeat = 0; repeat < bench_repeats(); ++repeat) {
+        cudaEvent_t start, stop;
+        cudaCheck(cudaEventCreate(&start));
+        cudaCheck(cudaEventCreate(&stop));
+        cudaCheck(cudaEventRecord(start));
+        for (int i = 0; i < iters; ++i) {
+            fn();
+        }
+        cudaCheck(cudaEventRecord(stop));
+        cudaCheck(cudaEventSynchronize(stop));
+        float ms = 0.0f;
+        cudaCheck(cudaEventElapsedTime(&ms, start, stop));
+        cudaCheck(cudaEventDestroy(start));
+        cudaCheck(cudaEventDestroy(stop));
+        samples.push_back(ms * 1000.0f / iters);
     }
-    cudaCheck(cudaEventRecord(stop));
-    cudaCheck(cudaEventSynchronize(stop));
-    float ms = 0.0f;
-    cudaCheck(cudaEventElapsedTime(&ms, start, stop));
-    cudaCheck(cudaEventDestroy(start));
-    cudaCheck(cudaEventDestroy(stop));
-    return ms * 1000.0f / iters;
+    std::sort(samples.begin(), samples.end());
+    return samples[samples.size() / 2];
 }
 
 static void tk_forward(floatX* out, const floatX* inp, const floatX* weight,
@@ -173,6 +194,48 @@ static void cublaslt_forward_gelu(floatX* out, floatX* pre_gelu, const floatX* i
         /*accumulate=*/false, /*pre_gelu=*/pre_gelu, /*backward=*/false);
 }
 
+static void cublas_check(cublasStatus_t status, const char* file, int line) {
+    if (status != CUBLAS_STATUS_SUCCESS) {
+        fprintf(stderr, "cuBLAS error %d at %s:%d\n", (int)status, file, line);
+        exit(EXIT_FAILURE);
+    }
+}
+
+#define CUBLAS_CHECK(status) cublas_check((status), __FILE__, __LINE__)
+
+static void cublas_gemm(floatX* out, const floatX* a, const floatX* b,
+                        int m, int n, int k, int lda, int ldb, int ldc,
+                        cublasOperation_t transa, cublasOperation_t transb,
+                        bool accumulate, cudaStream_t stream) {
+    const float alpha = 1.0f;
+    const float beta = accumulate ? 1.0f : 0.0f;
+    CUBLAS_CHECK(cublasSetStream(cublas_handle, stream));
+    CUBLAS_CHECK(cublasGemmEx(
+        cublas_handle, transa, transb, m, n, k,
+        &alpha,
+        a, CUDA_R_16BF, lda,
+        b, CUDA_R_16BF, ldb,
+        &beta,
+        out, CUDA_R_16BF, ldc,
+        CUBLAS_COMPUTE_32F,
+        CUBLAS_GEMM_DEFAULT));
+}
+
+static void cublas_forward(floatX* out, const floatX* inp, const floatX* weight,
+                           const floatX* bias, const Shape& s, cudaStream_t stream) {
+    // Row-major out(M,N)=inp(M,K)*weight(N,K)^T as column-major out(N,M).
+    cublas_gemm(out, weight, inp, s.N, s.M, s.K, s.K, s.K, s.N,
+                CUBLAS_OP_T, CUBLAS_OP_N, false, stream);
+    add_bias(out, bias, s.M, s.N, stream);
+}
+
+static void cublas_forward_gelu(floatX* out, floatX* pre_gelu, const floatX* inp,
+                                const floatX* weight, const floatX* bias,
+                                const Shape& s, cudaStream_t stream) {
+    cublas_forward(pre_gelu, inp, weight, bias, s, stream);
+    gelu_forward(out, pre_gelu, s.M * s.N, stream);
+}
+
 static void tk_dinp(floatX* out, const floatX* dout, const floatX* weight,
                     const Shape& s, cudaStream_t stream) {
     matmul_dispatch_tk_ab(out, dout, weight, s.M, s.K, s.N, stream);
@@ -187,6 +250,39 @@ static void cublaslt_dinp(floatX* out, const floatX* dout, const floatX* weight,
         /*accumulate=*/false, /*pre_gelu=*/nullptr, /*backward=*/true);
 }
 
+static void cublas_dinp(floatX* out, const floatX* dout, const floatX* weight,
+                        const Shape& s, cudaStream_t stream) {
+    // Row-major out(M,K)=dout(M,N)*weight(N,K) as column-major out(K,M).
+    cublas_gemm(out, weight, dout, s.K, s.M, s.N, s.K, s.N, s.K,
+                CUBLAS_OP_N, CUBLAS_OP_N, false, stream);
+}
+
+static void tk_dinp_dgelu(floatX* out, const floatX* dout, const floatX* weight,
+                          const floatX* pre_gelu, const Shape& s, cudaStream_t stream) {
+    matmul_dispatch_tk_ab(out, dout, weight, s.M, s.K, s.N, stream, pre_gelu, true);
+}
+
+static void cublaslt_dinp_dgelu(floatX* out, const floatX* dout, const floatX* weight,
+                                const floatX* pre_gelu, const Shape& s, cudaStream_t stream) {
+    llmk::cublaslt_sm120::matmul(
+        out, weight, dout, nullptr, s.K, s.M, s.N, stream,
+        /*transA=*/false, /*transB=*/false,
+        /*batch_count=*/0, /*strideA=*/0, /*strideB=*/0, /*strideOut=*/0,
+        /*accumulate=*/false, /*pre_gelu=*/const_cast<floatX*>(pre_gelu), /*backward=*/true);
+}
+
+static void cublaslt_dinp_explicit_dgelu(floatX* out, const floatX* dout, const floatX* weight,
+                                         const floatX* pre_gelu, const Shape& s, cudaStream_t stream) {
+    cublaslt_dinp(out, dout, weight, s, stream);
+    gelu_backward_inplace(out, pre_gelu, s.M * s.K, stream);
+}
+
+static void cublas_dinp_explicit_dgelu(floatX* out, const floatX* dout, const floatX* weight,
+                                       const floatX* pre_gelu, const Shape& s, cudaStream_t stream) {
+    cublas_dinp(out, dout, weight, s, stream);
+    gelu_backward_inplace(out, pre_gelu, s.M * s.K, stream);
+}
+
 static void tk_dweight(floatX* out, const floatX* dout, const floatX* inp,
                        floatX* scratch, size_t scratch_elements,
                        const Shape& s, cudaStream_t stream) {
@@ -197,6 +293,23 @@ static void tk_dweight(floatX* out, const floatX* dout, const floatX* inp,
     }
 }
 
+static void tk_dweight_accumulate(floatX* out, const floatX* dout, const floatX* inp,
+                                  floatX* scratch, size_t scratch_elements,
+                                  const Shape& s, cudaStream_t stream) {
+    const size_t out_elements = (size_t)s.N * s.K;
+    if (matmul_dispatch_tk_atb_splitk(
+            out, dout, inp, s.N, s.K, s.M, stream,
+            /*accumulate=*/true, scratch, scratch_elements)) {
+        return;
+    }
+    assert(scratch != nullptr && scratch_elements >= out_elements);
+    matmul_dispatch_tk_atb(scratch, dout, inp, s.N, s.K, s.M, stream);
+    const int block = 256;
+    const int grid = CEIL_DIV(out_elements, block);
+    matmul_add_inplace_kernel<<<grid, block, 0, stream>>>(out, scratch, out_elements);
+    cudaCheck(cudaGetLastError());
+}
+
 static void cublaslt_dweight(floatX* out, const floatX* dout, const floatX* inp,
                              const Shape& s, cudaStream_t stream) {
     llmk::cublaslt_sm120::matmul(
@@ -204,6 +317,28 @@ static void cublaslt_dweight(floatX* out, const floatX* dout, const floatX* inp,
         /*transA=*/false, /*transB=*/true,
         /*batch_count=*/0, /*strideA=*/0, /*strideB=*/0, /*strideOut=*/0,
         /*accumulate=*/false, /*pre_gelu=*/nullptr, /*backward=*/true);
+}
+
+static void cublas_dweight(floatX* out, const floatX* dout, const floatX* inp,
+                           const Shape& s, cudaStream_t stream) {
+    // Row-major out(N,K)=dout(M,N)^T*inp(M,K) as column-major out(K,N).
+    cublas_gemm(out, inp, dout, s.K, s.N, s.M, s.K, s.N, s.K,
+                CUBLAS_OP_N, CUBLAS_OP_T, false, stream);
+}
+
+static void cublaslt_dweight_accumulate(floatX* out, const floatX* dout, const floatX* inp,
+                                        const Shape& s, cudaStream_t stream) {
+    llmk::cublaslt_sm120::matmul(
+        out, inp, dout, nullptr, s.K, s.N, s.M, stream,
+        /*transA=*/false, /*transB=*/true,
+        /*batch_count=*/0, /*strideA=*/0, /*strideB=*/0, /*strideOut=*/0,
+        /*accumulate=*/true, /*pre_gelu=*/nullptr, /*backward=*/true);
+}
+
+static void cublas_dweight_accumulate(floatX* out, const floatX* dout, const floatX* inp,
+                                      const Shape& s, cudaStream_t stream) {
+    cublas_gemm(out, inp, dout, s.K, s.N, s.M, s.K, s.N, s.K,
+                CUBLAS_OP_N, CUBLAS_OP_T, true, stream);
 }
 
 static void bench_shape(const Shape& s) {
@@ -239,13 +374,15 @@ static void bench_shape(const Shape& s) {
         float tk_fused = bench_us([&] { tk_forward_gelu(O, PreGelu, A, W, Bias, s, 0); }, warmup, iters);
         float tk_explicit = bench_us([&] { tk_forward_explicit_gelu(O, PreGelu, A, W, Bias, s, 0); }, warmup, iters);
         float cb_fwd = bench_us([&] { cublaslt_forward_gelu(O, PreGelu, A, W, Bias, s, 0); }, warmup, iters);
-        printf("  fwd+GeLU TK fused %9.2f us | TK explicit %9.2f us | cuBLASLt %9.2f us | explicit/cuBLASLt %.2fx\n",
-               tk_fused, tk_explicit, cb_fwd, tk_explicit / cb_fwd);
+        float cublas_fwd = bench_us([&] { cublas_forward_gelu(O, PreGelu, A, W, Bias, s, 0); }, warmup, iters);
+        printf("  fwd+GeLU TK fused %9.2f us | TK explicit %9.2f us | cuBLASLt %9.2f us | cuBLAS explicit %9.2f us | explicit/cuBLASLt %.2fx\n",
+               tk_fused, tk_explicit, cb_fwd, cublas_fwd, tk_explicit / cb_fwd);
     } else {
         float tk_fwd = bench_us([&] { tk_forward(O, A, W, Bias, s, 0); }, warmup, iters);
         float cb_fwd = bench_us([&] { cublaslt_forward(O, A, W, Bias, s, 0); }, warmup, iters);
-        printf("  fwd      TK %9.2f us | cuBLASLt %9.2f us | TK/cuBLASLt %.2fx\n",
-               tk_fwd, cb_fwd, tk_fwd / cb_fwd);
+        float cublas_fwd = bench_us([&] { cublas_forward(O, A, W, Bias, s, 0); }, warmup, iters);
+        printf("  fwd      TK %9.2f us | cuBLASLt %9.2f us | cuBLAS %9.2f us | TK/cuBLASLt %.2fx\n",
+               tk_fwd, cb_fwd, cublas_fwd, tk_fwd / cb_fwd);
     }
 
     floatX* DInp = nullptr;
@@ -253,8 +390,26 @@ static void bench_shape(const Shape& s) {
     fill_bytes(DInp, a_bytes, 0);
     float tk_di = bench_us([&] { tk_dinp(DInp, O, W, s, 0); }, warmup, iters);
     float cb_di = bench_us([&] { cublaslt_dinp(DInp, O, W, s, 0); }, warmup, iters);
-    printf("  dInp   TK %9.2f us | cuBLASLt %9.2f us | TK/cuBLASLt %.2fx\n",
-           tk_di, cb_di, tk_di / cb_di);
+    float cublas_di = bench_us([&] { cublas_dinp(DInp, O, W, s, 0); }, warmup, iters);
+    printf("  dInp   TK %9.2f us | cuBLASLt %9.2f us | cuBLAS %9.2f us | TK/cuBLASLt %.2fx\n",
+           tk_di, cb_di, cublas_di, tk_di / cb_di);
+
+    if (s.dgelu) {
+        floatX* PreDgelu = nullptr;
+        cudaCheck(cudaMalloc(&PreDgelu, a_bytes));
+        fill_bytes(PreDgelu, a_bytes, 4);
+        float tk_dg = bench_us([&] { tk_dinp_dgelu(DInp, O, W, PreDgelu, s, 0); }, warmup, iters);
+        float cb_dg = bench_us([&] { cublaslt_dinp_dgelu(DInp, O, W, PreDgelu, s, 0); }, warmup, iters);
+        float cb_explicit_dg = bench_us([&] {
+            cublaslt_dinp_explicit_dgelu(DInp, O, W, PreDgelu, s, 0);
+        }, warmup, iters);
+        float cublas_explicit_dg = bench_us([&] {
+            cublas_dinp_explicit_dgelu(DInp, O, W, PreDgelu, s, 0);
+        }, warmup, iters);
+        printf("  dInp+dGeLU TK %9.2f us | cuBLASLt fused %9.2f us | cuBLASLt explicit %9.2f us | cuBLAS explicit %9.2f us | explicit/fused %.2fx\n",
+               tk_dg, cb_dg, cb_explicit_dg, cublas_explicit_dg, cb_explicit_dg / cb_dg);
+        cudaCheck(cudaFree(PreDgelu));
+    }
     cudaCheck(cudaFree(DInp));
 
     floatX* DW = nullptr;
@@ -268,8 +423,17 @@ static void bench_shape(const Shape& s) {
                    (size_t)LLMK_SM120_DWEIGHT_SPLIT_K * s.N * s.K, s, 0);
     }, warmup, iters);
     float cb_dw = bench_us([&] { cublaslt_dweight(DW, O, A, s, 0); }, warmup, iters);
-    printf("  dW     TK %9.2f us | cuBLASLt %9.2f us | TK/cuBLASLt %.2fx\n",
-           tk_dw, cb_dw, tk_dw / cb_dw);
+    float cublas_dw = bench_us([&] { cublas_dweight(DW, O, A, s, 0); }, warmup, iters);
+    printf("  dW     TK %9.2f us | cuBLASLt %9.2f us | cuBLAS %9.2f us | TK/cuBLASLt %.2fx\n",
+           tk_dw, cb_dw, cublas_dw, tk_dw / cb_dw);
+    float tk_dw_acc = bench_us([&] {
+        tk_dweight_accumulate(DW, O, A, DWScratch,
+                              (size_t)LLMK_SM120_DWEIGHT_SPLIT_K * s.N * s.K, s, 0);
+    }, warmup, iters);
+    float cb_dw_acc = bench_us([&] { cublaslt_dweight_accumulate(DW, O, A, s, 0); }, warmup, iters);
+    float cublas_dw_acc = bench_us([&] { cublas_dweight_accumulate(DW, O, A, s, 0); }, warmup, iters);
+    printf("  dW+accum TK %9.2f us | cuBLASLt %9.2f us | cuBLAS %9.2f us | TK/cuBLASLt %.2fx\n",
+           tk_dw_acc, cb_dw_acc, cublas_dw_acc, tk_dw_acc / cb_dw_acc);
     cudaCheck(cudaFree(DW));
     cudaCheck(cudaFree(DWScratch));
 
@@ -284,24 +448,30 @@ int main() {
     cudaCheck(cudaSetDevice(0));
     cudaCheck(cudaGetDeviceProperties(&deviceProp, 0));
     printf("Device: %s (sm_%d%d)\n", deviceProp.name, deviceProp.major, deviceProp.minor);
+    printf("Timing: median of %d event samples per provider (set LLMK_BENCH_REPEATS to override)\n",
+           bench_repeats());
     if (deviceProp.major != 12) {
         fprintf(stderr, "bench_sm120_matmul expects an SM120-class GPU\n");
         return 1;
     }
     llmk::cublaslt_sm120::init();
+    CUBLAS_CHECK(cublasCreate(&cublas_handle));
 
     const int M = 64 * 1024;
     Shape shapes[] = {
-        {"qkv", M, 3 * 768, 768, true, false},
-        {"attproj", M, 768, 768, true, false},
-        {"fc", M, 4 * 768, 768, true, true},
-        {"fcproj", M, 768, 4 * 768, true, false},
-        {"lmhead", M, 50304, 768, false, false},
+        {"qkv", M, 3 * 768, 768, true, false, false},
+        {"attproj", M, 768, 768, true, false, false},
+        {"fc", M, 4 * 768, 768, true, true, false},
+        {"fcproj", M, 768, 4 * 768, true, false, true},
+        {"lmhead", M, 50304, 768, false, false, false},
     };
     for (const Shape& s : shapes) {
         bench_shape(s);
     }
 
+    CUBLAS_CHECK(cublasDestroy(cublas_handle));
     llmk::cublaslt_sm120::destroy();
     return 0;
 }
+
+#undef CUBLAS_CHECK

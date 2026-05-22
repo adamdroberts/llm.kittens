@@ -1,0 +1,919 @@
+{
+  "checks": [
+    {
+      "detail": "scratch/sm120_rounds/current-sm120-selection.md exists and has the current selection header",
+      "name": "selection markdown",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/current-sm120-selection.md lists resolved optional-stack decisions",
+      "name": "selection optional decision table",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/current-sm120-selection.md lists project-wide Torch fastest rows",
+      "name": "selection project-wide Torch table",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/current-sm120-selection.md lists disposition and next action for every project-wide Torch fastest row",
+      "name": "selection project-wide Torch disposition table",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/current-sm120-selection.md lists all project-wide fastest rows",
+      "name": "selection project-wide fastest table",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/current-sm120-selection.md lists project-wide fastest rows used by trainer",
+      "name": "selection project-wide used table",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/current-sm120-selection.md lists project-wide fastest rows resolved away from trainer",
+      "name": "selection project-wide divergence table",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/current-sm120-selection.md lists fastest rows not used by trainer by call-path kind",
+      "name": "selection fastest-row debt table",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/current-sm120-selection.md lists extra project-wide benchmark rows",
+      "name": "selection extra project-wide table",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/current-sm120-selection.md lists attention route totals",
+      "name": "selection attention route table",
+      "status": "pass"
+    },
+    {
+      "detail": "selection points to scratch/sm120_rounds/codex_sm120_runtime_grad_zero_default_audit_x10_20260522",
+      "name": "native round path",
+      "status": "pass"
+    },
+    {
+      "detail": "selection points to scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522",
+      "name": "optional round path",
+      "status": "pass"
+    },
+    {
+      "detail": "current selection records TinyStories training evidence at scratch/sm120_rounds/codex_sm120_runtime_grad_zero_default_audit_x10_20260522/train_gpt2cu.log",
+      "name": "native training evidence",
+      "status": "pass"
+    },
+    {
+      "detail": "current selection has 0 active promotion candidates",
+      "name": "active promotion count",
+      "status": "pass"
+    },
+    {
+      "detail": "current selection has 43/43 required trainer rows",
+      "name": "native trainer rows",
+      "status": "pass"
+    },
+    {
+      "detail": "native trainer rows preserve source selected-backends stack, time, fallback, scope, and provenance fields; mismatches=0",
+      "name": "native trainer source row content",
+      "status": "pass"
+    },
+    {
+      "detail": "source selected-backends rows match their generated scoreboard Selected Backend Rows; native_mismatches=0 optional_mismatches=0",
+      "name": "source selected-backend scoreboard content",
+      "status": "pass"
+    },
+    {
+      "detail": "source selected-backends metadata records schema, run identity, selection policy, benchmark counts, and Torch/LibTorch coverage; native_gaps=[] optional_gaps=[]",
+      "name": "source selected-backend metadata",
+      "status": "pass"
+    },
+    {
+      "detail": "current selection native extra benchmark rows match source selected-backends non-objective rows; count=3 expected=3 missing=0 extra=0 mismatches=0",
+      "name": "native extra selected row content",
+      "status": "pass"
+    },
+    {
+      "detail": "6 inactive native rows are mapped to fallback stacks",
+      "name": "inactive native fallback mapping",
+      "status": "pass"
+    },
+    {
+      "detail": "0 Torch rows are in the trainer mix and all are trainer-callable",
+      "name": "Torch trainer eligibility",
+      "status": "pass"
+    },
+    {
+      "detail": "selection records 18 resolved optional-stack decisions",
+      "name": "resolved optional decisions",
+      "status": "pass"
+    },
+    {
+      "detail": "selection records 50 fastest observed rows from the optional-stack round",
+      "name": "project-wide fastest rows",
+      "status": "pass"
+    },
+    {
+      "detail": "selection records 9 Torch fastest rows; missing_from_project=0",
+      "name": "project-wide Torch fastest rows",
+      "status": "pass"
+    },
+    {
+      "detail": "project-wide fastest rows use native trainer evidence when it beats the optional row; superseded=0",
+      "name": "project-wide native supersession",
+      "status": "pass"
+    },
+    {
+      "detail": "every Torch fastest row is accounted for as trainer-used, resolved, or extra; used=0 resolved=6 extra=3 unpartitioned=0 overlap=0",
+      "name": "project-wide Torch fastest partition",
+      "status": "pass"
+    },
+    {
+      "detail": "every Torch fastest row carries a trainer-used/resolved/extra disposition and an action or reason; rows=9/9 missing=0 extra=0 bad=0 missing_action=0",
+      "name": "project-wide Torch fastest disposition",
+      "status": "pass"
+    },
+    {
+      "detail": "every project-wide fastest objective row is trainer-selected or has an inactive decision; unresolved=0",
+      "name": "project-wide unresolved objective rows",
+      "status": "pass"
+    },
+    {
+      "detail": "current selection records 10 resolved project-wide divergences",
+      "name": "project-wide resolved divergence count",
+      "status": "pass"
+    },
+    {
+      "detail": "current selection lists the project-wide fastest rows that are used by trainer; count=33 expected=33 missing=0 extra=0",
+      "name": "project-wide used row identity",
+      "status": "pass"
+    },
+    {
+      "detail": "current selection lists the project-wide fastest rows resolved away from trainer; missing=0 extra=0",
+      "name": "project-wide resolved row identity",
+      "status": "pass"
+    },
+    {
+      "detail": "current selection summarizes fastest rows not used by trainer by call path and decision; call_paths={'libtorch_raw_pointer_prototype': 2, 'operator_or_reference_prototype': 2, 'profiler_runtime_benchmark_only': 3, 'trainer_or_cxx_route': 3} expected={'libtorch_raw_pointer_prototype': 2, 'operator_or_reference_prototype': 2, 'profiler_runtime_benchmark_only': 3, 'trainer_or_cxx_route': 3} statuses={'layout_rewrite_only': 2, 'profiler_only_runtime_row': 3, 'rejected_x10_selector': 3, 'rejected_x10_trainer_route': 2} expected_statuses={'layout_rewrite_only': 2, 'profiler_only_runtime_row': 3, 'rejected_x10_selector': 3, 'rejected_x10_trainer_route': 2}",
+      "name": "project-wide resolved row debt counts",
+      "status": "pass"
+    },
+    {
+      "detail": "trainer/C++ callable fastest rows resolved away from trainer carry trainer-smoke or x10 stability evidence; with_evidence=3/3 missing=0",
+      "name": "project-wide trainer-callable debt evidence",
+      "status": "pass"
+    },
+    {
+      "detail": "project-wide fastest rows resolved away from trainer link to resolved decision rows, and non-trainer rows carry action metadata there; linked=10/10 actionable=6/6",
+      "name": "project-wide resolved decision linkage",
+      "status": "pass"
+    },
+    {
+      "detail": "current selection lists the extra project-wide benchmark rows; missing=0 extra=0",
+      "name": "project-wide extra row identity",
+      "status": "pass"
+    },
+    {
+      "detail": "current selection project-wide used/resolved/extra rows preserve the full source project-fastest row content; mismatches=0",
+      "name": "project-wide partition row content",
+      "status": "pass"
+    },
+    {
+      "detail": "project-wide fastest rows resolved away from trainer carry decision reason and evidence; missing=0",
+      "name": "project-wide resolved divergence detail",
+      "status": "pass"
+    },
+    {
+      "detail": "Torch fc dW resolved row carries standalone LibTorch C++ parity/timing evidence from scratch/sm120_rounds/libtorch_matmul_fc_20260521/bench_sm120_libtorch_matmul.log",
+      "name": "Torch fc dWeight LibTorch rejection evidence",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522/bench_sm120_libtorch_matmul.json or scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522/bench_sm120_libtorch_matmul.log records standalone C++ cached from_blob route evidence",
+      "name": "LibTorch all-shape dWeight route marker",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522/bench_sm120_libtorch_matmul.json exists for machine-readable all-shape evidence",
+      "name": "LibTorch all-shape dWeight structured evidence",
+      "status": "pass"
+    },
+    {
+      "detail": "supplemental LibTorch C++ dWeight probe covers every GPT-2 dW/dW+accum shape; timing_missing=0 parity_missing=0",
+      "name": "LibTorch all-shape dWeight parity/timing coverage",
+      "status": "pass"
+    },
+    {
+      "detail": "supplemental LibTorch C++ dWeight rows are slower than the effective native trainer rows for 10/10 shapes; missing_native=0",
+      "name": "LibTorch all-shape dWeight rejection comparison",
+      "status": "pass"
+    },
+    {
+      "detail": "Torch/Torch C++ runtime-memory rows resolved away from trainer carry raw-pointer parity/timing evidence from scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522/bench_sm120_libtorch_runtime.log and trainer-link evidence from scratch/sm120_rounds/libtorch_trainer_link_20260521/validate_libtorch_trainer_link.log; rows=4 missing=0",
+      "name": "Torch runtime memory LibTorch rejection evidence",
+      "status": "pass"
+    },
+    {
+      "detail": "current selection records 7 extra project-wide benchmark rows",
+      "name": "project-wide extra row count",
+      "status": "pass"
+    },
+    {
+      "detail": "every extra project-wide benchmark row has an explicit reason; missing=0",
+      "name": "project-wide extra row reasons",
+      "status": "pass"
+    },
+    {
+      "detail": "native/resolved/project selection rows reference existing timing, config, stack-probe, and correctness evidence; missing=0",
+      "name": "selection row provenance",
+      "status": "pass"
+    },
+    {
+      "detail": "runtime cuda_copy_d2d rows and logits-sized memset rows are marked as profiler-runtime benchmark evidence, not trainer-callable replacements; mismatches=0",
+      "name": "runtime profiler memory call-path kind",
+      "status": "pass"
+    },
+    {
+      "detail": "resolved non-trainer optional decisions carry candidate class, priority, and promotion gate; missing=0",
+      "name": "resolved optional promotion metadata",
+      "status": "pass"
+    },
+    {
+      "detail": "resolved optional decisions carry explicit evidence text; missing=0",
+      "name": "resolved optional decision evidence",
+      "status": "pass"
+    },
+    {
+      "detail": "current selection records native TK plus optional packed attention route totals, including incomplete TritonPacked evidence",
+      "name": "attention route totals",
+      "status": "pass"
+    },
+    {
+      "detail": "current selection attention route rows match source selected-backends route totals; native=1/1 optional=8/8 mismatches=0",
+      "name": "attention route source content",
+      "status": "pass"
+    },
+    {
+      "detail": "current trainer mix covers 21/21 objective families",
+      "name": "trainer objective family coverage",
+      "status": "pass"
+    },
+    {
+      "detail": "current trainer mix covers 43/43 required exact rows",
+      "name": "trainer exact row coverage",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_runtime_grad_zero_default_audit_x10_20260522/round-manifest.json has schema_version=1",
+      "name": "round manifest schema",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_runtime_grad_zero_default_audit_x10_20260522/round-manifest.json records artifact_dir=scratch/sm120_rounds/codex_sm120_runtime_grad_zero_default_audit_x10_20260522 device_arch=SM120",
+      "name": "round manifest config",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_runtime_grad_zero_default_audit_x10_20260522/round-manifest.json records git short_commit=0f21747",
+      "name": "round manifest git",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_runtime_grad_zero_default_audit_x10_20260522/round-manifest.json records nvcc returncode=0",
+      "name": "round manifest toolchain",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_runtime_grad_zero_default_audit_x10_20260522/round-manifest.json records 14 binaries with SHA256 evidence",
+      "name": "round manifest binaries",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522/round-manifest.json has schema_version=1",
+      "name": "round manifest schema",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522/round-manifest.json records artifact_dir=scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522 device_arch=SM120",
+      "name": "round manifest config",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522/round-manifest.json records run_python_stack_benchmarks=1",
+      "name": "round manifest python-stack flag",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522/round-manifest.json records git short_commit=0f21747",
+      "name": "round manifest git",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522/round-manifest.json records nvcc returncode=0",
+      "name": "round manifest toolchain",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522/round-manifest.json records 14 binaries with SHA256 evidence",
+      "name": "round manifest binaries",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_runtime_grad_zero_default_audit_x10_20260522 records 8 objective stacks",
+      "name": "objective stack list",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_runtime_grad_zero_default_audit_x10_20260522 records 21 objective families",
+      "name": "objective family list",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_runtime_grad_zero_default_audit_x10_20260522 has 168 family/stack rows",
+      "name": "family/stack matrix",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_runtime_grad_zero_default_audit_x10_20260522 records 9 stack probe rows; missing=[]",
+      "name": "stack probe rows",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_runtime_grad_zero_default_audit_x10_20260522 stack rows include status, evidence, candidate_use, and next_action",
+      "name": "stack probe evidence",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_runtime_grad_zero_default_audit_x10_20260522 family/stack rows include status, reason, and next_action; missing=0 bad=0",
+      "name": "family/stack row evidence",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_runtime_grad_zero_default_audit_x10_20260522 records Torch status=available",
+      "name": "Torch stack probe",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_runtime_grad_zero_default_audit_x10_20260522 records 21 Torch family rows",
+      "name": "Torch family coverage",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522 records 8 objective stacks",
+      "name": "objective stack list",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522 records 21 objective families",
+      "name": "objective family list",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522 has 168 family/stack rows",
+      "name": "family/stack matrix",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522 records 9 stack probe rows; missing=[]",
+      "name": "stack probe rows",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522 stack rows include status, evidence, candidate_use, and next_action",
+      "name": "stack probe evidence",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522 family/stack rows include status, reason, and next_action; missing=0 bad=0",
+      "name": "family/stack row evidence",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522 records Torch status=available",
+      "name": "Torch stack probe",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522 records 21 Torch family rows",
+      "name": "Torch family coverage",
+      "status": "pass"
+    },
+    {
+      "detail": "optional-stack round has 9 Torch-selected benchmark rows",
+      "name": "Torch selected rows",
+      "status": "pass"
+    },
+    {
+      "detail": "optional-stack round has 11 non-trainer selected rows",
+      "name": "optional non-trainer selected rows",
+      "status": "pass"
+    },
+    {
+      "detail": "current selection records 11 optional non-trainer rows",
+      "name": "selection optional non-trainer count",
+      "status": "pass"
+    },
+    {
+      "detail": "current selection records 11 optional non-trainer promotion rows",
+      "name": "selection optional promotion count",
+      "status": "pass"
+    },
+    {
+      "detail": "current selection records 50 project-wide fastest rows",
+      "name": "selection project-wide fastest count",
+      "status": "pass"
+    },
+    {
+      "detail": "current selection project-wide fastest rows cover the optional selected-backends base rows; missing=0 extra=0",
+      "name": "selection project-wide fastest identity",
+      "status": "pass"
+    },
+    {
+      "detail": "current selection project-wide fastest rows preserve source selected-backends stack, time, scope, and provenance fields; mismatches=0",
+      "name": "selection project-wide fastest content",
+      "status": "pass"
+    },
+    {
+      "detail": "current selection records 9 project-wide Torch fastest rows",
+      "name": "selection project-wide Torch fastest count",
+      "status": "pass"
+    },
+    {
+      "detail": "current selection Torch fastest rows are selected from optional selected-backends Torch rows; superseded_optional_torch=0 extra=0",
+      "name": "selection project-wide Torch fastest identity",
+      "status": "pass"
+    },
+    {
+      "detail": "current selection Torch fastest rows preserve source selected-backends stack, time, scope, and provenance fields; mismatches=0",
+      "name": "selection project-wide Torch fastest content",
+      "status": "pass"
+    },
+    {
+      "detail": "current selection resolved optional decisions preserve source promotion-candidate or selected-backend decision, timing, scope, and provenance fields; mismatches=0",
+      "name": "selection resolved optional content",
+      "status": "pass"
+    },
+    {
+      "detail": "all non-trainer optional wins have matching promotion rows; missing=0",
+      "name": "optional promotion row coverage",
+      "status": "pass"
+    },
+    {
+      "detail": "all non-trainer optional wins are resolved or explicitly inactive; unresolved=0",
+      "name": "optional decision coverage",
+      "status": "pass"
+    },
+    {
+      "detail": "all resolved non-trainer optional wins are present in current selection; missing=0",
+      "name": "optional consolidated decisions",
+      "status": "pass"
+    },
+    {
+      "detail": "optional-stack promotion backlog has 0 active candidates",
+      "name": "optional active promotions",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522/bench_sm120_torch_matmul.log exists and is non-empty",
+      "name": "Python stack log bench_sm120_torch_matmul.log",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522/bench_sm120_cutedsl_matmul.log exists and is non-empty",
+      "name": "Python stack log bench_sm120_cutedsl_matmul.log",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522/bench_sm120_triton_matmul.log exists and is non-empty",
+      "name": "Python stack log bench_sm120_triton_matmul.log",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522/bench_sm120_torch_attention.log exists and is non-empty",
+      "name": "Python stack log bench_sm120_torch_attention.log",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522/bench_sm120_cudnn_attention.log exists and is non-empty",
+      "name": "Python stack log bench_sm120_cudnn_attention.log",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522/bench_sm120_triton_attention.log exists and is non-empty",
+      "name": "Python stack log bench_sm120_triton_attention.log",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522/bench_sm120_torch_classifier.log exists and is non-empty",
+      "name": "Python stack log bench_sm120_torch_classifier.log",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522/bench_sm120_triton_classifier.log exists and is non-empty",
+      "name": "Python stack log bench_sm120_triton_classifier.log",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522/bench_sm120_layernorm_python_stacks.log exists and is non-empty",
+      "name": "Python stack log bench_sm120_layernorm_python_stacks.log",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522/bench_sm120_triton_runtime.log exists and is non-empty",
+      "name": "Python stack log bench_sm120_triton_runtime.log",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522/bench_sm120_torch_runtime.log exists and is non-empty",
+      "name": "Python stack log bench_sm120_torch_runtime.log",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522/bench_sm120_libtorch_runtime.log exists and is non-empty",
+      "name": "Python stack log bench_sm120_libtorch_runtime.log",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522/bench_sm120_libtorch_matmul.log exists and is non-empty when run_libtorch_matmul_benchmarks=1",
+      "name": "LibTorch matmul log",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522/bench_sm120_libtorch_matmul.log records standalone C++ cached from_blob route evidence",
+      "name": "LibTorch matmul route marker",
+      "status": "pass"
+    },
+    {
+      "detail": "optional manifest requested known LibTorch matmul shapes; unknown=[]",
+      "name": "LibTorch matmul requested shapes",
+      "status": "pass"
+    },
+    {
+      "detail": "optional round records Torch C++ dW/dW+accum rows for requested shapes; covered=10/10 missing=0",
+      "name": "LibTorch matmul dWeight coverage",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522/scoreboard-candidates.md contains Torch objective benchmark coverage",
+      "name": "Torch objective benchmark section",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522/scoreboard-candidates.md records 43/43 covered Torch objective benchmark rows; missing=0",
+      "name": "Torch exact benchmark row coverage",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522/bench_sm120_cutedsl_matmul.log records a CuTeDSL grouped-GEMM compile/probe attempt",
+      "name": "CuTeDSL compile probe marker",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522/bench_sm120_cutedsl_matmul.log records exact CuTeDSL rows for 5/5 GPT-2 GEMM shapes; timed=0 unavailable=5 target_rejections=5 missing=0 bad=0",
+      "name": "CuTeDSL exact GEMM feasibility rows",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522/bench_sm120_triton_matmul.log records Triton timing rows for 21/21 GPT-2 GEMM objective rows; missing=0 bad=0",
+      "name": "Triton GEMM exact coverage",
+      "status": "pass"
+    },
+    {
+      "detail": "optional round records cuDNN separated and packed forward/backward attention rows; missing=[]",
+      "name": "cuDNN attention exact coverage",
+      "status": "pass"
+    },
+    {
+      "detail": "optional round records saved-forward cuDNNPacked backward route evidence",
+      "name": "cuDNN packed attention backward route",
+      "status": "pass"
+    },
+    {
+      "detail": "optional round records Triton separated/packed forward rows and explicit backward timing or unavailable rows; missing_forward=[] missing_backward=[] bad_unavailable=0",
+      "name": "Triton attention exact coverage",
+      "status": "pass"
+    },
+    {
+      "detail": "optional round records Torch timing or unavailable rows for 17/17 runtime/classifier objective rows; timed=16 unavailable=1 missing=0 bad_unavailable=0",
+      "name": "Torch runtime/classifier exact coverage",
+      "status": "pass"
+    },
+    {
+      "detail": "optional round records Triton timing or unavailable rows for 17/17 runtime/classifier objective rows; timed=6 unavailable=11 missing=0 bad_unavailable=0",
+      "name": "Triton runtime/classifier exact coverage",
+      "status": "pass"
+    },
+    {
+      "detail": "optional round records Torch C++ timing rows for 5/5 memory rows; missing=0",
+      "name": "LibTorch runtime exact memory coverage",
+      "status": "pass"
+    },
+    {
+      "detail": "optional round records Torch C++ parity rows for 5/5 memory rows; missing=0",
+      "name": "LibTorch runtime parity coverage",
+      "status": "pass"
+    },
+    {
+      "detail": "optional round records cached from_blob raw-pointer route evidence for LibTorch C++ memory rows; manifest_route=cxx-api-raw-pointer observed=cxx-api-raw-pointer",
+      "name": "LibTorch runtime raw-pointer route",
+      "status": "pass"
+    },
+    {
+      "detail": "current supplemental logs record Torch C++ timing rows for 1/1 supplemental runtime rows; missing=0",
+      "name": "LibTorch supplemental runtime coverage",
+      "status": "pass"
+    },
+    {
+      "detail": "current supplemental logs record Torch C++ parity rows for 1/1 supplemental runtime rows; missing=0",
+      "name": "LibTorch supplemental runtime parity coverage",
+      "status": "pass"
+    },
+    {
+      "detail": "current supplemental logs prove standalone LibTorch executable link/runtime route; passed=1/1 missing=0 bad=0",
+      "name": "LibTorch trainer link probe",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_runtime_grad_zero_default_audit_x10_20260522/scoreboard-candidates.md records 10 training steps",
+      "name": "native training smoke",
+      "status": "pass"
+    },
+    {
+      "detail": "scratch/sm120_rounds/codex_sm120_runtime_grad_zero_default_audit_x10_20260522/scoreboard-candidates.md records avg_ms=2473.342",
+      "name": "native average step time",
+      "status": "pass"
+    },
+    {
+      "detail": "docs mention current selection replay contract terms; missing={'optimise-goal.md': [], 'best_runs.md': [], 'CHANGELOG.md': []}",
+      "name": "selection docs",
+      "status": "pass"
+    },
+    {
+      "detail": "optimise-goal.md names the current Torch objective benchmark count; expected=`43/43` Torch objective benchmark rows stale_or_missing={'optimise-goal.md': []}",
+      "name": "objective Torch row count docs",
+      "status": "pass"
+    },
+    {
+      "detail": "GPU runtime wording avoids stale availability claims and raw NVML failure text; stale_terms={'optimise-goal.md': [], 'best_runs.md': [], 'CHANGELOG.md': [], 'dev/probe_sm120_backend_stacks.py': []}",
+      "name": "GPU runtime wording docs",
+      "status": "pass"
+    }
+  ],
+  "cutedsl_summary": {
+    "bad_cutedsl_gemm_rows": {},
+    "cutedsl_gemm_rows": 5,
+    "cutedsl_target_rejection_rows": 5,
+    "cutedsl_timed_rows": 0,
+    "cutedsl_unavailable_rows": 5,
+    "expected_cutedsl_gemm_rows": 5,
+    "missing_cutedsl_gemm_rows": []
+  },
+  "doc_summary": {
+    "missing_terms": {
+      "CHANGELOG.md": [],
+      "best_runs.md": [],
+      "optimise-goal.md": []
+    },
+    "stale_gpu_wording": {
+      "CHANGELOG.md": [],
+      "best_runs.md": [],
+      "dev/probe_sm120_backend_stacks.py": [],
+      "optimise-goal.md": []
+    },
+    "stale_torch_counts": {
+      "optimise-goal.md": []
+    }
+  },
+  "libtorch_runtime_summary": {
+    "expected_libtorch_runtime_rows": 5,
+    "expected_libtorch_supplemental_runtime_rows": 1,
+    "libtorch_runtime_evidence_log": "scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522/bench_sm120_libtorch_runtime.log",
+    "libtorch_runtime_manifest_route": "cxx-api-raw-pointer",
+    "libtorch_runtime_observed_routes": [
+      "cxx-api-raw-pointer"
+    ],
+    "libtorch_runtime_parity_rows": 5,
+    "libtorch_runtime_raw_pointer_route": true,
+    "libtorch_runtime_rows": 5,
+    "libtorch_supplemental_runtime_evidence_logs": [
+      "scratch/sm120_rounds/libtorch_runtime_gelu_20260521/bench_sm120_libtorch_runtime.log"
+    ],
+    "libtorch_supplemental_runtime_parity_rows": 1,
+    "libtorch_supplemental_runtime_rows": 1,
+    "missing_libtorch_runtime_parity_rows": [],
+    "missing_libtorch_runtime_rows": [],
+    "missing_libtorch_supplemental_runtime_parity_rows": [],
+    "missing_libtorch_supplemental_runtime_rows": []
+  },
+  "libtorch_trainer_link_summary": {
+    "bad_libtorch_trainer_link_logs": [],
+    "expected_libtorch_trainer_link_logs": 1,
+    "libtorch_trainer_link_evidence_logs": [
+      "scratch/sm120_rounds/libtorch_trainer_link_20260521/validate_libtorch_trainer_link.log"
+    ],
+    "libtorch_trainer_link_passed_logs": 1,
+    "missing_libtorch_trainer_link_logs": []
+  },
+  "native_manifest_summary": {
+    "binary_rows": 14,
+    "device_arch": "SM120",
+    "git_short_commit": "0f21747",
+    "run_python_stack_benchmarks": "0"
+  },
+  "native_round": "scratch/sm120_rounds/codex_sm120_runtime_grad_zero_default_audit_x10_20260522",
+  "native_stack_summary": {
+    "family_stack_rows": 168,
+    "stack_count": 9,
+    "stack_probe_rows": 9,
+    "torch_status": "available"
+  },
+  "optional_attention_summary": {
+    "cudnn_attention_rows": 4,
+    "cudnn_packed_backward_route": "saved-forward",
+    "cudnn_packed_backward_route_evidence": true,
+    "expected_cudnn_attention_rows": 4,
+    "expected_triton_attention_rows": 4,
+    "missing_cudnn_attention_rows": [],
+    "missing_triton_attention_backward_rows": [],
+    "missing_triton_attention_forward_rows": [],
+    "triton_attention_timed_rows": 2,
+    "triton_attention_unavailable_rows": 2
+  },
+  "optional_manifest_summary": {
+    "binary_rows": 14,
+    "device_arch": "SM120",
+    "git_short_commit": "0f21747",
+    "run_python_stack_benchmarks": "1"
+  },
+  "optional_round": "scratch/sm120_rounds/codex_sm120_optional_refresh_current2_20260522",
+  "optional_runtime_summary": {
+    "expected_runtime_operator_rows": 17,
+    "missing_torch_runtime_operator_rows": [],
+    "missing_triton_runtime_operator_rows": [],
+    "torch_runtime_operator_rows": 16,
+    "torch_runtime_operator_unavailable_rows": 1,
+    "triton_runtime_operator_timed_rows": 6,
+    "triton_runtime_operator_unavailable_rows": 11
+  },
+  "optional_stack_summary": {
+    "family_stack_rows": 168,
+    "stack_count": 9,
+    "stack_probe_rows": 9,
+    "torch_status": "available"
+  },
+  "optional_summary": {
+    "active_promotion_candidates": 0,
+    "libtorch_matmul_log_count": 1,
+    "libtorch_matmul_rows": 10,
+    "optional_non_trainer_selected_rows": 11,
+    "optional_resolved_non_trainer_rows": 11,
+    "project_fastest_identity_extra": 0,
+    "project_fastest_identity_missing": 0,
+    "project_torch_identity_extra": 0,
+    "project_torch_identity_missing": 0,
+    "python_stack_log_count": 12,
+    "torch_promotion_rows": 9,
+    "torch_selected_rows": 9
+  },
+  "schema_version": 1,
+  "selection_json": "scratch/sm120_rounds/current-sm120-selection.json",
+  "selection_markdown": "scratch/sm120_rounds/current-sm120-selection.md",
+  "selection_summary": {
+    "native_attention_route_rows": 1,
+    "native_trainer_rows": 43,
+    "optional_attention_route_rows": 8,
+    "project_fastest_extra_rows": 7,
+    "project_fastest_extra_rows_missing_reasons": 0,
+    "project_fastest_resolved_call_path_counts": {
+      "libtorch_raw_pointer_prototype": 2,
+      "operator_or_reference_prototype": 2,
+      "profiler_runtime_benchmark_only": 3,
+      "trainer_or_cxx_route": 3
+    },
+    "project_fastest_resolved_decision_link_rows": 10,
+    "project_fastest_resolved_divergence_rows": 10,
+    "project_fastest_resolved_missing_decision_links": 0,
+    "project_fastest_resolved_non_trainer_actionable_rows": 6,
+    "project_fastest_resolved_non_trainer_missing_action_rows": 0,
+    "project_fastest_resolved_non_trainer_rows": 6,
+    "project_fastest_resolved_status_counts": {
+      "layout_rewrite_only": 2,
+      "profiler_only_runtime_row": 3,
+      "rejected_x10_selector": 3,
+      "rejected_x10_trainer_route": 2
+    },
+    "project_fastest_resolved_trainer_callable_rows": 3,
+    "project_fastest_resolved_trainer_callable_rows_missing_evidence": 0,
+    "project_fastest_resolved_trainer_callable_rows_with_evidence": 3,
+    "project_fastest_rows": 50,
+    "project_fastest_unresolved_objective_rows": 0,
+    "project_fastest_used_rows": 33,
+    "project_torch_fastest_disposition_rows": 9,
+    "project_torch_fastest_extra_rows": 3,
+    "project_torch_fastest_resolved_rows": 6,
+    "project_torch_fastest_rows": 9,
+    "project_torch_fastest_rows_missing_action": 0,
+    "project_torch_fastest_rows_missing_disposition": 0,
+    "project_torch_fastest_rows_with_bad_disposition": 0,
+    "project_torch_fastest_unpartitioned_rows": 0,
+    "project_torch_fastest_used_rows": 0,
+    "resolved_optional_decisions": 18,
+    "resolved_optional_rows_missing_promotion_metadata": 0,
+    "torch_trainer_rows": 0,
+    "trainer_exact_row_coverage": {
+      "attention/backward/B=64 T=1024 C=768 NH=12 HS=64": true,
+      "attention/forward/B=64 T=1024 C=768 NH=12 HS=64": true,
+      "layernorm/backward/N=65536 C=768": true,
+      "layernorm/forward/N=65536 C=768": true,
+      "layernorm/fused_residual_forward/N=65536 C=768": true,
+      "matmul/dInp+dGeLU/fcproj M=65536 N=768 K=3072 bias=1 gelu=0": true,
+      "matmul/dInp/attproj M=65536 N=768 K=768 bias=1 gelu=0": true,
+      "matmul/dInp/fc M=65536 N=3072 K=768 bias=1 gelu=1": true,
+      "matmul/dInp/fcproj M=65536 N=768 K=3072 bias=1 gelu=0": true,
+      "matmul/dInp/lmhead M=65536 N=50304 K=768 bias=0 gelu=0": true,
+      "matmul/dInp/qkv M=65536 N=2304 K=768 bias=1 gelu=0": true,
+      "matmul/dW+accum/attproj M=65536 N=768 K=768 bias=1 gelu=0": true,
+      "matmul/dW+accum/fc M=65536 N=3072 K=768 bias=1 gelu=1": true,
+      "matmul/dW+accum/fcproj M=65536 N=768 K=3072 bias=1 gelu=0": true,
+      "matmul/dW+accum/lmhead M=65536 N=50304 K=768 bias=0 gelu=0": true,
+      "matmul/dW+accum/qkv M=65536 N=2304 K=768 bias=1 gelu=0": true,
+      "matmul/dW/attproj M=65536 N=768 K=768 bias=1 gelu=0": true,
+      "matmul/dW/fc M=65536 N=3072 K=768 bias=1 gelu=1": true,
+      "matmul/dW/fcproj M=65536 N=768 K=3072 bias=1 gelu=0": true,
+      "matmul/dW/lmhead M=65536 N=50304 K=768 bias=0 gelu=0": true,
+      "matmul/dW/qkv M=65536 N=2304 K=768 bias=1 gelu=0": true,
+      "matmul/fwd+gelu/fc M=65536 N=3072 K=768 bias=1 gelu=1": true,
+      "matmul/fwd/attproj M=65536 N=768 K=768 bias=1 gelu=0": true,
+      "matmul/fwd/fcproj M=65536 N=768 K=3072 bias=1 gelu=0": true,
+      "matmul/fwd/lmhead M=65536 N=50304 K=768 bias=0 gelu=0": true,
+      "matmul/fwd/qkv M=65536 N=2304 K=768 bias=1 gelu=0": true,
+      "runtime/adamw_update/params=124475904 no-master": true,
+      "runtime/bias_add/BT=65536 OC=3072": true,
+      "runtime/bias_add/BT=65536 OC=768": true,
+      "runtime/bias_grad_reduce/BT=65536 OC=2304": true,
+      "runtime/bias_grad_reduce/BT=65536 OC=3072": true,
+      "runtime/bias_grad_reduce/BT=65536 OC=768": true,
+      "runtime/cuda_copy_d2d/hidden_elems=50331648": true,
+      "runtime/cuda_copy_d2d/logits_elems=3296722944": true,
+      "runtime/cuda_memset/grad_elems=124475904": true,
+      "runtime/cuda_memset/hidden_elems=50331648": true,
+      "runtime/cuda_memset/logits_elems=3296722944": true,
+      "runtime/encoder_forward/B=64 T=1024 C=768": true,
+      "runtime/fused_classifier/B=64 T=1024 V=50257 P=50304": true,
+      "runtime/fused_classifier_loss/B=64 T=1024 V=50257 P=50304": true,
+      "runtime/gelu_backward_inplace/BT=65536 C=3072": true,
+      "runtime/gelu_forward/BT=65536 C=3072": true,
+      "runtime/global_norm_squared/params=124475904": true
+    },
+    "trainer_family_coverage": {
+      "adamw": true,
+      "attention_backward": true,
+      "attention_forward": true,
+      "bias_add": true,
+      "bias_gradient_reduce": true,
+      "classifier_softmax_cross_entropy_dlogits": true,
+      "cuda_copy_d2d": true,
+      "cuda_memset": true,
+      "encoder_forward": true,
+      "gelu_backward": true,
+      "gelu_forward": true,
+      "gemm_backward_dinput": true,
+      "gemm_backward_dinput_fused_dgelu": true,
+      "gemm_backward_dweight": true,
+      "gemm_backward_dweight_accum": true,
+      "gemm_forward": true,
+      "gemm_forward_fused_gelu": true,
+      "global_norm": true,
+      "layernorm_backward": true,
+      "layernorm_forward": true,
+      "layernorm_fused_residual_forward": true
+    },
+    "trainer_stack_counts": {
+      "CUDA": 15,
+      "CUDA kernel": 3,
+      "CUDA runtime": 2,
+      "TK packed-QKV": 2,
+      "cuBLAS": 10,
+      "cuBLASLt": 10,
+      "cuBLASLt fused": 1
+    }
+  },
+  "torch_benchmark_summary": {
+    "expected_torch_objective_benchmark_rows": 43,
+    "missing_torch_objective_benchmark_rows": 0,
+    "torch_objective_benchmark_rows": 43
+  },
+  "training_summary": {
+    "avg_ms": 2473.342,
+    "expected_steps": 10,
+    "steps": 10
+  },
+  "triton_matmul_summary": {
+    "bad_triton_matmul_rows": [],
+    "expected_triton_matmul_rows": 21,
+    "missing_triton_matmul_rows": [],
+    "triton_matmul_rows": 21
+  }
+}

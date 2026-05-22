@@ -23,6 +23,7 @@ CUDA_OUTPUT_FILE = -o $@
 
 FORCE_NVCC_O ?= 3
 DEVICE_ARCH ?= SM90
+PYTHON_BIN ?= python3
 
 ifeq ($(DEVICE_ARCH),SM90)
   KITTENS_ARCH_DEFINE := -DKITTENS_SM90
@@ -76,14 +77,45 @@ NVCC_INCLUDES =
 NVCC_LDLIBS =
 
 SM120_USE_CUBLASLT_GEMM ?= 1
+SM120_FAST_TRAINER ?= 1
+SM120_USE_CUDA_KERNEL_GRAD_ZERO ?= 0
+SM120_USE_LIBTORCH_MEMORY ?= 0
+SM120_USE_LIBTORCH_GRAD_ZERO ?= $(SM120_USE_LIBTORCH_MEMORY)
+SM120_USE_LIBTORCH_DRESIDUAL_ZERO ?= $(SM120_FAST_TRAINER)
+BUILD_DIR = build
+LIBTORCH_MEMORY_OBJ =
 ifeq ($(DEVICE_ARCH),SM120)
   ifeq ($(SM120_USE_CUBLASLT_GEMM),1)
     NVCC_FLAGS += -DLLMK_SM120_USE_CUBLASLT_GEMM
     NVCC_LDLIBS += -lcublasLt -lcublas
   endif
+  ifeq ($(SM120_FAST_TRAINER),1)
+    NVCC_FLAGS += -DLLMK_SM120_DPREP_WARPS=3
+    NVCC_FLAGS += -DLLMK_SM120_MEMORY_BLOCK_SIZE=1024
+    NVCC_FLAGS += -DLLMK_SM120_LAYERNORM_BWD_BLOCKS_PER_SM=1
+  endif
+  ifeq ($(SM120_USE_CUDA_KERNEL_GRAD_ZERO),1)
+    NVCC_FLAGS += -DLLMK_SM120_USE_CUDA_KERNEL_GRAD_ZERO
+  endif
+  ifneq ($(filter 1,$(SM120_USE_LIBTORCH_GRAD_ZERO) $(SM120_USE_LIBTORCH_DRESIDUAL_ZERO)),)
+    $(info → SM120 LibTorch memory route enabled)
+    LIBTORCH_MEMORY_OBJ := $(BUILD_DIR)/libtorch_memory.o
+    TORCH_INCLUDE_FLAGS := $(shell $(PYTHON_BIN) -c "import torch; from torch.utils.cpp_extension import CUDA_HOME, include_paths; paths = include_paths(); cuda_home = CUDA_HOME or '/usr/local/cuda'; paths.append(cuda_home + '/include'); print(' '.join('-I' + p for p in paths))")
+    TORCH_LIBRARY_FLAGS := $(shell $(PYTHON_BIN) -c "from torch.utils.cpp_extension import CUDA_HOME, library_paths; paths = library_paths(); cuda_home = CUDA_HOME or '/usr/local/cuda'; paths.append(cuda_home + '/lib64'); print(' '.join('-L' + p + ' -Wl,-rpath,' + p for p in paths))")
+    TORCH_CXX11_ABI := $(shell $(PYTHON_BIN) -c "import torch; print(int(torch._C._GLIBCXX_USE_CXX11_ABI))")
+    NVCC_FLAGS += -DLLMK_SM120_USE_LIBTORCH_MEMORY
+    ifeq ($(SM120_USE_LIBTORCH_GRAD_ZERO),1)
+      NVCC_FLAGS += -DLLMK_SM120_USE_LIBTORCH_GRAD_ZERO
+    endif
+    ifeq ($(SM120_USE_LIBTORCH_DRESIDUAL_ZERO),1)
+      NVCC_FLAGS += -DLLMK_SM120_USE_LIBTORCH_DRESIDUAL_ZERO
+    endif
+    NVCC_INCLUDES += $(TORCH_INCLUDE_FLAGS)
+    NVCC_LDFLAGS += $(TORCH_LIBRARY_FLAGS)
+    NVCC_LDLIBS += $(LIBTORCH_MEMORY_OBJ) -ltorch -ltorch_cpu -ltorch_cuda -lc10 -lc10_cuda -lcudart
+  endif
 endif
 
-BUILD_DIR = build
 $(shell mkdir -p $(BUILD_DIR))
 
 # nvidia-smi-based GPU sanity check (warn if not Hopper)
@@ -182,7 +214,7 @@ endif
 
 $(info ---------------------------------------------)
 
-.PHONY: all cuda_runtime_check test_dataloader test_matmul bench_sm120_matmul test_attention test_layernorm test_rope test_rmsnorm test_swiglu test_attention_gqa test_gelu test_fused_classifier test_encoder test_adamw test_global_norm test-kernels probe_layernorm_ref probe_layernorm_tk probe_gelu_ref probe_gelu_tk probe_encoder_ref probe_encoder_tk probe_global_norm_ref probe_global_norm_tk probe_swiglu probe_adamw_ref probe_adamw_tk probe_fused_classifier_ref probe_fused_classifier_tk probe_attention_ref probe_attention_tk probe_matmul_ref probe_matmul_tk probe_rmsnorm probe_rope probe_attention_gqa parity-kernels train_gpt2cu train_llama3cu gpt2_validate test_gpt2cu profile_gpt2cu clean
+.PHONY: all cuda_runtime_check test_dataloader test_matmul bench_sm120_matmul bench_sm120_cublaslt_epilogue_algos bench_sm120_attention bench_sm120_layernorm bench_sm120_runtime test_attention test_layernorm test_rope test_rmsnorm test_swiglu test_attention_gqa test_bias test_gelu test_fused_classifier test_encoder test_adamw test_global_norm test-kernels probe_layernorm_ref probe_layernorm_tk probe_gelu_ref probe_gelu_tk probe_encoder_ref probe_encoder_tk probe_global_norm_ref probe_global_norm_tk probe_swiglu probe_adamw_ref probe_adamw_tk probe_fused_classifier_ref probe_fused_classifier_tk probe_attention_ref probe_attention_tk probe_matmul_ref probe_matmul_tk probe_rmsnorm probe_rope probe_attention_gqa parity-kernels train_gpt2cu train_llama3cu gpt2_validate test_gpt2cu profile_gpt2cu clean
 
 ifeq ($(NVCC),)
   $(error nvcc not found — install CUDA Toolkit 12.4+)
@@ -207,6 +239,21 @@ test_matmul: dev/cuda/test_matmul.cu llmc/matmul.cuh llmc/tk/gemm_h100.cuh llmc/
 bench_sm120_matmul: dev/cuda/bench_sm120_matmul.cu llmc/matmul.cuh llmc/tk/gemm_sm120.cuh llmc/tk/tk_common.cuh
 	$(NVCC) $(NVCC_FLAGS) -DLLMK_SM120_USE_CUBLASLT_GEMM -I. dev/cuda/bench_sm120_matmul.cu $(NVCC_LDFLAGS) $(NVCC_INCLUDES) -lcublasLt -lcublas $(NVCC_LDLIBS) -o $@
 
+bench_sm120_cublaslt_epilogue_algos: dev/cuda/bench_sm120_cublaslt_epilogue_algos.cu llmc/matmul.cuh
+	$(NVCC) $(NVCC_FLAGS) -DLLMK_SM120_USE_CUBLASLT_GEMM -I. dev/cuda/bench_sm120_cublaslt_epilogue_algos.cu $(NVCC_LDFLAGS) $(NVCC_INCLUDES) -lcublasLt -lcublas $(NVCC_LDLIBS) -o $@
+
+bench_sm120_attention: dev/cuda/bench_sm120_attention.cu llmc/attention.cuh llmc/tk/attention_sm120.cuh llmc/tk/tk_common.cuh
+	$(NVCC) $(NVCC_FLAGS) -I. dev/cuda/bench_sm120_attention.cu $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) -o $@
+
+bench_sm120_layernorm: dev/cuda/bench_sm120_layernorm.cu llmc/layernorm.cuh llmc/tk/layernorm_tk.cuh llmc/tk/tk_common.cuh
+	$(NVCC) $(NVCC_FLAGS) -I. dev/cuda/bench_sm120_layernorm.cu $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) -o $@
+
+bench_sm120_runtime: dev/cuda/bench_sm120_runtime.cu llmc/matmul.cuh llmc/gelu.cuh llmc/fused_classifier.cuh llmc/adamw.cuh llmc/global_norm.cuh llmc/encoder.cuh llmc/memory.cuh
+	$(NVCC) $(NVCC_FLAGS) -I. dev/cuda/bench_sm120_runtime.cu $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) -o $@
+
+$(BUILD_DIR)/libtorch_memory.o: llmc/libtorch_memory.cpp
+	$(CXX) $(CXXFLAGS) -fPIC -D_GLIBCXX_USE_CXX11_ABI=$(TORCH_CXX11_ABI) $(TORCH_INCLUDE_FLAGS) -c $< -o $@
+
 test_attention: dev/cuda/test_attention.cu llmc/attention.cuh llmc/tk/attention_h100.cuh llmc/tk/tk_common.cuh
 	$(NVCC) $(NVCC_FLAGS) -I. dev/cuda/test_attention.cu $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) -o $@
 
@@ -224,6 +271,9 @@ test_rmsnorm: dev/cuda/test_rmsnorm.cu llmc/rmsnorm.cuh llmc/tk/rmsnorm_tk.cuh l
 
 test_swiglu: dev/cuda/test_swiglu.cu llmc/swiglu.cuh llmc/cuda_utils.cuh
 	$(NVCC) $(NVCC_FLAGS) -I. dev/cuda/test_swiglu.cu $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) -o $@
+
+test_bias: dev/cuda/test_bias.cu llmc/matmul.cuh llmc/cuda_utils.cuh llmc/cuda_common.h
+	$(NVCC) $(NVCC_FLAGS) -I. dev/cuda/test_bias.cu $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) -o $@
 
 test_gelu: dev/cuda/test_gelu.cu llmc/gelu.cuh llmc/cuda_utils.cuh llmc/cuda_common.h
 	$(NVCC) $(NVCC_FLAGS) -I. dev/cuda/test_gelu.cu $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) -o $@
@@ -244,7 +294,7 @@ test_global_norm: dev/cuda/test_global_norm.cu llmc/global_norm.cuh llmc/cuda_ut
 #   make -j test-kernels [DEVICE_ARCH=SM120]
 # then drive them through the pytest harness under tests/.
 test-kernels: test_matmul test_attention test_attention_gqa test_layernorm \
-              test_rmsnorm test_rope test_swiglu test_gelu \
+              test_rmsnorm test_rope test_swiglu test_bias test_gelu \
               test_fused_classifier test_encoder test_adamw test_global_norm
 
 # ----------------------------------------------------------------------------
@@ -335,21 +385,21 @@ parity-kernels: probe_layernorm_ref probe_layernorm_tk \
                 probe_matmul_ref probe_matmul_tk \
                 probe_swiglu probe_rmsnorm probe_rope probe_attention_gqa
 
-train_gpt2cu: train_gpt2.cu llmc/matmul.cuh llmc/attention.cuh llmc/layernorm.cuh llmc/tk/layernorm_tk.cuh llmc/gelu.cuh
+train_gpt2cu: train_gpt2.cu llmc/matmul.cuh llmc/attention.cuh llmc/layernorm.cuh llmc/tk/layernorm_tk.cuh llmc/gelu.cuh llmc/memory.cuh $(LIBTORCH_MEMORY_OBJ)
 	$(NVCC) $(NVCC_FLAGS) -I. $< $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) $(CUDA_OUTPUT_FILE)
 
 train_llama3cu: train_llama3.cu llmc/rmsnorm.cuh llmc/tk/rmsnorm_tk.cuh llmc/rope.cuh llmc/tk/rope_tk.cuh llmc/attention_gqa.cuh llmc/tk/attention_gqa_h100.cuh llmc/swiglu.cuh
 	$(NVCC) $(NVCC_FLAGS) -I. $< $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) $(CUDA_OUTPUT_FILE)
 
-gpt2_validate: dev/cuda/gpt2_validate.cu train_gpt2.cu llmc/matmul.cuh llmc/attention.cuh llmc/layernorm.cuh llmc/tk/layernorm_tk.cuh llmc/gelu.cuh
+gpt2_validate: dev/cuda/gpt2_validate.cu train_gpt2.cu llmc/matmul.cuh llmc/attention.cuh llmc/layernorm.cuh llmc/tk/layernorm_tk.cuh llmc/gelu.cuh llmc/memory.cuh $(LIBTORCH_MEMORY_OBJ)
 	$(NVCC) $(NVCC_FLAGS) -I. $< $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) $(CUDA_OUTPUT_FILE)
 
-test_gpt2cu: test_gpt2.cu train_gpt2.cu llmc/matmul.cuh llmc/attention.cuh llmc/layernorm.cuh llmc/tk/layernorm_tk.cuh llmc/gelu.cuh
+test_gpt2cu: test_gpt2.cu train_gpt2.cu llmc/matmul.cuh llmc/attention.cuh llmc/layernorm.cuh llmc/tk/layernorm_tk.cuh llmc/gelu.cuh llmc/memory.cuh $(LIBTORCH_MEMORY_OBJ)
 	$(NVCC) $(NVCC_FLAGS) -I. $< $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) $(CUDA_OUTPUT_FILE)
 
-profile_gpt2cu: profile_gpt2.cu train_gpt2.cu llmc/matmul.cuh llmc/attention.cuh llmc/layernorm.cuh llmc/tk/layernorm_tk.cuh llmc/gelu.cuh
+profile_gpt2cu: profile_gpt2.cu train_gpt2.cu llmc/matmul.cuh llmc/attention.cuh llmc/layernorm.cuh llmc/tk/layernorm_tk.cuh llmc/gelu.cuh llmc/memory.cuh $(LIBTORCH_MEMORY_OBJ)
 	$(NVCC) $(NVCC_FLAGS) -I. -lineinfo $< $(NVCC_LDFLAGS) $(NVCC_INCLUDES) $(NVCC_LDLIBS) $(CUDA_OUTPUT_FILE)
 
 clean:
-	$(REMOVE_FILES) cuda_runtime_check test_dataloader test_matmul test_attention test_layernorm test_rope test_rmsnorm test_swiglu test_attention_gqa test_gelu test_fused_classifier test_encoder test_adamw test_global_norm probe_layernorm_ref probe_layernorm_tk probe_gelu_ref probe_gelu_tk probe_encoder_ref probe_encoder_tk probe_global_norm_ref probe_global_norm_tk probe_adamw_ref probe_adamw_tk probe_fused_classifier_ref probe_fused_classifier_tk probe_attention_ref probe_attention_tk probe_matmul_ref probe_matmul_tk probe_swiglu probe_rmsnorm probe_rope probe_attention_gqa train_gpt2cu train_llama3cu gpt2_validate test_gpt2cu profile_gpt2cu
+	$(REMOVE_FILES) cuda_runtime_check test_dataloader test_matmul bench_sm120_matmul bench_sm120_cublaslt_epilogue_algos bench_sm120_attention bench_sm120_layernorm bench_sm120_runtime test_attention test_layernorm test_rope test_rmsnorm test_swiglu test_attention_gqa test_bias test_gelu test_fused_classifier test_encoder test_adamw test_global_norm probe_layernorm_ref probe_layernorm_tk probe_gelu_ref probe_gelu_tk probe_encoder_ref probe_encoder_tk probe_global_norm_ref probe_global_norm_tk probe_adamw_ref probe_adamw_tk probe_fused_classifier_ref probe_fused_classifier_tk probe_attention_ref probe_attention_tk probe_matmul_ref probe_matmul_tk probe_swiglu probe_rmsnorm probe_rope probe_attention_gqa train_gpt2cu train_llama3cu gpt2_validate test_gpt2cu profile_gpt2cu
 	rm -f $(BUILD_DIR)/*.o

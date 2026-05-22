@@ -1,0 +1,145 @@
+{
+  "binaries": [
+    {
+      "exists": true,
+      "path": "test_matmul",
+      "sha256": "193282ed67f338f1e2e49d8ed0aaf949a6e2f674e51ba45cf0ba5efe53a31db6",
+      "size_bytes": 2115600
+    },
+    {
+      "exists": true,
+      "path": "test_attention",
+      "sha256": "48e69f1275d36e6518cf9a86a8b04566ff099e9e10e8042dab3b5ceb934196d5",
+      "size_bytes": 1760032
+    },
+    {
+      "exists": true,
+      "path": "test_layernorm",
+      "sha256": "4751e157cc8e2e47d544371c6ec43a4f2229c1dd8c13908e9730610bfbd72d54",
+      "size_bytes": 1241880
+    },
+    {
+      "exists": true,
+      "path": "test_bias",
+      "sha256": "28e1b4fc493047918ff37d5a344c594884ad11d7c39f668e008b32ab0b943c55",
+      "size_bytes": 2039504
+    },
+    {
+      "exists": true,
+      "path": "test_gelu",
+      "sha256": "a12d364ac0a6329d7b836892df83a3b83c0c0f8a3fc4b0a6f6c793b9a51226bf",
+      "size_bytes": 1139336
+    },
+    {
+      "exists": true,
+      "path": "test_fused_classifier",
+      "sha256": "a4feab9b52dcdeb2d294d8c29e3e9cc0f072184de57e0c29cb87a4967528994e",
+      "size_bytes": 1146768
+    },
+    {
+      "exists": true,
+      "path": "test_encoder",
+      "sha256": "5a10598ecb6770932e073c68e474e120f31b2200b33070a5c725f9987e130440",
+      "size_bytes": 1165512
+    },
+    {
+      "exists": true,
+      "path": "test_adamw",
+      "sha256": "5b4cfcf4222e2e4e1c11049ab79e20a9b04c7f4bad980429e582724ae4e78cc9",
+      "size_bytes": 1134168
+    },
+    {
+      "exists": true,
+      "path": "test_global_norm",
+      "sha256": "1260cc3d258624d79fead3754a718010b14cf1b8b1190429780922f7f6608381",
+      "size_bytes": 1138816
+    },
+    {
+      "exists": true,
+      "path": "bench_sm120_matmul",
+      "sha256": "b5fe3c007d0d2a02e29166cc9995e7e01215b994456ebaf07b3dfdcac2781f89",
+      "size_bytes": 2344376
+    },
+    {
+      "exists": true,
+      "path": "bench_sm120_attention",
+      "sha256": "c6e9cd4a34843a508376cd7e3105725edaf6a05590f907a28dfe79a016a31915",
+      "size_bytes": 1731352
+    },
+    {
+      "exists": true,
+      "path": "bench_sm120_layernorm",
+      "sha256": "2c209bd377bb1c68957abc9025a087993fdeb5e80a52cb315bc0c95652daa8ef",
+      "size_bytes": 1233184
+    },
+    {
+      "exists": true,
+      "path": "bench_sm120_runtime",
+      "sha256": "896d6b3ac31429fbc4105f97723c659d9b51adc1cb9311675d4c7f414bf8d7b3",
+      "size_bytes": 2168552
+    },
+    {
+      "exists": true,
+      "path": "train_gpt2cu",
+      "sha256": "fe2f9224ba873092bb583aa58c9dd0b5d964e14e5f6f65968714422ebc2383a4",
+      "size_bytes": 3040632
+    }
+  ],
+  "config": {
+    "artifact_dir": "scratch/sm120_rounds/codex_fresh_sm120_round_20260520",
+    "build_jobs": "4",
+    "device_arch": "SM120",
+    "keep_checkpoints": "0",
+    "max_steps": "3",
+    "no_multi_gpu": "1",
+    "no_use_mpi": "1",
+    "run_benchmarks": "1",
+    "run_correctness": "1",
+    "run_label": "codex_fresh_sm120_round_20260520",
+    "run_stack_probe": "1",
+    "run_training": "1",
+    "train_out_dir": "log124M/5090_S_codex_fresh_sm120_round_20260520"
+  },
+  "created_utc": "2026-05-20T16:06:41.146678+00:00",
+  "environment": {
+    "CONDA_DEFAULT_ENV": "llm-kittens",
+    "CUDA_HOME": "/usr/local/cuda",
+    "CUDA_VISIBLE_DEVICES": "",
+    "LD_LIBRARY_PATH": "/usr/local/cuda/lib64:",
+    "LLMK_SM120_CUBLASLT_HEURISTIC_INDEX": "",
+    "LLMK_SM120_CUBLASLT_HEURISTIC_RESULTS": "",
+    "LLMK_SM120_CUBLASLT_SELECT_MAX_WAVES": "",
+    "SM120_USE_CUBLASLT_GEMM": "",
+    "VIRTUAL_ENV": ""
+  },
+  "git": {
+    "commit": "0f2174743c0b94e92e25d7390038a5959d5f565f",
+    "short_commit": "0f21747",
+    "status_count": 430,
+    "status_path": "git-status.txt"
+  },
+  "host": {
+    "platform": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.43",
+    "python": "3.14.5"
+  },
+  "schema_version": 1,
+  "toolchain": {
+    "nvcc": {
+      "command": [
+        "nvcc",
+        "--version"
+      ],
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "nvcc: NVIDIA (R) Cuda compiler driver\nCopyright (c) 2005-2026 NVIDIA Corporation\nBuilt on Thu_Mar_19_11:12:51_PM_PDT_2026\nCuda compilation tools, release 13.2, V13.2.78\nBuild cuda_13.2.r13.2/compiler.37668154_0"
+    },
+    "nvidia_smi": {
+      "command": [
+        "nvidia-smi"
+      ],
+      "returncode": 255,
+      "stderr": "",
+      "stdout": "GPU runtime availability is established by target-context timing and correctness runs; metadata-only queries are not used as availability evidence."
+    }
+  }
+}

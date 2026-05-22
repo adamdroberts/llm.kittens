@@ -61,6 +61,44 @@ __global__ void adamw_kernel3(Tp* params_memory, float* master_params_memory, Tg
                  );
 }
 
+template <typename Tp, typename Tg>
+__global__ void adamw_device_grad_scale_kernel3(Tp* params_memory, float* master_params_memory, Tg* grads_memory, float* m_memory, float* v_memory, size_t num_parameters,
+                                                ptrdiff_t w_stride, ptrdiff_t g_stride, ptrdiff_t s_stride,
+                                                float learning_rate, float beta1, float beta2, float beta1_correction, float beta2_correction, float eps, float weight_decay,
+                                                const float* grad_norm_squared, float grad_clip, unsigned int seed) {
+    const float grad_norm = sqrtf(*grad_norm_squared);
+    const float grad_scale = (grad_norm > grad_clip) ? grad_clip / grad_norm : 1.0f;
+    adamw_update(params_memory + blockIdx.y * w_stride,
+                 master_params_memory ? master_params_memory + blockIdx.y * s_stride : NULL,
+                 grads_memory + blockIdx.y * g_stride,
+                 m_memory + blockIdx.y * s_stride,
+                 v_memory + blockIdx.y * s_stride,
+                 num_parameters, learning_rate, beta1, beta2, beta1_correction, beta2_correction, eps, weight_decay, grad_scale,
+                 seed
+                 );
+}
+
+template <typename Tp, typename Tg>
+__global__ void adamw_precomputed_grad_scale_kernel3(Tp* params_memory, float* master_params_memory, Tg* grads_memory, float* m_memory, float* v_memory, size_t num_parameters,
+                                                     ptrdiff_t w_stride, ptrdiff_t g_stride, ptrdiff_t s_stride,
+                                                     float learning_rate, float beta1, float beta2, float beta1_correction, float beta2_correction, float eps, float weight_decay,
+                                                     const float* grad_scale_device, unsigned int seed) {
+    const float grad_scale = *grad_scale_device;
+    adamw_update(params_memory + blockIdx.y * w_stride,
+                 master_params_memory ? master_params_memory + blockIdx.y * s_stride : NULL,
+                 grads_memory + blockIdx.y * g_stride,
+                 m_memory + blockIdx.y * s_stride,
+                 v_memory + blockIdx.y * s_stride,
+                 num_parameters, learning_rate, beta1, beta2, beta1_correction, beta2_correction, eps, weight_decay, grad_scale,
+                 seed
+                 );
+}
+
+__global__ void adamw_compute_grad_scale_kernel(float* grad_scale_device, const float* grad_norm_squared, float grad_clip) {
+    const float grad_norm = sqrtf(*grad_norm_squared);
+    *grad_scale_device = (grad_norm > grad_clip) ? grad_clip / grad_norm : 1.0f;
+}
+
 template <typename Tp>
 __global__ void init_from_master_kernel(Tp* params_memory, float* master_params_memory, size_t num_parameters,
                                           ptrdiff_t w_stride, ptrdiff_t s_stride, unsigned int seed) {
@@ -84,6 +122,41 @@ void adamw_update(Tp* params_memory, float* master_params_memory, Tg* grads_memo
                                                          m_memory, v_memory, num_parameters, w_stride, g_stride, s_stride,
                                                          learning_rate, beta1, beta2, beta1_correction, beta2_correction, eps, weight_decay,
                                                          grad_scale, seed);
+    cudaCheck(cudaGetLastError());
+}
+
+template <typename Tp, typename Tg>
+void adamw_update_device_grad_scale(Tp* params_memory, float* master_params_memory, Tg* grads_memory, float* m_memory, float* v_memory, size_t num_parameters,
+                                    ptrdiff_t w_stride, ptrdiff_t g_stride, ptrdiff_t s_stride, int num_slices, float learning_rate, float beta1, float beta2, int t, float eps, float weight_decay,
+                                    const float* grad_norm_squared, float grad_clip, unsigned int seed, cudaStream_t stream) {
+    int block_size = 512;
+    int num_blocks = CEIL_DIV(num_parameters, block_size);
+    float beta1_correction = 1.0f - powf(beta1, t);
+    float beta2_correction = 1.0f - powf(beta2, t);
+    adamw_device_grad_scale_kernel3<<<dim3(num_blocks, num_slices), block_size, 0, stream>>>(params_memory, master_params_memory, grads_memory,
+                                                                           m_memory, v_memory, num_parameters, w_stride, g_stride, s_stride,
+                                                                           learning_rate, beta1, beta2, beta1_correction, beta2_correction, eps, weight_decay,
+                                                                           grad_norm_squared, grad_clip, seed);
+    cudaCheck(cudaGetLastError());
+}
+
+void adamw_compute_grad_scale(float* grad_scale_device, const float* grad_norm_squared, float grad_clip, cudaStream_t stream) {
+    adamw_compute_grad_scale_kernel<<<1, 1, 0, stream>>>(grad_scale_device, grad_norm_squared, grad_clip);
+    cudaCheck(cudaGetLastError());
+}
+
+template <typename Tp, typename Tg>
+void adamw_update_precomputed_grad_scale(Tp* params_memory, float* master_params_memory, Tg* grads_memory, float* m_memory, float* v_memory, size_t num_parameters,
+                                         ptrdiff_t w_stride, ptrdiff_t g_stride, ptrdiff_t s_stride, int num_slices, float learning_rate, float beta1, float beta2, int t, float eps, float weight_decay,
+                                         const float* grad_scale_device, unsigned int seed, cudaStream_t stream) {
+    int block_size = 512;
+    int num_blocks = CEIL_DIV(num_parameters, block_size);
+    float beta1_correction = 1.0f - powf(beta1, t);
+    float beta2_correction = 1.0f - powf(beta2, t);
+    adamw_precomputed_grad_scale_kernel3<<<dim3(num_blocks, num_slices), block_size, 0, stream>>>(params_memory, master_params_memory, grads_memory,
+                                                                                m_memory, v_memory, num_parameters, w_stride, g_stride, s_stride,
+                                                                                learning_rate, beta1, beta2, beta1_correction, beta2_correction, eps, weight_decay,
+                                                                                grad_scale_device, seed);
     cudaCheck(cudaGetLastError());
 }
 

@@ -1,0 +1,2 @@
+log124M/5090_S_codex_sm120_round_libtorch_dresidual_zero_x10_20260521/model_00000010.bin
+log124M/5090_S_codex_sm120_round_libtorch_dresidual_zero_x10_20260521/state_00000010_00000.bin

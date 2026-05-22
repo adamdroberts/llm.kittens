@@ -1,0 +1,448 @@
+{
+  "baseline": {
+    "qkv": {
+      "fwd": {
+        "TK": 1068.23,
+        "cuBLASLt": 1033.83
+      },
+      "dInp": {
+        "TK": 1081.15,
+        "cuBLASLt": 1006.72
+      },
+      "dW": {
+        "TK": 1490.38,
+        "cuBLASLt": 986.35
+      }
+    },
+    "attproj": {
+      "fwd": {
+        "TK": 376.76,
+        "cuBLASLt": 369.68
+      },
+      "dInp": {
+        "TK": 380.95,
+        "cuBLASLt": 363.94
+      },
+      "dW": {
+        "TK": 548.33,
+        "cuBLASLt": 326.92
+      }
+    },
+    "fc": {
+      "fwd": {
+        "TK": 1593.25,
+        "cuBLASLt": 1434.66
+      },
+      "dInp": {
+        "TK": 1442.09,
+        "cuBLASLt": 1340.88
+      },
+      "dW": {
+        "TK": 1703.15,
+        "cuBLASLt": 1301.76
+      }
+    },
+    "fcproj": {
+      "fwd": {
+        "TK": 1412.1,
+        "cuBLASLt": 1425.23
+      },
+      "dInp": {
+        "TK": 1468.6,
+        "cuBLASLt": 1360.36
+      },
+      "dW": {
+        "TK": 1706.79,
+        "cuBLASLt": 1349.77
+      }
+    },
+    "lmhead": {
+      "fwd": {
+        "TK": 27317.66,
+        "cuBLASLt": 21759.9
+      },
+      "dInp": {
+        "TK": 23615.35,
+        "cuBLASLt": 20999.43
+      },
+      "dW": {
+        "TK": 25670.59,
+        "cuBLASLt": 20909.96
+      }
+    }
+  },
+  "tuning": [
+    {
+      "super_m": 4,
+      "results": {
+        "qkv": {
+          "fwd": {
+            "TK": 1067.97,
+            "cuBLASLt": 1057.91
+          },
+          "dInp": {
+            "TK": 1082.81,
+            "cuBLASLt": 1006.85
+          },
+          "dW": {
+            "TK": 1455.06,
+            "cuBLASLt": 988.29
+          }
+        },
+        "attproj": {
+          "fwd": {
+            "TK": 374.73,
+            "cuBLASLt": 367.99
+          },
+          "dInp": {
+            "TK": 379.96,
+            "cuBLASLt": 408.51
+          },
+          "dW": {
+            "TK": 543.64,
+            "cuBLASLt": 326.62
+          }
+        },
+        "fc": {
+          "fwd": {
+            "TK": 1528.19,
+            "cuBLASLt": 1434.74
+          },
+          "dInp": {
+            "TK": 1440.68,
+            "cuBLASLt": 1320.96
+          },
+          "dW": {
+            "TK": 1700.1,
+            "cuBLASLt": 1323.66
+          }
+        },
+        "fcproj": {
+          "fwd": {
+            "TK": 1412.34,
+            "cuBLASLt": 1425.11
+          },
+          "dInp": {
+            "TK": 1469.0,
+            "cuBLASLt": 1363.62
+          },
+          "dW": {
+            "TK": 1701.62,
+            "cuBLASLt": 1303.2
+          }
+        },
+        "lmhead": {
+          "fwd": {
+            "TK": 27644.69,
+            "cuBLASLt": 22046.06
+          },
+          "dInp": {
+            "TK": 23566.23,
+            "cuBLASLt": 21085.73
+          },
+          "dW": {
+            "TK": 25590.06,
+            "cuBLASLt": 21063.57
+          }
+        }
+      }
+    },
+    {
+      "super_m": 8,
+      "results": {
+        "qkv": {
+          "fwd": {
+            "TK": 1067.9,
+            "cuBLASLt": 1034.31
+          },
+          "dInp": {
+            "TK": 1082.27,
+            "cuBLASLt": 1007.17
+          },
+          "dW": {
+            "TK": 1459.08,
+            "cuBLASLt": 993.42
+          }
+        },
+        "attproj": {
+          "fwd": {
+            "TK": 374.29,
+            "cuBLASLt": 367.28
+          },
+          "dInp": {
+            "TK": 379.88,
+            "cuBLASLt": 363.63
+          },
+          "dW": {
+            "TK": 541.28,
+            "cuBLASLt": 327.38
+          }
+        },
+        "fc": {
+          "fwd": {
+            "TK": 1528.61,
+            "cuBLASLt": 1434.35
+          },
+          "dInp": {
+            "TK": 1440.9,
+            "cuBLASLt": 1321.79
+          },
+          "dW": {
+            "TK": 1696.39,
+            "cuBLASLt": 1341.12
+          }
+        },
+        "fcproj": {
+          "fwd": {
+            "TK": 1416.99,
+            "cuBLASLt": 1426.0
+          },
+          "dInp": {
+            "TK": 1469.25,
+            "cuBLASLt": 1471.37
+          },
+          "dW": {
+            "TK": 1701.86,
+            "cuBLASLt": 1309.19
+          }
+        },
+        "lmhead": {
+          "fwd": {
+            "TK": 27335.18,
+            "cuBLASLt": 22418.46
+          },
+          "dInp": {
+            "TK": 23576.95,
+            "cuBLASLt": 21018.91
+          },
+          "dW": {
+            "TK": 25639.07,
+            "cuBLASLt": 21210.15
+          }
+        }
+      }
+    },
+    {
+      "super_m": 16,
+      "results": {
+        "qkv": {
+          "fwd": {
+            "TK": 1069.54,
+            "cuBLASLt": 1033.97
+          },
+          "dInp": {
+            "TK": 1086.76,
+            "cuBLASLt": 1007.23
+          },
+          "dW": {
+            "TK": 1457.72,
+            "cuBLASLt": 987.38
+          }
+        },
+        "attproj": {
+          "fwd": {
+            "TK": 374.06,
+            "cuBLASLt": 367.35
+          },
+          "dInp": {
+            "TK": 380.92,
+            "cuBLASLt": 363.58
+          },
+          "dW": {
+            "TK": 553.01,
+            "cuBLASLt": 327.99
+          }
+        },
+        "fc": {
+          "fwd": {
+            "TK": 1530.76,
+            "cuBLASLt": 1434.2
+          },
+          "dInp": {
+            "TK": 1474.04,
+            "cuBLASLt": 1321.8
+          },
+          "dW": {
+            "TK": 1702.34,
+            "cuBLASLt": 1304.09
+          }
+        },
+        "fcproj": {
+          "fwd": {
+            "TK": 1478.01,
+            "cuBLASLt": 1428.04
+          },
+          "dInp": {
+            "TK": 1469.71,
+            "cuBLASLt": 1360.93
+          },
+          "dW": {
+            "TK": 1707.6,
+            "cuBLASLt": 1338.77
+          }
+        },
+        "lmhead": {
+          "fwd": {
+            "TK": 27496.5,
+            "cuBLASLt": 21939.18
+          },
+          "dInp": {
+            "TK": 23316.75,
+            "cuBLASLt": 20873.38
+          },
+          "dW": {
+            "TK": 25517.28,
+            "cuBLASLt": 20801.42
+          }
+        }
+      }
+    },
+    {
+      "super_m": 32,
+      "results": {
+        "qkv": {
+          "fwd": {
+            "TK": 1093.56,
+            "cuBLASLt": 1033.6
+          },
+          "dInp": {
+            "TK": 1081.16,
+            "cuBLASLt": 1009.45
+          },
+          "dW": {
+            "TK": 1454.98,
+            "cuBLASLt": 1110.98
+          }
+        },
+        "attproj": {
+          "fwd": {
+            "TK": 374.04,
+            "cuBLASLt": 367.47
+          },
+          "dInp": {
+            "TK": 379.87,
+            "cuBLASLt": 363.72
+          },
+          "dW": {
+            "TK": 540.84,
+            "cuBLASLt": 327.61
+          }
+        },
+        "fc": {
+          "fwd": {
+            "TK": 1591.78,
+            "cuBLASLt": 1460.11
+          },
+          "dInp": {
+            "TK": 1441.45,
+            "cuBLASLt": 1321.74
+          },
+          "dW": {
+            "TK": 1789.43,
+            "cuBLASLt": 1328.25
+          }
+        },
+        "fcproj": {
+          "fwd": {
+            "TK": 1413.25,
+            "cuBLASLt": 1425.78
+          },
+          "dInp": {
+            "TK": 1596.4,
+            "cuBLASLt": 1359.29
+          },
+          "dW": {
+            "TK": 1755.64,
+            "cuBLASLt": 1302.92
+          }
+        },
+        "lmhead": {
+          "fwd": {
+            "TK": 27357.12,
+            "cuBLASLt": 21955.01
+          },
+          "dInp": {
+            "TK": 23999.94,
+            "cuBLASLt": 20991.51
+          },
+          "dW": {
+            "TK": 25585.99,
+            "cuBLASLt": 20909.45
+          }
+        }
+      }
+    }
+  ],
+  "best": {
+    "qkv": {
+      "fwd": {
+        "stack": "cuBLASLt",
+        "time": 1033.83
+      },
+      "dInp": {
+        "stack": "cuBLASLt",
+        "time": 1006.72
+      },
+      "dW": {
+        "stack": "cuBLASLt",
+        "time": 986.35
+      }
+    },
+    "attproj": {
+      "fwd": {
+        "stack": "cuBLASLt",
+        "time": 369.68
+      },
+      "dInp": {
+        "stack": "cuBLASLt",
+        "time": 363.94
+      },
+      "dW": {
+        "stack": "cuBLASLt",
+        "time": 326.92
+      }
+    },
+    "fc": {
+      "fwd": {
+        "stack": "cuBLASLt",
+        "time": 1434.66
+      },
+      "dInp": {
+        "stack": "cuBLASLt",
+        "time": 1340.88
+      },
+      "dW": {
+        "stack": "cuBLASLt",
+        "time": 1301.76
+      }
+    },
+    "fcproj": {
+      "fwd": {
+        "stack": "TK (default)",
+        "time": 1412.1
+      },
+      "dInp": {
+        "stack": "cuBLASLt",
+        "time": 1360.36
+      },
+      "dW": {
+        "stack": "cuBLASLt",
+        "time": 1349.77
+      }
+    },
+    "lmhead": {
+      "fwd": {
+        "stack": "cuBLASLt",
+        "time": 21759.9
+      },
+      "dInp": {
+        "stack": "cuBLASLt",
+        "time": 20999.43
+      },
+      "dW": {
+        "stack": "cuBLASLt",
+        "time": 20909.96
+      }
+    }
+  }
+}

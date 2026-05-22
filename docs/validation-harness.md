@@ -69,7 +69,7 @@ flowchart TD
 ```
 
 `host-core` (alias `all-local`) is `goal-core` minus the CUDA-runtime probes;
-it is the one to use on a build host without H100 access.
+it is the one to use when you intentionally want compile/tooling coverage only.
 `goal-complete-prereqs` runs the threshold/tooling/validate-only checks
 that `goal-complete` enforces before launching anything.
 
@@ -219,7 +219,7 @@ ALLOW_FULL_GOAL_RUN=0       must be 1 to run goal-complete.
 ## Recipes
 
 ```bash
-# Local build host (no CUDA driver):
+# Host-side build and metadata checks:
 scripts/validate_goal_h100.sh host-core
 
 # Real H100 box, default checks:

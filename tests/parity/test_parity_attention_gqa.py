@@ -19,7 +19,7 @@ def _rope_apply(x, cos, sin):
 def test_parity_attention_gqa_forward(kernel_runner, iodir):
     torch = pytest.importorskip("torch")
     if not torch.cuda.is_available():
-        pytest.skip("CUDA unavailable on this host")
+        pytest.skip("torch.cuda is not initialized for this pytest process")
     F = torch.nn.functional
 
     # GQA shapes that hit the supported TK fast path on H100 and a sane

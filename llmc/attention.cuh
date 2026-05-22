@@ -509,7 +509,7 @@ inline void attention_backward(floatX* dinp, floatX* dqkvr, floatX* datt, floatX
 #if defined(KITTENS_SM120)
         {
 #ifndef LLMK_SM120_DPREP_WARPS
-#define LLMK_SM120_DPREP_WARPS 4
+#define LLMK_SM120_DPREP_WARPS 3
 #endif
             dim3 dprep_block(WARP_SIZE, LLMK_SM120_DPREP_WARPS);
             int dprep_rows = B * NH * T;
@@ -622,7 +622,7 @@ inline void attention_backward_packed_qkv(floatX* dinp, floatX* datt, const floa
     float* d_vec = reinterpret_cast<float*>(og_perm + qkv_elems);
 
 #ifndef LLMK_SM120_DPREP_WARPS
-#define LLMK_SM120_DPREP_WARPS 4
+#define LLMK_SM120_DPREP_WARPS 3
 #endif
     dim3 dprep_block(WARP_SIZE, LLMK_SM120_DPREP_WARPS);
     int dprep_rows = B * NH * T;

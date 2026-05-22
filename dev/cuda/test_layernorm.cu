@@ -161,6 +161,20 @@ static double max_abs_diff_bf16_float(const std::vector<__nv_bfloat16>& actual,
     return max_diff;
 }
 
+static size_t max_abs_diff_bf16_float_index(const std::vector<__nv_bfloat16>& actual,
+                                            const std::vector<float>& expected) {
+    size_t max_i = 0;
+    double max_diff = -1.0;
+    for (size_t i = 0; i < actual.size(); ++i) {
+        double diff = std::abs((double)bf16_to_float(actual[i]) - (double)expected[i]);
+        if (diff > max_diff) {
+            max_diff = diff;
+            max_i = i;
+        }
+    }
+    return max_i;
+}
+
 static double max_abs_diff_float(const std::vector<float>& actual,
                                  const std::vector<float>& expected) {
     double max_diff = 0.0;
@@ -331,6 +345,23 @@ int main() {
            dweight_diff, grad_tol, dweight_diff <= grad_tol ? "PASS" : "FAIL");
     printf("backward dbias max abs diff    = %.6f (tol %.3f) %s\n",
            dbias_diff, grad_tol, dbias_diff <= grad_tol ? "PASS" : "FAIL");
+    if (dbias_diff > grad_tol) {
+        size_t i = max_abs_diff_bf16_float_index(h_dbias, ref_dbias);
+        int first = std::max(0, (int)i - 2);
+        int last = std::min(C - 1, (int)i + 2);
+        printf("backward dbias worst index     = %zu\n", i);
+        for (int j = first; j <= last; ++j) {
+            float actual = bf16_to_float(h_dbias[(size_t)j]);
+            float expected = ref_dbias[(size_t)j];
+            float base = bf16_to_float(h_base_dbias[(size_t)j]);
+            float dweight_actual = bf16_to_float(h_dweight[(size_t)j]);
+            float dweight_expected = ref_dweight[(size_t)j];
+            printf("  idx %d dbias actual=% .6f expected=% .6f base=% .6f diff=% .6f"
+                   " | dweight actual=% .6f expected=% .6f\n",
+                   j, actual, expected, base, actual - expected,
+                   dweight_actual, dweight_expected);
+        }
+    }
 
     cudaCheck(cudaFree(d_inp));
     cudaCheck(cudaFree(d_skip));

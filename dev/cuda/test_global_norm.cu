@@ -86,11 +86,37 @@ int main() {
     printf("cpu norm = %.6f  gpu norm = %.6f  relative diff = %.6f (tol %.3f) %s\n",
            cpu_norm, gpu_norm, rel, tol, rel <= tol ? "PASS" : "FAIL");
 
+    bool ok = rel <= tol;
+
+    // Exercise the reset=true fallback where max_block_sums is larger than the
+    // rows written by this call. The untouched tail must be cleared before the
+    // deterministic aggregate reads the whole buffer.
+    int mixed_slices[2] = {1, 4};
+    int mixed_max_block_sums = get_max_num_block_sums(mixed_slices, 2);
+    float* d_tail_out = nullptr;
+    cudaCheck(cudaMalloc(&d_tail_out, (size_t)mixed_max_block_sums * sizeof(float)));
+    std::vector<float> stale_tail((size_t)mixed_max_block_sums, 7.0f);
+    cudaCheck(cudaMemcpy(d_tail_out, stale_tail.data(), (size_t)mixed_max_block_sums * sizeof(float), cudaMemcpyHostToDevice));
+    global_norm_squared<__nv_bfloat16>(d_tail_out, d_p1, N1, /*stride=*/0, /*num_slices=*/1,
+                                       mixed_max_block_sums, /*reset=*/true, 0);
+    global_norm_aggregate_kernel<<<1, 1024, 0, 0>>>(d_tail_out, mixed_max_block_sums);
+    cudaCheck(cudaDeviceSynchronize());
+    float tail_gpu_sumsq = 0.0f;
+    cudaCheck(cudaMemcpy(&tail_gpu_sumsq, d_tail_out, sizeof(float), cudaMemcpyDeviceToHost));
+    double tail_gpu_norm = std::sqrt((double)tail_gpu_sumsq);
+    double tail_cpu_sumsq = 0.0;
+    for (auto& v : h_p1) { double f = bf16_to_float(v); tail_cpu_sumsq += f * f; }
+    double tail_cpu_norm = std::sqrt(tail_cpu_sumsq);
+    double tail_rel = std::abs(tail_gpu_norm - tail_cpu_norm) / std::max(tail_cpu_norm, 1e-12);
+    printf("reset-tail cpu norm = %.6f  gpu norm = %.6f  relative diff = %.6f (tol %.3f) %s\n",
+           tail_cpu_norm, tail_gpu_norm, tail_rel, tol, tail_rel <= tol ? "PASS" : "FAIL");
+    cudaCheck(cudaFree(d_tail_out));
+    ok = (tail_rel <= tol) && ok;
+
     cudaCheck(cudaFree(d_p1));
     cudaCheck(cudaFree(d_p2));
     cudaCheck(cudaFree(d_out));
 
-    bool ok = rel <= tol;
     if (ok) printf("test_global_norm smoke OK\n");
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

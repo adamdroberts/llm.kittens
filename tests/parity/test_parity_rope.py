@@ -31,7 +31,7 @@ def _torch_rope_apply(x, cos, sin, *, inverse=False):
 def test_parity_rope(kernel_runner, iodir, B, H, T, HS):
     torch = pytest.importorskip("torch")
     if not torch.cuda.is_available():
-        pytest.skip("CUDA unavailable on this host")
+        pytest.skip("torch.cuda is not initialized for this pytest process")
 
     rng = np.random.default_rng(31)
     x    = rng.uniform(-1.0, 1.0, size=(B, H, T, HS)).astype(np.float32)

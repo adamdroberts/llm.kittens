@@ -6,6 +6,1732 @@ milestone. Adds within a milestone are listed in chronological order.
 The canonical "what is done / what is left" is [`goal.md`](goal.md). The
 changelog is the diary; `goal.md` is the plan.
 
+## 2026-05-21 — Torch-inclusive optional-stack refresh
+
+- Promoted CUDA-runtime grad-zero as the SM120 fast-trainer default while
+  keeping Torch C++ dresidual-zero selected. `SM120_USE_CUDA_KERNEL_GRAD_ZERO`
+  now defaults to `0`, so clean SM120 rebuilds no longer re-enable the slower
+  custom grad-zero kernel by accident. Verification: exact
+  `CUDA_DEVICE_MAX_CONNECTIONS=1 ./train-sm120.sh` after rebuild averaged
+  `2468.121529 ms` x10 with first-three `2461.186667 ms`; full audit round
+  `scratch/sm120_rounds/codex_sm120_runtime_grad_zero_default_audit_x10_20260522`
+  passed all nine focused smokes, `95` native benchmark rows, stack-probe
+  coverage, TinyStories x10, artifact validation, and the regenerated current
+  SM120 selection/audit with `0` active promotions. A follow-up exact
+  `train-sm120.sh` run on the active audited binary averaged `2465.890302 ms`
+  x10 with first-three `2458.770000 ms` and first-five `2460.134000 ms`.
+- Added a tracked `TRAIN_ZERO_STAGE` knob to
+  `scripts/run_sm120_optimization_round.sh` and recorded it in
+  `dev/write_sm120_round_manifest.py`, keeping the default at `1` to preserve
+  `train-sm120.sh` behavior. This lets single-GPU `-z 0` candidates run
+  through the normal manifest/correctness/training artifact path instead of
+  being manual-only probes. Verification: `bash -n
+  scripts/run_sm120_optimization_round.sh`, `python3 -m py_compile
+  dev/write_sm120_round_manifest.py`, and target-context round
+  `scratch/sm120_rounds/codex_sm120_precompute_grad_scale_zero0_x3_20260522`
+  with `TRAIN_ZERO_STAGE=0`.
+- Added `optimise-goal.md` to the current-selection documentation audit and
+  corrected its Torch objective benchmark count to the shared
+  `dev/sm120_objective_contract.py` contract. The audit now fails if the goal
+  file still names the stale `42/42` Torch row count or omits the current
+  `43/43` count, and the replay-doc check covers `optimise-goal.md`,
+  `best_runs.md`, and `CHANGELOG.md`. Regenerating
+  `scratch/sm120_rounds/current-sm120-audit.{json,md}` now passes `131` checks,
+  including the new `objective Torch row count docs` check.
+- Broadened the future LibTorch C++ matmul probe from the focused `fc`
+  dWeight row to all GPT-2 matmul shapes by default. The SM120 optimization
+  harness now defaults `LLMK_LIBTORCH_MATMUL_SHAPES` to
+  `qkv attproj fc fcproj lmhead`, so optional-stack rounds that enable
+  LibTorch matmul benchmarking must record standalone C++ cached-`from_blob`
+  `dW` and `dW+accum` rows for every requested shape. This keeps the Torch
+  trainer-callable evidence path aligned with the "whole project" comparison
+  matrix instead of only the original MLP-up dWeight probe.
+  Target-context all-shape evidence at
+  `scratch/sm120_rounds/libtorch_matmul_all_shapes_20260521/bench_sm120_libtorch_matmul.json`
+  passed parity for `qkv`, `attproj`, `fc`, `fcproj`, and `lmhead` dWeight
+  plus accumulated dWeight, then measured slower than the current
+  cuBLAS/cuBLASLt trainer providers on every row. No Torch matmul trainer
+  default changed. The probe now writes a `--json-out` structured evidence
+  file, and the current project audit has four dedicated all-shape LibTorch
+  dWeight checks: route marker, structured evidence, parity/timing coverage for
+  all `10/10` `dW` / `dW+accum` rows, and slower-than-trainer comparison
+  against the effective native selection.
+- Promoted the correctness-enabled optional-stack refresh
+  `scratch/sm120_rounds/codex_sm120_round_optional_refresh_correctness_20260521`
+  to the shared default comparison round in
+  `dev/sm120_objective_contract.py`. The run passed all SM120 correctness
+  smokes and validated `203` benchmark rows, including `43/43` Torch objective
+  rows, `17/17` Torch runtime/classifier rows, `5/5` LibTorch C++ runtime
+  timing rows, and `5/5` LibTorch C++ runtime parity rows. Regenerating
+  `scratch/sm120_rounds/current-sm120-selection.{json,md}` now reports
+  `project_torch_fastest_row_count=9` current project-wide fastest
+  Torch-family rows and `active_promotions=0`; regenerating
+  `scratch/sm120_rounds/current-sm120-audit.{json,md}` passes `130` checks.
+  The refreshed rows keep Torch where it is actually fastest after comparison
+  with the current native trainer-backed row, while refusing trainer promotion
+  for layout-only attention, partial LayerNorm, non-equivalent AdamW, and
+  sub-percent LibTorch C++ memory wins whose explicit trainer routes do not
+  survive the x10 TinyStories gate.
+- Reclassified the logits-sized memset and logits/hidden-sized device-copy
+  memory rows as profiler/runtime evidence instead of pending trainer
+  integrations. A source trace of `train_gpt2.cu` shows no
+  `logits_elems=3296722944` memset or logits/hidden-sized device-to-device copy
+  call-site in the current GPT-2 trainer; the actual host/device copies are
+  inputs, targets, mean loss, and sampling logits, and the real zeroing paths are
+  losses, grads, residual scratch, AdamW state, and attention scratch.
+  `dev/sm120_promotion_decisions.json` now marks those three rows
+  `profiler_only_runtime_row`, and
+  `dev/validate_sm120_round.py` emits the same "no current trainer call-site"
+  gate for future profiler-only rows instead of generic LibTorch call-site
+  text. Regenerating the current selection reports `profiler_only_runtime_row: 3`
+  and keeps the LibTorch logits-copy row as the fastest observed profiler row
+  (`8659.680 us`) but resolved away from the trainer with no promotion gate.
+- Added an opt-in LibTorch C++ trainer route for the backward-pass residual
+  stream clear, the trainer call-site behind the `cuda_memset
+  hidden_elems=50331648` runtime row. `SM120_USE_LIBTORCH_DRESIDUAL_ZERO=1`
+  caches a BF16 `from_blob` handle over `model->acts.scratch_btc`, uses the
+  trainer stream for `zero_()`, and prints
+  `dresidual_zero_backend | Torch C++` while leaving `grad_zero_backend` on
+  CUDA unless separately requested. The 3-step route passed validation at
+  `scratch/sm120_rounds/codex_sm120_round_libtorch_dresidual_zero_20260521`
+  with `avg_ms=2492.696`, but the x10 stability run
+  `scratch/sm120_rounds/codex_sm120_round_libtorch_dresidual_zero_x10_20260521`
+  regressed to `avg_ms=2495.957` versus the current native x10 selection at
+  `2493.133 ms`, so the default stays on CUDA runtime zeroing. The old
+  `SM120_USE_LIBTORCH_MEMORY=1` convenience path remains mapped to
+  `SM120_USE_LIBTORCH_GRAD_ZERO=1`, and the round manifest now records both
+  per-call-site flags.
+- Added the real trainer gradients-zero memory shape to the runtime objective:
+  `cuda_memset grad_elems=124475904`. `bench_sm120_runtime`,
+  `dev/bench_sm120_torch_runtime.py`, and
+  `dev/bench_sm120_libtorch_runtime.py` now all emit that row, while the
+  Triton runtime probe records it as explicitly unavailable. Target-context
+  refreshes measured CUDA runtime `148.470 us`, Python Torch `148.104 us`, and
+  Torch C++ `147.749 us`; the current selection records the LibTorch C++ row
+  as fastest but resolved away. A real opt-in trainer call-site now exists
+  behind `SM120_USE_LIBTORCH_GRAD_ZERO=1`; it caches a LibTorch C++ BF16
+  `from_blob` handle over `model->grads_memory`, uses the trainer stream for
+  `zero_()`, and prints `grad_zero_backend | Torch C++` in the startup table.
+  The 3-step route passed validation at
+  `scratch/sm120_rounds/codex_sm120_round_libtorch_grad_zero_20260521` with
+  `avg_ms=2487.730`, but the x10 stability run
+  `scratch/sm120_rounds/codex_sm120_round_libtorch_grad_zero_x10_20260521`
+  regressed to `avg_ms=2495.623` versus the current native x10 selection at
+  `2493.133 ms`, so the default stays on CUDA runtime zeroing. The optional
+  round, native x10 selected-backend artifacts, current selection, and audit
+  were regenerated with
+  `trainer_rows=43`, `torch_runtime_rows=17`, `libtorch_runtime_rows=5`,
+  `libtorch_parity_rows=5`, and `active_promotions=0`.
+- Closed the tiny Triton/Torch wide-bias-add promotion hypothesis with focused
+  same-session evidence instead of adding a new trainer route. Source-default
+  CUDA vec2 measured `529.464 us` for
+  `bias_add BT=65536 OC=3072`, while Triton measured `530.461 us` and a
+  tested CUDA vec4 candidate measured `538.793 us`. The vec4 candidate passed
+  `test_bias` and a 3-step TinyStories smoke at `avg_ms=2487.089`, but the
+  focused runtime row was slower, so the source change was not kept.
+  `dev/sm120_promotion_decisions.json` now marks both the older Torch and
+  Triton wide-bias-add rows as `rejected_same_session_refresh`, and the current
+  selection/audit artifacts were regenerated with `active_promotions=0`.
+- Extended the LibTorch C++ runtime probe with `gelu_forward` over cached
+  BF16 `from_blob` handles. The focused target-context run at
+  `scratch/sm120_rounds/libtorch_runtime_gelu_20260521/bench_sm120_libtorch_runtime.log`
+  passed parity for `BT=65536 C=3072` and measured Torch C++ `547.598 us`,
+  slower than the current native CUDA trainer-backed row at `528.334 us` and
+  the optional Python Torch row at `529.467 us`. The current-selection writer
+  now lets a faster native row supersede an optional-stack row before reporting
+  the project-wide fastest set, and the audit adds a native-supersession guard
+  plus supplemental LibTorch GELU timing/parity checks.
+  Regenerating the artifacts now reports `project_fastest_used_row_count=32`,
+  `project_fastest_resolved_divergence_row_count=11`,
+  `project_torch_fastest_row_count=9`, `checks=130`,
+  `libtorch_supplemental_runtime_rows=1`, and
+  `libtorch_supplemental_parity_rows=1`; GPT-2 MLP GELU forward stays on CUDA.
+  The round validator self-test now also rejects future manifests that request
+  LibTorch supplemental runtime shapes but omit either the GELU timing row or
+  its LibTorch parity marker.
+- Added `dev/validate_libtorch_trainer_link.py`, a standalone LibTorch
+  executable probe for the remaining Torch C++ memory-route promotion question.
+  The probe links `torch`, `torch_cuda`, `c10`, `c10_cuda`, and `cudart`
+  without `torch_python`, wraps CUDA allocations with BF16 `from_blob` tensors,
+  and verifies zero/copy parity. Target-context evidence at
+  `scratch/sm120_rounds/libtorch_trainer_link_20260521/validate_libtorch_trainer_link.log`
+  records compile PASS, runtime PASS, and probe PASS. Future rounds now record
+  `RUN_LIBTORCH_TRAINER_LINK_PROBE` in the manifest as
+  `run_libtorch_trainer_link_probe`; when set, the round validator rejects a
+  missing or incomplete trainer-link probe log. The current audit now verifies
+  `libtorch_trainer_link_logs=1`, and the Torch C++ memory-row decisions now
+  cite that evidence explicitly. The gradients-zero and dresidual-zero rows now
+  have opt-in trainer call-sites and x10 rejection evidence; the remaining
+  logits-sized memory rows stay benchmark-only unless a real trainer call path
+  is identified.
+- Added an inactive `benchmark_context_flip` decision for qkv forward selecting
+  TK in the optional refresh. The optional round measured TK `1073.34 us`
+  versus cuBLASLt `1089.66 us`, but the trainer-backed x10 native round still
+  selected cuBLASLt `1039.600 us` versus TK `1070.020 us`, so the trainer
+  default remains cuBLASLt for that row. Refreshed LibTorch runtime-memory
+  decision text now reflects the new target-context results: logits memset and
+  logits copy select Torch C++ in the optional artifact (`3923.616 us` and
+  `8669.632 us`), but remain C++ API feasibility evidence pending a linked
+  trainer route and TinyStories smoke.
+
+## 2026-05-20 — SM120 optimization scoreboard and bench target repair
+
+- Corrected the cuDNN packed-QKV attention benchmark so the packed backward row
+  times backward from the saved cuDNN forward result instead of timing a fresh
+  forward inside the backward loop. This is the route shape a trainer link
+  would use and avoids overstating the packed backward cost. The focused
+  target-context refresh saved at
+  `scratch/sm120_rounds/cudnn_attention_saved_bwd_20260521/bench_sm120_cudnn_attention.log`
+  measured separated cuDNN forward/backward at `686.811/2371.942 us` and
+  packed cuDNN forward/backward at `807.672/2817.216 us`. Packed cuDNN is much
+  closer after the benchmark fix, but the route still totals `3624.888 us`,
+  slower than the current packed TK attention evidence around `3507-3529 us`,
+  so no trainer link or selection change is justified.
+  Future optional-stack rounds now make that route contract explicit:
+  `scripts/run_sm120_optimization_round.sh` records
+  `LLMK_CUDNN_PACKED_BACKWARD_ROUTE=saved-forward`, the manifest stores
+  `cudnn_packed_backward_route`, `dev/bench_sm120_cudnn_attention.py` prints
+  `cuDNNPacked Attention Backward route: saved-forward`, and both the round
+  validator and project audit reject new saved-forward manifests if the marker
+  is missing while continuing to accept older artifacts without the field.
+- Ran the focused `fc` dWeight LibTorch C++ raw-pointer probe in the target
+  context and rejected trainer promotion for that row. The saved log at
+  `scratch/sm120_rounds/libtorch_matmul_fc_20260521/bench_sm120_libtorch_matmul.log`
+  passed parity for `dW` and `dW+accum`, then measured `1355.76 us` and
+  `1372.33 us`. That loses to the current optional cuBLAS rows
+  (`1330.140 us` / `1313.760 us`) and to the native trainer-backed x10 cuBLAS
+  rows (`1309.120 us` / `1333.200 us`), so
+  `dev/sm120_promotion_decisions.json` now records the project-wide Torch
+  `fc dW` win as rejected with standalone LibTorch C++ evidence. Regenerating
+  `current-sm120-selection.{json,md}` preserved `active_promotions=0`.
+- Added `dev/bench_sm120_libtorch_matmul.py`, a focused standalone LibTorch C++
+  API probe for GPT-2 dWeight matmul rows. It wraps existing BF16 CUDA buffers
+  with cached `from_blob` tensor handles and times `dW` / `dW+accum` through
+  C++ `mm_out` / `addmm_out`, starting with the `fc` row where project-wide
+  fastest evidence currently shows a Torch operator win. The SM120 round
+  harness now records `RUN_LIBTORCH_MATMUL_BENCHMARKS` and
+  `LLMK_LIBTORCH_MATMUL_SHAPES`, runs the probe during optional Python-stack
+  rounds by default for `fc`, and summarizes `bench_sm120_libtorch_matmul.log`.
+  The round validator parses optional `Torch C++` matmul rows, carries their
+  timing/correctness provenance from the LibTorch matmul log, and now rejects
+  future manifests with `run_libtorch_matmul_benchmarks=1` unless that log
+  exists, records the standalone C++ cached-`from_blob` route marker, and
+  contains exact `dW` / `dW+accum` rows for the requested shapes. The project
+  audit enforces the same conditional gate for future optional rounds without
+  making older optional-stack artifacts invalid. A target-context run on RTX
+  5090 passed parity and recorded the measured `1355.76 us` / `1372.33 us`
+  C++ timings above; the project audit now also has a dedicated
+  `Torch fc dWeight LibTorch rejection evidence` gate that checks the saved log
+  and the current-selection rejection evidence before passing.
+- Wired the standalone LibTorch C++ API runtime route into
+  `scripts/run_sm120_optimization_round.sh` as the default future LibTorch
+  memory route. The harness now defaults
+  `LLMK_LIBTORCH_RUNTIME_ROUTE=cxx-api-raw-pointer`, passes that value to
+  `dev/write_sm120_round_manifest.py`, records it in the round summary and
+  manifest config, and invokes `dev/bench_sm120_libtorch_runtime.py --route`.
+  `dev/validate_sm120_round.py` now carries the route in selected-row
+  `source_run_config`, and both the round validator and project audit self-tests
+  enforce that a new manifest's `libtorch_runtime_route` matches the raw-pointer
+  marker recorded in `bench_sm120_libtorch_runtime.log`, while still accepting
+  either marker for older artifacts that did not record the route.
+- Extended `dev/bench_sm120_libtorch_runtime.py` with a
+  `--route cxx-api-raw-pointer` mode. This builds a standalone LibTorch C++ API
+  shared library that links `torch`/`torch_cuda`/`c10` directly, avoids
+  `torch_python` and pybind in the timed path, caches `from_blob` tensor handles
+  over existing CUDA pointers, and exposes C ABI zero/copy calls. The existing
+  extension-backed raw-pointer route remains the default for continuity, while
+  the validator and project audit now accept either raw-pointer marker as
+  LibTorch memory-route evidence. Host-side verification passed
+  `py_compile`, the script help path exposes `cxx-api-raw-pointer`, and the
+  target-context raw-pointer refresh below records the actual parity/timing
+  evidence for the linked-C++ route shape.
+- Added `dev/bench_sm120_libtorch_runtime.py`, a focused LibTorch C++ API
+  runtime-memory probe for the exact Torch-fast zero/copy rows, and wired it
+  into the optional Python-stack benchmark phase plus validator log contract.
+  The validator and project audit now require timing and parity evidence for
+  all four exact LibTorch memory rows: hidden/logits `cuda_memset` and
+  hidden/logits `cuda_copy_d2d`.
+  The script builds a tiny C++ extension and falls back to a direct `c++`
+  shared-library build when `torch.utils.cpp_extension` cannot use `ninja`.
+  Target-context same-session timing kept this as feasibility evidence rather
+  than a trainer promotion: CUDA runtime hidden/logits memset measured
+  `59.647/3952.352 us` and copy measured `131.799/8769.241 us`; Python Torch
+  measured `59.814/3928.672 us` memset and `131.677/8666.176 us` copy; the
+  current optional-stack LibTorch log records full-row parity PASS for all four
+  rows and measured Torch C++ `59.850/3917.600 us` memset and
+  `131.987/8662.080 us` copy. The probe now defaults to cached `from_blob`
+  wrappers over existing CUDA pointers, which is the route shape a future
+  trainer integration would need instead of Python-owned tensors only. A
+  refreshed target-context raw-pointer run passed full-row parity and measured
+  Torch C++ raw hidden/logits memset `60.011/3984.000 us` and copy
+  `131.526/8686.496 us`; same-session native CUDA memory tuning with
+  non-streaming 1024-thread kernels measured hidden/logits memset
+  `60.056/4016.422 us` and copy `133.416/8881.951 us`, so the native
+  replacement still does not beat the Torch/CUDA choices. Revalidating the
+  optional round now parses `194`
+  benchmark rows with `42` Torch objective rows, `4` LibTorch timing rows, and
+  `4` LibTorch parity rows; selected Torch C++ memory winners now also carry
+  that LibTorch log in their row-level `correctness_logs` provenance instead
+  of an empty correctness list. Regenerating the current selection/audit reports
+  `optional_non_trainer=12`, `torch_selected=9`, `checks=115`, and
+  `active_promotions=0`; the audit now also fails if any LibTorch C++ memory log
+  lacks cached `from_blob` raw-pointer route evidence, if any resolved optional
+  decision lacks explicit `decision_evidence`, or if a project-wide fastest row
+  resolved away from the trainer lacks decision reason/evidence detail. A
+  dedicated `Torch runtime memory LibTorch rejection evidence` audit gate now
+  checks that the three resolved Torch/Torch C++ runtime-memory rows carry
+  raw-pointer parity/timing evidence from
+  `scratch/sm120_rounds/codex_sm120_round_torch_attention_materialized_20260521/bench_sm120_libtorch_runtime.log`;
+  the regenerated audit passes with `checks=117` and `rows=3 missing=0` for
+  that gate. Selected
+  backend rows now also carry `trainer_call_path_kind`, and the audit fails if
+  any `cuda_copy_d2d` runtime row is not marked as
+  `profiler_runtime_benchmark_only`, keeping profiler-visible copy evidence from
+  being mistaken for a trainer replacement. The current-selection artifact now
+  also lists the `28` project-wide fastest rows that are actually used by the
+  trainer and summarizes the `14` fastest rows not used by the trainer by
+  call-path kind: `6` trainer/C++ rows rejected by stability/selector evidence,
+  `5` operator/reference prototypes, `2` profiler-runtime copy rows, and `1`
+  LibTorch raw-pointer prototype. The audit checks those debt counts plus the
+  fact that all `6/6` trainer/C++ callable debt rows carry trainer-smoke, x10,
+  or stability evidence before they are resolved away from the trainer. It also
+  checks the persisted used/resolved/extra project-fastest partition identities
+  and row contents, including the Torch-specific partition: `0` trainer-used,
+  `6` resolved, and `3` extra/non-objective Torch fastest rows, with all `9/9`
+  Torch fastest rows accounted for. The selection artifact now also renders a
+  Torch-fastest disposition table, and the audit requires all `9/9` Torch
+  fastest rows to carry a trainer-used/resolved/extra disposition plus an
+  action or reason, so Python/operator wins, LibTorch raw-pointer prototypes,
+  and non-equivalent reference rows stay explicit instead of being confused
+  with trainer-selected routes. It also checks that all `14/14`
+  project-wide fastest rows resolved away from the trainer link to the
+  resolved-decision table, and that all `8/8` non-trainer resolved rows carry
+  action metadata there. Selected backend rows now also carry
+  `source_run_config` copied from `round-manifest.json`
+  so the exact SM120 build/runtime flags are present at row level; the audit
+  checks those flags plus each row's source run label, artifact directory, and
+  git commit against the referenced manifest, checks each source round's
+  `selected-backends.json` rows against its generated `Selected Backend Rows`
+  scoreboard table, checks the source selected-backend schema, run identity,
+  selection policy, benchmark counts, and Torch/LibTorch coverage metadata, and
+  checks the project-wide
+  fastest/Torch-fastest row contents against the source round's
+  `selected-backends.json`; native trainer rows are also checked against the
+  native source `selected-backends.json`, including rejected microbench winners
+  and their fallback stack/time fields; native extra benchmark-only rows are
+  checked against the source non-objective selected rows; resolved optional
+  decisions are checked against their source `promotion-candidates.json` row or
+  selected-backend row; and native/optional attention route totals are checked
+  against the source `attention_route_rows`.
+- Added behavior-preserving SM120 bias-add block-size A/B hooks in
+  `llmc/matmul.cuh`: `LLMK_SM120_BIAS_ADD_BLOCK_SIZE` and
+  `LLMK_SM120_BIAS_ADD_WIDE_BLOCK_SIZE`. The source default remains unchanged
+  after focused RTX 5090 timing failed to reproduce a material default win:
+  default measured `80.698/536.701 us` for `OC=768/3072`, candidate `512`
+  measured `81.521/535.581 us`, candidate `1024` measured `81.111/527.753 us`,
+  a source-default shape-aware rerun measured `80.931/535.270 us`, and the
+  final restored-default rebuild measured `81.034/536.434 us`. Each candidate
+  passed `test_bias`; no trainer route changed.
+- Ran the unresolved `LLMK_SM120_BIAS_ADD_WIDE_BLOCK_SIZE=1024` candidate
+  through the full native SM120 round harness and kept it rejected as a default
+  source change. Target-context
+  `scratch/sm120_rounds/codex_sm120_round_bias_add_wide1024_20260521` passed
+  all nine correctness smokes, benchmark validation, and 3 TinyStories steps at
+  `avg_ms=2489.491`, but the same round measured standalone `bias_add`
+  `OC=768/3072` at `101.293/536.232 us`, did not reproduce the earlier
+  `527.753 us` wide-row candidate timing, and did not beat the better prior
+  3-step stream-sync candidate round at `2483.598 ms`. The default
+  `train_gpt2cu` binary was rebuilt without the candidate flag.
+- Extended `dev/triton/bench_sm120_layernorm.py` with a
+  `Torch LayerNorm BackwardDInputNativePlusGrads` row. This closes the
+  dInput-only Torch LayerNorm promotion gate by timing native Torch dInput plus
+  explicit Torch reductions for trainer-required BF16 dweight/dbias. Focused
+  target-context RTX 5090 timing
+  `/home/adam/miniconda3/envs/llm-kittens/bin/python
+  dev/triton/bench_sm120_layernorm.py --cols 768 --repeats 7 --warmup 3`
+  measured `1964.480 us`, versus `221.888 us` for dInput-only Torch native,
+  `409.728 us` for full Torch native backward, `365.760 us` for Triton FP32
+  atomic gradients, and the existing CUDA full-backward baseline around
+  `290 us`. The trainer remains on CUDA LayerNorm backward.
+- Added `dev/cuda/bench_sm120_cublaslt_epilogue_algos.cu`, a focused
+  cuBLASLt heuristic-index probe for the trainer-shaped fused MLP epilogue
+  rows. It builds through `make bench_sm120_cublaslt_epilogue_algos
+  DEVICE_ARCH=SM120 NO_MULTI_GPU=1 NO_USE_MPI=1` and enumerates the returned
+  algorithms for `fc` forward+GeLU and `fcproj` dInput+dGeLU. Target-context
+  `LLMK_BENCH_REPEATS=7 ./bench_sm120_cublaslt_epilogue_algos` on RTX 5090
+  found the current default lowest-waves heuristic already fastest for both:
+  `fc` forward+GeLU default idx `0` measured `1437.429 us` versus idx `1`
+  `1449.168 us`, and `fcproj` dInput+dGeLU default idx `0` measured
+  `1760.613 us` versus idx `1` `1789.392 us`. No trainer route was changed.
+- Added `dev/bench_sm120_torch_attention_layouts.py`, a focused Torch route
+  probe for the unresolved separated-Q/K/V attention layout hypothesis. The
+  target-context RTX 5090 run
+  `/home/adam/miniconda3/envs/llm-kittens/bin/python
+  dev/bench_sm120_torch_attention_layouts.py --repeats 5 --warmup 2 --json-out
+  scratch/sm120_rounds/torch_attention_layout_probe_20260521.json` measured
+  `TorchQKVSinglePacked` `2030.240/6334.176 us`,
+  `TorchQKVSplitStrided` `2108.192/4822.080 us`, and
+  `TorchQKVSplitMaterialized` `2653.696/5388.320 us` for forward/backward.
+  The best split-strided Torch route improves the backward side, but its
+  combined qkv-projection plus attention route remains slower than the current
+  selected native qkv+packed-TK path, so this rejects a libtorch attention
+  layout rewrite for the current trainer shape.
+- Rechecked the older `LLMK_SM120_DPREP_WARPS=3` attention-prep setting against
+  the current stream-sync source default of `4`. The candidate remains rejected
+  as a default: both builds passed the RTX 5090 `test_attention` smoke, but
+  focused `LLMK_BENCH_REPEATS=9 ./bench_sm120_attention` timing was
+  noise-level. Default measured `781.911 us` forward / `2742.730 us`
+  backward; the `LLMK_SM120_DPREP_WARPS=3` build measured `783.235 us`
+  forward / `2741.640 us` backward, so there is no trainer-smoke justification
+  and the source default stays at `4`.
+- Promoted SM120 backward completion from a device-wide synchronization to a
+  `main_stream` synchronization, with
+  `LLMK_SM120_DISABLE_BACKWARD_STREAM_SYNC` as the opt-out. The change keeps
+  H100/non-SM120 behavior on the old device-wide sync path and relies on the
+  existing SM120 stream contract: auxiliary split-K work is joined back to
+  `main_stream` before the backward function needs the copied mean loss.
+  Verification: opt-in `codex_sm120_round_backward_stream_sync_20260521`
+  passed all native gates at `avg_ms=2483.598`; opt-in x10
+  `codex_sm120_round_backward_stream_sync_x10_20260521` validated at
+  `avg_ms=2495.290`; and promoted default-build x10
+  `codex_sm120_round_backward_stream_sync_default_x10_20260521` passed
+  correctness, manifest, stack-probe, benchmarks, checkpoint cleanup, and
+  TinyStories training with `avg_ms=2493.133`, loss
+  `11.032358 -> 9.588612`, norm `22.1414 -> 6.3099`,
+  `use_master_weights disabled`, and `gelu_fusion 1`. The current selection
+  contract now uses the default-build stream-sync x10 native round; regenerated
+  `current-sm120-selection.{json,md}` reports `native_selected_row_count=42`,
+  `native_inactive_selected_row_count=5`,
+  `project_fastest_resolved_divergence_row_count=13`, and
+  `active_promotion_candidate_count=0`, while
+  `current-sm120-audit.{json,md}` passes with `checks=88`.
+- Added attention route-level totals to the SM120 validator and consolidated
+  selection artifacts. `dev/validate_sm120_round.py` now writes an `Attention
+  Route Totals` scoreboard section plus `attention_route_rows` in
+  `selected-backends.json`, grouping forward/backward timings by stack and
+  marking packed trainer-layout routes separately from separated Q/K/V reference
+  routes. `dev/write_sm120_current_selection.py` carries the native and
+  optional route rows into `current-sm120-selection.{json,md}`, and the project
+  audit now requires native TK packed-route evidence plus optional TorchPacked,
+  TorchMaterializedPacked, cuDNNPacked, and explicit incomplete TritonPacked
+  evidence. Revalidating the current native and optional rounds shows packed TK
+  remains the trainer attention route (`3529.519 us` native route total;
+  `3507.412 us` in the optional comparison round), while separated Torch is
+  faster only as a non-trainer-layout reference route (`2751.159 us`).
+- Preserved actionable promotion metadata in the consolidated current-selection
+  artifact. `dev/write_sm120_current_selection.py` now carries
+  `candidate_class`, `priority`, `promotion_gate`, decision notes, and measured
+  edge fields from `promotion-candidates.json` into
+  `resolved_optional_stack_decisions`, and the Markdown table shows the class
+  and promotion gate for each resolved optional-stack decision. The project
+  audit now fails if a resolved non-trainer optional decision lacks candidate
+  class, priority, or promotion gate, so the current selection remains usable as
+  the next-work queue without reopening the source round JSON.
+- Tightened the project-wide documentation audit for the current-selection
+  replay path. `dev/audit_sm120_optimization_goal.py` now requires the audited
+  docs to mention the selection writer, project audit, shared
+  `dev/sm120_objective_contract.py` defaults, `RUN_CURRENT_SELECTION_AUDIT=1`,
+  both `SM120_SELECTION_*_ROUND` override variables, and the `DRY_RUN=1`
+  command-shape check. The self-test now rejects docs that only contain the old
+  weak `current-sm120-selection` mention, keeping the live scoreboard and
+  changelog aligned with the machine-checked replay contract.
+- Aligned one-command current-selection replay with the current audited native
+  trainer evidence. `dev/sm120_objective_contract.py` now owns the default
+  native and optional-stack selection round paths, the selection writer and
+  project audit import those defaults. `scripts/run_sm120_optimization_round.sh`
+  now omits selection-round overrides by default, so `RUN_CURRENT_SELECTION_AUDIT=1`
+  uses the same contract defaults as direct Python invocations while still
+  honoring explicit `SM120_SELECTION_NATIVE_ROUND` and
+  `SM120_SELECTION_OPTIONAL_ROUND` overrides. Running the selection writer and
+  audit without explicit round overrides now replays the same x10 median native
+  evidence used by the published `current-sm120-selection` artifacts. The
+  current-selection audit block also runs in `DRY_RUN=1`, so dry-run replay
+  prints the exact selection/audit commands instead of silently skipping that
+  part of the round plan. `best_runs.md` now documents the contract-owned
+  defaults, dry-run check, and recent replay-default decision alongside the
+  current Torch/optional-stack scoreboard guidance.
+- Captured a fresh current-source native x10 round,
+  `codex_sm120_round_current_native_x10_median_20260521`, with the median
+  attention benchmark and current 93-row native benchmark contract. The round
+  passed build, stack-probe, manifest, all nine correctness smokes, benchmark
+  validation, TinyStories training, current-selection generation, and the
+  project audit. It reports `benchmarks=93`, `family_stack_rows=168`,
+  `train_steps=10`, `avg_ms=2496.245`, attention forward/backward
+  `787.769/2741.750 us`, and `0` active promotions. This is current-source
+  evidence for the trainer mix, but not a new stable-best claim versus the
+  earlier x10 `2495.443 ms` row.
+- Tightened `dev/write_sm120_current_selection.py` so the published native
+  trainer mix contains exactly the GPT-2 objective rows from
+  `dev/sm120_objective_contract.py`. Extra native benchmark rows remain visible
+  as benchmark evidence but no longer inflate `trainer_rows`; the current
+  median x10 round has `45` native selected benchmark rows, of which the
+  selection artifact keeps `42` objective trainer rows and records the three
+  LayerNorm `N=65536 C=3072` rows as extra benchmark selections. The
+  project-wide audit now requires exactly the objective-row count.
+- Moved the shared exact trainer-row key builder into
+  `dev/sm120_objective_contract.py` and extended the consolidated current
+  selection with a project-wide fastest observed row set. The artifact compares
+  the optional Python/backend stack row against the current native trainer row
+  before listing Torch as a project-wide fastest situation, while the trainer
+  mix remains limited to rows with an existing trainer-callable route plus
+  TinyStories evidence.
+  Regenerating `current-sm120-selection.{json,md}` reports
+  `project_fastest_row_count=49`, `project_torch_fastest_row_count=8`, and
+  `project_trainer_callable_row_count=38`, with `33` project-wide fastest rows
+  used directly by the trainer mix, `9` objective fastest rows resolved away
+  from the trainer by inactive decisions, `7` extra benchmark rows, and `0`
+  unresolved objective rows. The Markdown renders the Torch-only, full
+  project-wide fastest, resolved-away-from-trainer, and extra project-wide
+  benchmark row tables. The project audit now verifies exact row-key identity
+  against its native or optional source round, that every project-wide fastest
+  objective row is trainer-selected or inactive-decision covered, that no
+  optional row remains selected when the current native row is faster, and that
+  every extra project-wide benchmark row has an explicit reason. It also requires CuTeDSL
+  GEMM evidence to be stronger than package import: the optional round must
+  carry exact GPT-2 shape timing rows or target-rejection rows for all five
+  GEMM shapes, and Triton GEMM must time every required GPT-2 pass/shape row.
+  The audit also checks exact cuDNN/Triton attention evidence: cuDNN must have
+  separated and packed forward/backward rows, and Triton must have
+  separated/packed forward rows plus explicit backward timing or unavailable
+  rows. Runtime/classifier optional coverage is exact too: Torch must time
+  every objective row, while Triton must either time or explicitly mark
+  unimplemented runtime rows. It also checks the fastest-row debt table and
+  requires all `6/6` trainer/C++ callable rows resolved away from the trainer to
+  carry trainer-smoke, x10, or stability evidence. It also audits the
+  Torch-specific partition: `0` trainer-used, `4` resolved, and `4`
+  extra/non-objective Torch fastest rows, plus decision-table linkage for all
+  `9/9` resolved project-fastest rows and action metadata for all `4/4`
+  non-trainer resolved rows. With the current source, it passes with `checks=130`,
+  `trainer_rows=42`, `project_torch_fastest_rows=8`, `torch_objective_rows=42`,
+  `cutedsl_gemm_rows=5`, `triton_matmul_rows=21`,
+  `cudnn_attention_rows=4`, `triton_attention_unavailable=2`,
+  `torch_runtime_rows=16`, `libtorch_supplemental_runtime_rows=1`,
+  `libtorch_trainer_link_logs=1`, `triton_runtime_unavailable=10`, and
+  `active_promotions=0`.
+- Recorded the optional-stack `fcproj` dInput cuBLASLt row as an inactive
+  `benchmark_context_flip` in `dev/sm120_promotion_decisions.json`. The
+  optional-stack refresh selected cuBLASLt at `1372.020 us` versus cuBLAS
+  `1415.140 us`, but the current-source x10 native round selected cuBLAS at
+  `1380.080 us` versus cuBLASLt `1405.130 us` and carries TinyStories
+  training evidence at `avg_ms=2496.245`, so the trainer mix stays with the
+  training-backed current native row until a fresh selector smoke proves a
+  change.
+- Tightened `dev/write_sm120_current_selection.py` so the native round used for
+  the published current trainer mix must include TinyStories training evidence.
+  The writer now checks `round-manifest.json` for `run_training=1`, requires a
+  positive `max_steps`, and requires a non-empty `train_gpt2cu.log` with total
+  average iteration time evidence. Benchmark-only native rounds can still be
+  inspected with `--allow-benchmark-only-native`, but they no longer pass as
+  current trainer-mix artifacts by default. The project-wide audit now also
+  requires that `current-sm120-selection.json` carries those native training
+  evidence paths. Verification:
+  `python3 dev/write_sm120_current_selection.py --self-test`,
+  default generation with the stable x10 native round, a negative check against
+  benchmark-only `codex_sm120_round_native_attention_median_20260521`, and an
+  explicit override inspection generation all behaved as expected, followed by
+  `python3 dev/audit_sm120_optimization_goal.py --self-test`.
+- Recorded the fresh native qkv dInput cuBLAS selection as an inactive
+  noise-floor flip in `dev/sm120_promotion_decisions.json`. The benchmark-only
+  round `codex_sm120_round_native_attention_median_20260521` selected cuBLAS at
+  `1012.36 us` versus cuBLASLt `1014.27 us`, but the stable x10 selection
+  artifact has cuBLASLt at `1007.09 us` for the same row and there is no
+  trainer-smoke evidence for changing this default. Revalidating the round
+  annotates `selected-backends.json` and `scoreboard-candidates.md` with
+  `noise_floor_microbench_flip` so a later current-selection refresh cannot
+  silently promote the row.
+- Upgraded `bench_sm120_attention` to the same repeatable median-event timing
+  contract as the other native SM120 microbenchmarks. It now honors
+  `LLMK_BENCH_REPEATS`, prints the repeat count in a timing header, and keeps
+  the existing attention timing row format for validator compatibility.
+  Verification: `make -B -j 4 bench_sm120_attention DEVICE_ARCH=SM120
+  NO_MULTI_GPU=1 NO_USE_MPI=1` passed, and target-context
+  `LLMK_BENCH_REPEATS=7 ./bench_sm120_attention` measured packed TK attention
+  forward/backward at `783.509/2739.042 us`. The benchmark-only round
+  `codex_sm120_round_native_attention_median_20260521` then passed build,
+  stack-probe, manifest, all nine correctness smokes, benchmark validation, and
+  selected-backend generation with `benchmarks=93`, selected attention rows
+  `785.867/2746.680 us`, and `0` promotion candidates. This does not change the
+  trainer route: packed TK remains selected, while Torch SDPA stays scoped to
+  faster already-separated-Q/K/V reference rows rather than the packed trainer
+  layout.
+- Reworded optional Python-stack benchmark context failures so they cannot be
+  read as hardware/GPU availability claims. Torch, Triton, and cuDNN benchmark
+  scripts now report a missing `torch.cuda` context as
+  "PyTorch CUDA context is not initialized in this process" and the round
+  summary patterns were updated to capture that wording. Backend-specific
+  exact-shape rejection rows remain explicit backend rows, not GPU status.
+- Added an opt-in `LLMK_SM120_CLASSIFIER_EXP2` A/B hook for the SM120 fused
+  classifier softmax math and rejected it as the default after focused
+  same-session evidence. The candidate build passed `./test_fused_classifier`
+  and measured `fused_classifier_loss 3997.862 us`, `fused_classifier
+  8921.062 us` with `LLMK_BENCH_REPEATS=7 ./bench_sm120_runtime`; the restored
+  default build passed the same smoke and measured `3943.962 us` / `8909.920
+  us`, so the current expf path remains the trainer route.
+- Made Torch benchmark coverage an exact-row project contract for SM120
+  optimization rounds. `dev/validate_sm120_round.py` now writes and enforces a
+  `Torch Objective Benchmark Coverage` table when Python-stack benchmarks are
+  enabled, requiring Torch timing rows for all `42` GPT-2 objective rows before
+  selecting or rejecting Torch wins. `dev/audit_sm120_optimization_goal.py` now
+  requires that section in the optional-stack scoreboard and reports `42` Torch
+  objective benchmark rows in `current-sm120-audit.{json,md}`. Verification:
+  `python3 dev/validate_sm120_round.py --self-test`,
+  `python3 dev/audit_sm120_optimization_goal.py --self-test`,
+  `python3 -m py_compile` for both updated scripts, revalidating
+  `codex_sm120_round_torch_attention_materialized_20260521` with benchmark
+  gates, and regenerating `current-sm120-selection.{json,md}` plus
+  `current-sm120-audit.{json,md}`.
+- Added a materialized packed-QKV Torch attention benchmark path to
+  `dev/bench_sm120_torch_attention.py`, alongside the existing separated and
+  strided packed SDPA rows. The refreshed optional-stack round
+  `codex_sm120_round_torch_attention_materialized_20260521` validates with
+  `190` benchmark rows and records attention forward/backward timings of packed
+  TK `778.909/2728.503 us`, native separated Torch `555.498/2195.661 us`,
+  TorchPacked `1068.491/4067.501 us`, and TorchMaterializedPacked
+  `1260.536/4195.885 us`. The current selection/audit now use that optional
+  round by default; regenerated `current-sm120-selection.{json,md}` reports
+  `0` active promotions, and `current-sm120-audit.{json,md}` passes `61`
+  checks. The trainer remains on packed TK because the faster Torch row is only
+  for already-separated Q/K/V.
+- Added a scoped opt-in SM120 TK exact-dGELU dInput selector for the
+  cuBLASLt-backed trainer build. `LLMK_SM120_USE_TK_FUSED_DGELU_DINP` now
+  routes the GPT-2 `fcproj` fused dGELU dInput row through TK and forces exact
+  dGELU tanh for that candidate, while the default remains cuBLASLt. The
+  candidate recovered the old correctness failure: `./test_matmul` passed
+  `10/10` with GPT-2 fcproj fused dGELU max diff `0.125000`, and focused
+  `LLMK_BENCH_REPEATS=7 ./bench_sm120_matmul` measured TK exact `1761.68 us`
+  versus cuBLASLt fused `1855.33 us`. It is still rejected as the default:
+  3-step `codex_sm120_round_tk_fused_dgelu_exact_20260521` validated at
+  `avg_ms=2492.018`, but x10
+  `codex_sm120_round_tk_fused_dgelu_exact_x10_20260521` regressed to
+  `avg_ms=2502.328` versus the current stable x10 `2495.443 ms`.
+- Added `dev/write_sm120_current_selection.py` to generate a consolidated
+  SM120 backend-selection artifact from the stable native x10 round and the
+  latest optional-stack comparison round. It writes
+  `scratch/sm120_rounds/current-sm120-selection.json` and `.md`, requires the
+  native rows to have trainer call paths, fails if optional-stack promotions are
+  still active, and applies inactive decision-registry rows before reporting
+  the effective trainer mix. The current artifact reports `42` native rows,
+  `2` inactive native microbench selections mapped back to cuBLASLt, `21`
+  optional-stack decision rows, and `0` active promotions. The resolved
+  decision summary now also merges promotion-only decisions, so non-equivalent
+  Torch reference wins such as BF16-state AdamW stay visible as inactive
+  contract-mismatch rows. The script's `--self-test` path covers active
+  optional promotions, non-trainer-callable native rows, inactive native rows
+  that lack a fallback stack, and promotion-only resolved decisions.
+- Strengthened `dev/write_sm120_current_selection.py` so the non-trainer
+  optional-stack decision contract is enforced while generating the consolidated
+  artifact. Every selected optional-stack row without a trainer call path now
+  needs a matching `promotion-candidates.json` row and an inactive resolved
+  decision before `current-sm120-selection.json` can be written. The artifact
+  also records optional non-trainer selected and promotion-row counts, and
+  `dev/audit_sm120_optimization_goal.py` checks those counts against the
+  optional round. Verification: `python3 dev/write_sm120_current_selection.py
+  --self-test` covers missing promotion-row and missing inactive-decision
+  failures; regenerating `current-sm120-selection.{json,md}` passed with `42`
+  native rows, `17` optional non-trainer rows, `21` optional decisions, and `0`
+  active promotions; regenerating `current-sm120-audit.{json,md}` passed with
+  `37` checks.
+- Added a `Resolved Optional-Stack Decisions` table to
+  `current-sm120-selection.md`, listing each optional decision by suite, kernel,
+  exact shape, selected stack, timing, scope, and decision status. This makes
+  the Torch/Triton/other optional-stack evidence reviewable from the
+  project-wide selection artifact instead of requiring JSON inspection. The
+  current-selection audit now requires that table. Verification:
+  `python3 dev/write_sm120_current_selection.py --self-test`,
+  `python3 dev/audit_sm120_optimization_goal.py --self-test`, and regenerated
+  `current-sm120-selection.{json,md}` / `current-sm120-audit.{json,md}`, with
+  the audit passing `38` checks.
+- Replaced the audit's Torch-only optional-log check with the shared
+  `PYTHON_STACK_BENCHMARK_LOGS` contract. The project-wide audit now requires
+  all optional Python-stack logs to exist and be non-empty, covering Torch,
+  Torch C++ runtime memory, Triton, cuDNN, CuTeDSL, and the combined LayerNorm
+  comparison log.
+  Verification: `python3 dev/audit_sm120_optimization_goal.py --self-test` now
+  covers a missing non-Torch log failure, and regenerating
+  `current-sm120-audit.{json,md}` passed with `44` checks and the required
+  Python-stack benchmark logs.
+- Extended `dev/audit_sm120_optimization_goal.py` to verify the full backend
+  stack-probe contract for both current source rounds. The audit now checks
+  every objective stack plus GPU runtime for status, evidence, candidate-use,
+  and next-action fields, and checks every family/stack matrix row for status,
+  reason, and next action. Verification:
+  `python3 dev/audit_sm120_optimization_goal.py --self-test` and regenerated
+  `current-sm120-audit.{json,md}`, which passed with `50` checks, `9`
+  stack-probe rows per source round, and `168` family/stack rows per source
+  round.
+- Extended `dev/audit_sm120_optimization_goal.py` to validate both source
+  round manifests. It now checks SM120 artifact config, git short
+  commit/status path, nvcc metadata, every expected smoke/benchmark/trainer
+  binary row from `EXPECTED_MANIFEST_BINARIES`, SHA256 evidence, and
+  `run_python_stack_benchmarks=1` for the optional-stack round. Verification:
+  `python3 dev/audit_sm120_optimization_goal.py --self-test` and regenerated
+  `current-sm120-audit.{json,md}`, which passed with `61` checks and `14`
+  manifest binary rows per source round.
+- Added `dev/audit_sm120_optimization_goal.py`, a host-side audit for the
+  mixed-backend SM120 optimization goal. It verifies the current selection
+  artifact, stable native x10 training evidence, optional stack/family matrix
+  coverage, Torch benchmark logs for matmul/attention/classifier/runtime and
+  LayerNorm, and the rule that faster Torch rows must be trainer-callable or
+  explicitly resolved as inactive/reference rows before reporting the trainer
+  mix. The audit now also fails if a resolved Torch-selected optional row is
+  missing from the consolidated selection artifact. Verification:
+  `python3 dev/audit_sm120_optimization_goal.py --self-test`
+  and `python3 dev/audit_sm120_optimization_goal.py --json-out
+  scratch/sm120_rounds/current-sm120-audit.json --markdown-out
+  scratch/sm120_rounds/current-sm120-audit.md`, which passed with `30` checks,
+  `42` trainer rows, `13` Torch-selected optional rows, `0` active promotions,
+  and native x10 `avg_ms=2495.443`.
+- Broadened the current-selection audit from Torch-only optional rows to every
+  selected optional-stack row that lacks a trainer call path. Those rows now
+  require a matching `promotion-candidates.json` entry, inactive decision
+  coverage, and a consolidated resolved-decision entry in
+  `current-sm120-selection.json`; Torch keeps its separate benchmark-log
+  presence checks. Verification: `python3 dev/audit_sm120_optimization_goal.py
+  --self-test` now covers a non-Torch missing-consolidation failure, and
+  regenerating `scratch/sm120_rounds/current-sm120-audit.{json,md}` passed with
+  `35` checks, `42` trainer rows, `17` optional non-trainer selected rows,
+  `13` Torch-selected optional rows, and `0` active promotions.
+- Added an opt-in `RUN_CURRENT_SELECTION_AUDIT=1` path to
+  `scripts/run_sm120_optimization_round.sh`. After normal round validation, the
+  harness can regenerate `current-sm120-selection.{json,md}` and run
+  `dev/audit_sm120_optimization_goal.py` through the same logging surface.
+  `SM120_SELECTION_NATIVE_ROUND`, `SM120_SELECTION_OPTIONAL_ROUND`,
+  `SM120_SELECTION_JSON_OUT`, `SM120_SELECTION_MD_OUT`, `SM120_AUDIT_JSON_OUT`,
+  and `SM120_AUDIT_MD_OUT` let focused refreshes audit a newly generated native
+  or optional-stack evidence pair without editing the script. Verification:
+  `bash -n scripts/run_sm120_optimization_round.sh`.
+- Made `dev/validate_sm120_round.py` enforce optional Python-stack benchmark
+  logs when `round-manifest.json` records `run_python_stack_benchmarks=1`.
+  Torch/Triton/cuDNN/CuTeDSL logs are still parsed as optional comparison rows
+  for native-only rounds, but a Python-stack round now fails if any required log
+  is missing or empty, including Torch matmul, attention, classifier, runtime,
+  and the combined Torch/Triton LayerNorm benchmark log. The scoreboard now
+  includes a `Python Stack Benchmark Logs` section for those manifest-driven
+  checks. Verification: `python3 dev/validate_sm120_round.py --self-test` and
+  revalidation of
+  `scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521` with
+  manifest, stack-probe, correctness, and benchmark gates; the refreshed round
+  passed with `benchmarks=187`, `stacks=9`, and `family_stack_rows=168`.
+- Added row-level provenance to generated selected-backend and promotion
+  artifacts. `dev/validate_sm120_round.py` now writes the source run label,
+  artifact directory, git commit, timing log path, round-manifest path,
+  backend-stack probe path, and relevant correctness log paths on each selected
+  row and promotion row. `dev/write_sm120_current_selection.py` preserves those
+  fields into `current-sm120-selection.json`, and
+  `dev/audit_sm120_optimization_goal.py` now fails if any native trainer row or
+  resolved optional-stack decision lacks timing/config/stack-probe/correctness
+  provenance. Verification: revalidated the stable native x10 round and the
+  Torch-stack refresh round, regenerated current selection/audit artifacts, and
+  the refreshed audit passed `31` checks including `selection row provenance`.
+- Strengthened the provenance audit so referenced evidence paths must exist,
+  not merely be present as strings. The current selection audit now checks
+  timing log, round-manifest, backend-stack probe, and correctness log paths for
+  every native trainer row and resolved optional-stack decision. Runtime
+  memcpy/memset rows that have no route-specific correctness smoke carry an
+  explicit `correctness_evidence_note` instead of an empty unexplained
+  correctness list. Verification: revalidated both source rounds and
+  regenerated current selection/audit artifacts; a direct artifact scan found
+  `63` audited rows, `0` missing referenced files, and `8` runtime primitive
+  rows with explicit correctness notes.
+- Extended `dev/audit_sm120_optimization_goal.py` so the current native trainer
+  mix must cover every objective family from `dev/sm120_objective_contract.py`.
+  This keeps the consolidated selection artifact aligned with the full
+  `optimise-goal.md` scope instead of only validating individual row evidence.
+  Verification: `python3 dev/audit_sm120_optimization_goal.py --self-test` now
+  builds a synthetic full-family fixture, and regenerating
+  `scratch/sm120_rounds/current-sm120-audit.{json,md}` passed with `32` checks
+  and trainer objective-family coverage `21/21`.
+- Extended the same current-selection audit to require exact GPT-2 selected-row
+  coverage, not just family-level coverage. The audit now checks every required
+  GEMM pass/shape row, attention forward/backward, LayerNorm
+  forward/fused/backward, classifier loss and dlogits, AdamW, global norm,
+  encoder, required bias/reduction rows, and required memset/copy rows.
+  Verification: `python3 dev/audit_sm120_optimization_goal.py --self-test` and
+  regenerated `scratch/sm120_rounds/current-sm120-audit.{json,md}`, which
+  passed with `33` checks and trainer exact-row coverage `42/42`.
+- Moved the exact GPT-2 selection-row contract into
+  `dev/sm120_objective_contract.py`. The GEMM pass/shape matrix and fixed
+  runtime/operator shapes are now imported by both
+  `dev/validate_sm120_round.py` and `dev/audit_sm120_optimization_goal.py`,
+  reducing drift between benchmark validation and current-selection auditing.
+  Verification: py_compile for the contract, validator, and audit; validator
+  and audit self-tests; revalidation of both source rounds; and regenerated
+  current selection/audit artifacts still passing with exact-row coverage
+  `42/42`.
+- Refreshed the current stable x10 default round's derived artifacts to the
+  current optimisation contract without rerunning training. The round
+  `scratch/sm120_rounds/codex_sm120_round_current_default_x10_after_memory_20260520`
+  now has a fresh stack probe from the `llm-kittens` conda environment,
+  `scoreboard.md`, `selected-backends.json`, and `promotion-candidates.json`.
+  Revalidation with manifest, stack-probe, correctness, benchmark, training,
+  and checkpoint-cleanup gates passed with `benchmarks=86`, `stacks=9`,
+  `family_stack_rows=168`, `train_steps=10`, and `avg_ms=2495.443`.
+  The selected-backend artifact records `42` native C++/CUDA/TK rows and no
+  active promotion backlog for this native-only stable round.
+- Removed the stale raw NVML failure wording from the SM120 stack-probe path
+  and from existing generated scratch artifacts. `dev/probe_sm120_backend_stacks.py`
+  now records only neutral process-context metadata text when `nvidia-smi`
+  cannot return device metadata, while keeping GPU runtime availability tied to
+  explicit SM120 correctness and benchmark logs. A repo-wide scan including
+  `scratch/` now finds no stale GPU availability phrases. Verification:
+  `/home/adam/miniconda3/envs/llm-kittens/bin/python
+  dev/probe_sm120_backend_stacks.py --json-out /tmp/sm120_backend_stacks_sanitized.json
+  --markdown-out /tmp/sm120_backend_stacks_sanitized.md`.
+- Added an audit guard for that wording cleanup. `dev/audit_sm120_optimization_goal.py`
+  now fails if `optimise-goal.md`, `best_runs.md`, `CHANGELOG.md`, or
+  `dev/probe_sm120_backend_stacks.py` reintroduce stale GPU runtime wording or
+  raw NVML metadata-failure phrases. Regenerating
+  `scratch/sm120_rounds/current-sm120-audit.{json,md}` now passes with
+  `checks=132` and a `GPU runtime wording docs` check.
+- Made selected-backend artifacts decision-aware for trainer-callable rows, not
+  only for non-trainer-callable promotion backlog entries. The validator now
+  attaches `decision_status`/`decision_active` to any selected row matched by
+  `dev/sm120_promotion_decisions.json` and writes a `Resolved Selected Backend
+  Decisions` scoreboard section. The refreshed Torch-stack round now records
+  `19` selected rows with registry decisions, including rejected attention-proj
+  TK forward, attproj direct-cuBLAS dInput, TK fused dGELU dInput, and LM-head
+  forward direct-cuBLAS rows, while `promotion-candidates.json` remains `0`
+  active and `17` total. Verification: `python3 dev/validate_sm120_round.py
+  --self-test` and revalidation of
+  `scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521`.
+- Refreshed the full Python-stack/Torch comparison matrix against the current
+  SM120 C++ source. Target-context
+  `RUN_LABEL=codex_sm120_round_torch_stack_refresh_20260521 RUN_TRAINING=0
+  BUILD_JOBS=4 RUN_PYTHON_STACK_BENCHMARKS=1
+  scripts/run_sm120_optimization_round.sh` passed correctness, benchmark,
+  stack-probe, and manifest validation with `benchmarks=187`, `stacks=9`,
+  `family_stack_rows=168`, and `train_steps=0`. The full-round selected rows
+  briefly reopened Torch MLP-up backward candidates (`dInp/dW` at
+  `1346.50/1333.13 us` versus cuBLAS `1363.76/1353.38 us`) and a tiny Triton
+  GELU-forward candidate (`531.483 us` versus CUDA `535.954 us`), but focused
+  uncontended reruns rejected all three: cuBLAS measured `1331.36/1332.63 us`
+  versus Torch `1357.45/1347.02 us`, and CUDA GELU forward measured
+  `528.159 us` versus Triton `529.627 us`. `dev/sm120_promotion_decisions.json`
+  now records those rejections, and the regenerated promotion artifact reports
+  `0` active candidates and `17` total resolved/reference candidates.
+- Rejected expanding the SM120 direct-cuBLAS dInput selector beyond the
+  existing huge-N LM-head route. A narrow candidate for GPT-2
+  attention-projection (`C=768, OC=768`) and MLP-up (`C=768, OC=3072`) backward
+  rows passed an expanded `./test_matmul` smoke (`13/13`) and a full 3-step
+  target-context round
+  `codex_sm120_round_cublas_dinp_attproj_fc_20260521` at `avg_ms=2493.931`,
+  but the x10 stability round
+  `codex_sm120_round_cublas_dinp_attproj_fc_x10_20260521` regressed to
+  `avg_ms=2502.950` versus the current stable x10 default `2495.443 ms`.
+  `llmc/matmul.cuh` and `dev/cuda/test_matmul.cu` were restored to the prior
+  selector/test shape after recording the candidate artifacts.
+- Added behavior-preserving A/B hooks for the two rejected direct-cuBLAS dInput
+  subcases: `LLMK_SM120_USE_CUBLAS_DINP_ATTPROJ` and
+  `LLMK_SM120_USE_CUBLAS_DINP_FC`. The default selector remains the existing
+  huge-N-only route. A focused FC-only target-context round
+  `codex_sm120_round_cublas_dinp_fc_only_20260521` passed all native smokes
+  and 3 TinyStories steps at `avg_ms=2490.977`, but the x10 stability round
+  `codex_sm120_round_cublas_dinp_fc_only_x10_20260521` regressed to
+  `avg_ms=2504.399` versus the current native x10 `2493.133 ms`, so the
+  MLP-up dInput row stays on cuBLASLt by default. The focused attproj-only
+  target-context round
+  `codex_sm120_round_cublas_dinp_attproj_only_20260521` likewise passed native
+  smokes and 3 TinyStories steps at `avg_ms=2491.581`, but the x10 stability
+  round `codex_sm120_round_cublas_dinp_attproj_only_x10_20260521` regressed to
+  `avg_ms=2503.023` versus the current native x10 `2493.133 ms`, so attention
+  projection dInput also stays on cuBLASLt by default. The default
+  `test_matmul`, `bench_sm120_matmul`, and `train_gpt2cu` binaries were rebuilt
+  without the candidate flag.
+- Refreshed the current mixed-backend full smoke after the Torch/Triton/cuDNN
+  comparison work and CuTeDSL rejection-artifact refresh. Target-context
+  `RUN_LABEL=codex_sm120_round_current_mix_final_smoke_20260521 MAX_STEPS=3
+  BUILD_JOBS=4 RUN_PYTHON_STACK_BENCHMARKS=0
+  scripts/run_sm120_optimization_round.sh` passed correctness, benchmark,
+  stack-probe, manifest, checkpoint-cleanup, and TinyStories training
+  validation on the RTX 5090. The generated validator artifacts report
+  `benchmarks=93`, `stacks=9`, `family_stack_rows=168`, `train_steps=3`, and
+  `avg_ms=2494.781`; final val loss was `10.609911`, and the final step was
+  `2496.65 ms` / `210150 tok/s`.
+- Restored the CuTeDSL GEMM rejection artifact in the active Python-stack
+  selection round and extended `dev/validate_sm120_round.py` with
+  `Unavailable Backend Rows`. The target-context CuTeDSL probe now has a persisted
+  `bench_sm120_cutedsl_matmul.log` under
+  `scratch/sm120_rounds/codex_sm120_round_python_stacks_selection_20260520_rerun`
+  showing `CuTeDSL CUDA available: True`, the RTX 5090 device, and exact-shape
+  qkv/attproj/fc/fcproj/LM-head rows rejected with `local CuTeDSL BF16
+  grouped-GEMM path rejects sm_120a`. Round revalidation still passes with
+  `benchmarks=180`, `stacks=9`, and `family_stack_rows=168`.
+- Added `dev/triton/bench_sm120_matmul.py`, an opt-in Triton GEMM feasibility
+  benchmark for the GPT-2 matmul shape matrix. The probe uses a generic BF16
+  Triton matmul kernel with row/column strides, 64-bit offsets for LM-head-sized
+  tensors, bias, approximate GeLU, dGeLU, and in-place accumulated dWeight
+  variants. It is wired into the Python-stack benchmark phase and optional
+  validator ingestion as `bench_sm120_triton_matmul.log`. Target-context
+  verification captured the full GPT-2 row set in
+  `scratch/sm120_rounds/codex_sm120_round_python_stacks_selection_20260520_rerun`
+  with qkv fwd/dInp/dW/dW+accum
+  `2262.530/2504.180/2303.580/2316.410 us`, fc fwd+GeLU `3169.320 us`,
+  fcproj dInp+dGeLU `3618.690 us`, and LM-head fwd/dInp/dW/dW+accum
+  `49372.510/52579.710/75083.970/76736.100 us`. All rows are slower than the
+  current cuBLAS/cuBLASLt/TK/Torch selections, so they are rejected comparison
+  evidence. Round revalidation passed with `benchmarks=180`, `stacks=9`, and
+  `family_stack_rows=168`; `promotion-candidates.json` remains `0` active and
+  `21` total.
+- Added `dev/triton/bench_sm120_attention.py`, an opt-in Triton attention
+  forward feasibility benchmark for the GPT-2 separated-Q/K/V shape and the
+  trainer-shaped packed-QKV layout. The round harness runs it in the
+  Python-stack benchmark phase, and
+  `dev/validate_sm120_round.py` now ingests optional
+  `bench_sm120_triton_attention.log` rows. Target-context verification passed a
+  small causal-attention parity smoke with separated/packed diffs
+  `0.001953/0.003906`, then the GPT-2-sized run measured Triton
+  separated/packed forward `2113.485/2234.986 us`, slower than native Torch
+  SDPA, cuDNN SDPA, and packed TK. Round revalidation passed with
+  `benchmarks=159`, `stacks=9`, and `family_stack_rows=168`, so the Triton
+  attention rows are rejected forward-only evidence rather than
+  trainer-integration targets.
+- Extended `dev/triton/bench_sm120_layernorm.py` with LayerNorm backward
+  comparisons for the Python-stack round. It now reports full Torch native
+  backward using saved mean/rstd, separate dInput-only rows for Triton and
+  Torch native output-mask timing, and a full Triton atomic FP32-gradient
+  prototype that computes dInput, dweight, and dbias. `dev/validate_sm120_round.py`
+  parses full rows as `backward`, parses partial rows as `backward_dinput`,
+  labels dInput-only winners with a dweight/dbias gate, and labels the Triton
+  atomic row with its FP32 gradient-buffer contract mismatch. Target-context
+  verification captured `bench_sm120_layernorm_python_stacks.log` in
+  `scratch/sm120_rounds/codex_sm120_round_python_stacks_selection_20260520_rerun`
+  with `C=768` full Torch/Triton-atomic backward `416.224/363.680 us` versus
+  CUDA `~290 us`, dInput-only Torch/Triton `217.568/228.320 us`, and `C=3072`
+  full Torch/Triton-atomic backward `1395.008/1423.104 us`. Round revalidation
+  passed with `benchmarks=156`, `stacks=9`, and `family_stack_rows=168`; after
+  adding the dInput-only decision to `dev/sm120_promotion_decisions.json`,
+  `promotion-candidates.json` reports `0` active and `21` total candidates.
+- Fixed the SM120 optional-stack probe so cuDNN installed through the active
+  Python environment is detected. `dev/probe_sm120_backend_stacks.py` now
+  searches the `nvidia.cudnn.include` and `nvidia.cudnn.lib` wheel namespace
+  paths in addition to system CUDA locations, and recognizes cuDNN `.so.9`
+  libraries. The Python-stack selection round now records cuDNN `9.22.0` as
+  available from
+  `/home/adam/miniconda3/envs/llm-kittens/lib/python3.13/site-packages/nvidia/cudnn`
+  and marks it as an attention forward/backward candidate, while preserving the
+  current no-`-lcudnn` trainer/build contract. Verification:
+  `/home/adam/miniconda3/envs/llm-kittens/bin/python
+  dev/probe_sm120_backend_stacks.py --json-out
+  scratch/sm120_rounds/codex_sm120_round_python_stacks_selection_20260520_rerun/backend-stacks.json
+  --markdown-out
+  scratch/sm120_rounds/codex_sm120_round_python_stacks_selection_20260520_rerun/backend-stacks.md`
+  and round revalidation with `--require-stack-probe --require-benchmarks`
+  passed.
+- Added `dev/bench_sm120_cudnn_attention.py`, an opt-in cuDNN SDPA feasibility
+  benchmark for the GPT-2 attention shape. The round harness runs it in the
+  Python-stack benchmark phase and `dev/validate_sm120_round.py` ingests
+  optional `bench_sm120_cudnn_attention.log` rows as `cuDNN` and
+  `cuDNNPacked`. The benchmark uses the installed cuDNN 9.22 SDPA path through
+  PyTorch's internal cuDNN attention op, so the trainer's no-`-lcudnn` build
+  contract is unchanged. Target-context verification captured
+  `bench_sm120_cudnn_attention.log` in
+  `scratch/sm120_rounds/codex_sm120_round_python_stacks_selection_20260520_rerun`
+  with separated cuDNN forward/backward `667.986/2385.046 us` and packed cuDNN
+  forward/backward `780.912/3468.032 us`. Round revalidation passed with
+  `benchmarks=147`, `stacks=9`, and `family_stack_rows=168`; no cuDNN
+  promotion candidate remains active because native Torch SDPA still wins the
+  separated-Q/K/V reference row, and packed cuDNN does not beat TK across
+  forward plus backward enough to justify a trainer link.
+- Added `dev/triton/bench_sm120_classifier.py`, an opt-in Triton classifier
+  feasibility benchmark for the GPT-2 padded-logits shape. It uses tiled
+  log-sum-exp loss and BF16 dlogits kernels with 64-bit tensor offset math for
+  the 3.29B-element logits tensor, prints standard runtime-family rows, and is
+  wired into the Python-stack benchmark phase and optional validator ingestion
+  as `bench_sm120_triton_classifier.log`. Target-context verification passed a
+  small parity/timing smoke with
+  `--batch 2 --seq 16 --vocab 257 --padded-vocab 320`, then the GPT-2-sized
+  run measured Triton loss/dlogits `8379.872/21981.632 us` versus same-round
+  CUDA `4354.061/9540.025 us`. Round revalidation passed with
+  `benchmarks=157`, `stacks=9`, and `family_stack_rows=168`, so the Triton
+  classifier rows are rejected evidence rather than trainer-integration targets.
+- Regenerated the Python-stack selection round artifacts with the promotion
+  decision registry enabled and tightened the scoreboard output for the
+  zero-active-backlog case. `scoreboard-candidates.md` now says when no active
+  promotion candidates remain instead of emitting an empty table, while
+  `promotion-candidates.json` keeps both `promotion_candidates` and
+  `active_promotion_candidates`. The existing round
+  `scratch/sm120_rounds/codex_sm120_round_python_stacks_selection_20260520_rerun`
+  now has persisted `promotion-candidates.json`; after the LayerNorm backward
+  refresh it reports `0` active rows and `21` total non-trainer-callable
+  winners.
+  Verification:
+  `/home/adam/miniconda3/envs/llm-kittens/bin/python dev/validate_sm120_round.py
+  --round-dir scratch/sm120_rounds/codex_sm120_round_python_stacks_selection_20260520_rerun
+  --write-scoreboard
+  scratch/sm120_rounds/codex_sm120_round_python_stacks_selection_20260520_rerun/scoreboard-candidates.md
+  --write-selected-backends
+  scratch/sm120_rounds/codex_sm120_round_python_stacks_selection_20260520_rerun/selected-backends.json
+  --write-promotion-candidates
+  scratch/sm120_rounds/codex_sm120_round_python_stacks_selection_20260520_rerun/promotion-candidates.json
+  --require-manifest --require-stack-probe --require-benchmarks` passed.
+- Refreshed the remaining active Torch promotion-backlog rows from the
+  Python-stack round and recorded the decisions in
+  `dev/sm120_promotion_decisions.json`. Torch qkv `dW+accum` is rejected after
+  the same-session C++ row won (`cuBLAS 995.46 us`, `cuBLASLt 1136.04 us`,
+  Torch `1095.54 us`). Torch `gelu_forward` and wide `bias_add` remain useful
+  operator evidence but are not active trainer-integration targets: refreshed
+  Torch measured `538.895 us` and `547.969 us` versus CUDA `546.950 us` and
+  `549.777 us`, too small an edge to justify adding a libtorch trainer route.
+  Native CUDA GELU forward block-size retunes did not close the gap (`256`
+  measured `553.896 us`, `1024` measured `544.943 us`). Verification used
+  target-context `LLMK_BENCH_REPEATS=9 ./bench_sm120_runtime`,
+  `/home/adam/miniconda3/envs/llm-kittens/bin/python
+  dev/bench_sm120_torch_runtime.py --repeats 9 --warmup 3`,
+  `LLMK_BENCH_REPEATS=9 ./bench_sm120_matmul`, and
+  `/home/adam/miniconda3/envs/llm-kittens/bin/python
+  dev/bench_sm120_torch_matmul.py --shape qkv --repeats 9 --large-repeats 5`.
+- Added `dev/sm120_promotion_decisions.json` and wired
+  `dev/validate_sm120_round.py` to load it by default. The selected-backend and
+  promotion-candidate JSON now annotate unresolved versus resolved Torch,
+  Triton, layout-rewrite, contract-mismatch, and non-trainer-shape rows with
+  `decision_status`, `decision_active`, `decision`, and `decision_evidence`,
+  plus an `active_promotion_candidates` list. This keeps "use Torch where it
+  wins" visible for the whole benchmark matrix while preventing refreshed
+  rejects such as Torch LM-head, Torch memory replacements, Torch separated-QKV
+  attention, Triton GELU backward, Torch AdamW, and C=3072 LayerNorm from
+  reappearing as active trainer-integration targets. Verification:
+  `/home/adam/miniconda3/envs/llm-kittens/bin/python -m py_compile
+  dev/validate_sm120_round.py`,
+  `/home/adam/miniconda3/envs/llm-kittens/bin/python
+  dev/validate_sm120_round.py --self-test`, and revalidation of
+  `scratch/sm120_rounds/codex_sm120_round_python_stacks_selection_20260520_rerun`
+  with `--write-selected-backends` / `--write-promotion-candidates` passed.
+- Fixed two SM120 correctness gates uncovered by the first full RTX 5090 round.
+  `layernorm_backward_kernel10` now keeps every warp in a block aligned through
+  each reduction round and makes inactive row slots contribute zero, fixing the
+  stale shared-memory partials that corrupted `dbias` on the small LayerNorm
+  smoke (`1.510559` max diff before, `0.001953` after). The initial
+  fused-classifier repair used a 64-thread SM120 launch to avoid a 128-thread
+  hang in the upstream reverse/tail softmax traversal, then the SM120 path was
+  upgraded to a two-pass vectorized row max/sum with classifier-local
+  reductions and a 1024-thread launch. Verification:
+  `make -j 4 test_layernorm test_fused_classifier DEVICE_ARCH=SM120
+  NO_MULTI_GPU=1 NO_USE_MPI=1`, focused RTX 5090 `./test_layernorm` and
+  `timeout 20s ./test_fused_classifier`, focused `./bench_sm120_runtime`, and
+  full rounds
+  `RUN_LABEL=codex_sm120_round_after_lnfix_clsfix_20260520 MAX_STEPS=3
+  BUILD_JOBS=4 scripts/run_sm120_optimization_round.sh` and
+  `RUN_LABEL=codex_sm120_round_classifier_1024_20260520 MAX_STEPS=3
+  BUILD_JOBS=4 scripts/run_sm120_optimization_round.sh` all passed. The first
+  full round validated `avg_ms=2577.055`; the 1024-thread classifier round
+  validated `benchmarks=81`, `family_stack_rows=147`, `train_steps=3`, and
+  `avg_ms=2528.193`, with focused fused-classifier timing improving from
+  `13062.177 us` to `9086.464 us`. This is a validated improvement but still
+  not a speed promotion over the documented `2508.27 ms` restored baseline.
+- Extended `test_adamw` to cover the no-master path used by the SM120 training
+  default. A follow-up AdamW 1024-thread/no-master launch experiment passed
+  focused correctness but was rejected after the full round
+  `RUN_LABEL=codex_sm120_round_adamw1024_20260520 MAX_STEPS=3 BUILD_JOBS=4
+  scripts/run_sm120_optimization_round.sh` validated at `avg_ms=2567.526`,
+  slower than the retained `codex_sm120_round_classifier_1024_20260520`
+  (`2528.193 ms`), with round-local AdamW timing `1887.088 us`. The AdamW
+  runtime default was reverted to the existing 512-thread CUDA path; only the
+  no-master smoke coverage was kept.
+- Rejected compile-time specialization of the no-master AdamW update path. The
+  candidate removed the per-element `master_params_memory != NULL` branch while
+  preserving the existing 512-thread launch geometry and passed `./test_adamw`
+  on RTX 5090. Same-session focused timing with `LLMK_BENCH_REPEATS=7
+  ./bench_sm120_runtime` measured specialized `adamw_update 1831.962 us`
+  versus disabled old-path `1851.027 us`, but full-round evidence did not hold:
+  `codex_sm120_round_adamw_nomaster_specialized_20260520` validated at
+  `avg_ms=2494.281`, while the x10 stability round
+  `codex_sm120_round_adamw_nomaster_specialized_x10_20260520` validated at
+  `avg_ms=2499.597`, slower than the current-default x10 `2495.443 ms`. The
+  source was restored to the existing single AdamW CUDA kernel; the final
+  restored rebuild passed `./test_adamw` and measured `adamw_update
+  1841.731 us`.
+- Rejected a fused-classifier loss log-sum-exp formula rewrite. The temporary
+  source replaced the target `expf()` plus `logf()` loss calculation with the
+  algebraically equivalent `sp.Offset - target_logit - logf(sp.Scale)` form
+  while leaving the softmax and dlogits traversals unchanged. It passed
+  `./test_fused_classifier` on RTX 5090, but same-session focused timing did
+  not prove a win: candidate `LLMK_BENCH_REPEATS=7 ./bench_sm120_runtime`
+  measured `fused_classifier_loss 4027.225 us` and `fused_classifier
+  9084.755 us`, while the restored formula measured `3979.443 us` and
+  `9103.584 us`. The source was restored before any TinyStories round because
+  the loss-only row regressed and the dlogits movement was within noise.
+- Rejected separate SM120 loss-only fused-classifier block-size tuning. Added
+  a default-preserving `LLMK_SM120_CLASSIFIER_LOSS_ONLY_BLOCK_SIZE` hook so
+  future validation-path sweeps do not perturb the training dlogits block size,
+  then tested `512`, `256`, and `768` with the dlogits path still at `1024`.
+  Each variant built and passed `./test_fused_classifier` on RTX 5090, but
+  focused `LLMK_BENCH_REPEATS=7 ./bench_sm120_runtime` measured loss-only rows
+  `3972.480 us`, `5193.088 us`, and `4022.528 us` versus the stable x10
+  default row `3972.230 us`. The default remains tied to
+  `LLMK_SM120_CLASSIFIER_BLOCK_SIZE=1024`; the final default rebuild passed
+  `./test_fused_classifier`.
+- Rejected capping SM120 `matmul_backward_bias` `grid_size_y` to reduce
+  auxiliary reduction overhead. A temporary launch-policy hook preserved the
+  default when unset, and candidate builds with
+  `-DLLMK_SM120_BIAS_GRID_Y_CAP=8` and `16` both passed `./test_bias` on RTX
+  5090. Focused `LLMK_BENCH_REPEATS=7 ./bench_sm120_runtime` did not prove a
+  win across the trainer-active GPT-2 bias widths: default measured
+  `bias_grad_reduce 24.344/188.189/247.656 us` for `OC=768/2304/3072`, cap
+  `8` measured `32.888/190.440/246.306 us`, and cap `16` measured
+  `24.342/189.530/247.672 us`. The temporary hook was removed and the existing
+  512-thread occupancy-derived bias-gradient launch policy remains unchanged.
+- Rejected changing SM120 LayerNorm backward from `2 * SM` blocks to `1 * SM`.
+  The candidate reduced focused backward timing by lowering cross-block partial
+  reduction work: default `LLMK_BENCH_REPEATS=7 ./bench_sm120_layernorm`
+  measured `138.186/283.034/289.756 us` for forward/fused/backward, while the
+  `1 * SM` candidate passed `./test_layernorm` and measured
+  `138.331/282.302/272.547 us`. After temporarily making `1 * SM` the source
+  default, focused timing remained lower at `140.845/279.494/276.480 us` and
+  the 3-step full round `codex_sm120_round_layernorm_bwd_blocks1_20260520`
+  validated at `avg_ms=2492.310`. The required x10 stability round
+  `codex_sm120_round_layernorm_bwd_blocks1_x10_20260520` validated but
+  regressed to `avg_ms=2501.148`, slower than the current-default x10
+  `2495.443 ms`, so `llmc/layernorm.cuh` was restored to `blocks_per_sm=2`.
+  A `3 * SM` candidate passed `./test_layernorm` but hit an illegal memory
+  access in `bench_sm120_layernorm`, consistent with the current scratch sizing
+  being built around the existing two-blocks-per-SM allocation.
+- Fixed the SM120 optional-stack probe path so it detects the available Triton
+  and CuTeDSL packages through the project Python interpreter.
+  `scripts/run_sm120_optimization_round.sh` now uses `PYTHON_BIN` when set,
+  otherwise the active `CONDA_PREFIX/bin/python` when it exists, and the stack
+  probe records `python=` plus `python_version=` in Python-backend evidence.
+  Verification:
+  `/home/adam/miniconda3/envs/llm-kittens/bin/python dev/probe_sm120_backend_stacks.py
+  --json-out /tmp/sm120_backend_stacks_conda.json --markdown-out
+  /tmp/sm120_backend_stacks_conda.md` reported Triton `3.6.0` and
+  nvidia-cutlass-dsl/CuTeDSL `4.5.1` available from Python `3.13.13`;
+  `/home/adam/miniconda3/envs/llm-kittens/bin/python -m py_compile
+  dev/probe_sm120_backend_stacks.py dev/write_sm120_round_manifest.py` and
+  `bash -n scripts/run_sm120_optimization_round.sh` passed.
+- Added `dev/triton/bench_sm120_layernorm.py`, a Python/Triton SM120 LayerNorm
+  forward parity and timing prototype. It uses the repo's existing BF16
+  LayerNorm tolerances and checks Triton output, mean, and rstd against a Torch
+  FP32 reference before timing. Verification:
+  `/home/adam/miniconda3/envs/llm-kittens/bin/python -m py_compile
+  dev/triton/bench_sm120_layernorm.py` passed; the RTX 5090 smoke
+  `/home/adam/miniconda3/envs/llm-kittens/bin/python
+  dev/triton/bench_sm120_layernorm.py --rows 1024 --cols 768 3072 --repeats 3
+  --warmup 1` passed; the GPT-2-sized run with `--rows 65536 --cols 768 3072
+  --repeats 7 --warmup 3` measured `178.240 us` for `C=768` and `575.840 us`
+  for `C=3072`, with output max diff `0.031250` and exact mean/rstd. This is a
+  correct but rejected standalone-forward prototype because the current CUDA
+  LayerNorm rows remain faster.
+- Added Torch as a first-class stack in `optimise-goal.md`,
+  `dev/sm120_objective_contract.py`, `dev/probe_sm120_backend_stacks.py`, and
+  the SM120 validator's synthetic stack coverage. Torch is now represented in
+  the required family/stack matrix, bringing the live matrix to 168 rows. The
+  probe reports Torch `2.11.0+cu130` from the project conda Python. Also added
+  `dev/bench_sm120_torch_runtime.py` for focused Torch runtime-family rows and
+  wired the Python stack benchmarks into `scripts/run_sm120_optimization_round.sh`
+  behind `RUN_PYTHON_STACK_BENCHMARKS`, defaulting to the value of
+  `RUN_BENCHMARKS`.
+  Verification:
+  `/home/adam/miniconda3/envs/llm-kittens/bin/python -m py_compile
+  dev/sm120_objective_contract.py dev/probe_sm120_backend_stacks.py
+  dev/validate_sm120_round.py dev/triton/bench_sm120_layernorm.py
+  dev/bench_sm120_torch_runtime.py`, `dev/validate_sm120_round.py --self-test`,
+  `bash -n scripts/run_sm120_optimization_round.sh`, a dry-run harness
+  invocation with Python stack benchmarks disabled through `RUN_BENCHMARKS=0`,
+  and the Torch-enabled stack probe passed. GPT-2-sized LayerNorm timing with
+  `dev/triton/bench_sm120_layernorm.py --rows 65536 --cols 768 3072 --repeats
+  7 --warmup 3` measured native Torch forward `153.088 us` / `556.384 us`,
+  Torch stats forward `2222.848 us` / `9100.288 us`, and Torch fused stats
+  `3226.208 us` / `13382.976 us`. Runtime timing with
+  `dev/bench_sm120_torch_runtime.py --repeats 7 --warmup 3` measured Torch bias
+  add `137.210 us` / `557.361 us`, GELU fwd/bwd `539.351 us` / `27408.670 us`,
+  and bias-gradient reduction `321.354 us` / `985.702 us` / `1348.077 us`.
+  These rows are correct comparison evidence, but no Torch route was promoted:
+  native Torch LayerNorm does not expose saved mean/rstd for the trainer, the
+  stats-producing Torch compositions are much slower, and the runtime rows do
+  not beat the current CUDA baselines under the repeatable comparison.
+- Added `dev/bench_sm120_torch_matmul.py`, a Torch BF16 GEMM prototype covering
+  the same GPT-2 shape matrix as `bench_sm120_matmul`: qkv, attention
+  projection, MLP up, MLP projection, and LM-head across forward, fused
+  forward+GELU, dInput, fused dInput+dGELU, dWeight, and accumulated dWeight
+  where applicable. The round harness runs it in the Python stack benchmark
+  phase, and `dev/validate_sm120_round.py` now ingests optional Torch matmul,
+  Python stack LayerNorm, and Torch runtime logs when present. Verification:
+  `/home/adam/miniconda3/envs/llm-kittens/bin/python
+  dev/bench_sm120_torch_matmul.py --shape attproj --repeats 3 --large-repeats
+  1` passed on RTX 5090, then the all-shape run with `--repeats 7
+  --large-repeats 3` passed. Same-session
+  `LLMK_BENCH_REPEATS=7 ./bench_sm120_matmul` also passed for comparison. Torch
+  GEMM rows were mostly slower; qkv/fc/fcproj dInput and qkv dWeight were
+  close or marginal in isolation, but not enough to justify a libtorch trainer
+  route without a stronger end-to-end win.
+- Added `dev/bench_sm120_torch_attention.py`, a Torch SDPA attention prototype
+  for both native separated Q/K/V tensors and a trainer-shaped packed-QKV path.
+  The round harness now runs it in the Python stack benchmark phase, and
+  `dev/validate_sm120_round.py` ingests optional
+  `bench_sm120_torch_attention.log` rows. Verification:
+  `/home/adam/miniconda3/envs/llm-kittens/bin/python
+  dev/bench_sm120_torch_attention.py --repeats 7 --warmup 3` on RTX 5090
+  measured native Torch SDPA forward/backward `571.850 us` / `2203.347 us`,
+  faster than same-session TK packed-QKV attention at `788.299 us` /
+  `2723.085 us`. The trainer-shaped packed Torch row measured `1131.930 us` /
+  `4092.714 us`, so it is rejected for `train_gpt2cu` integration while native
+  SDPA remains the faster reference route for already-separated Q/K/V
+  Python-side experiments.
+- Added `dev/bench_sm120_torch_classifier.py`, a Torch BF16 classifier
+  prototype for the GPT-2 padded-logits shape. The first GPT-2-sized attempt
+  that forced FP32 logits materialization hit CUDA OOM, so the retained
+  benchmark measures the feasible BF16 Torch route directly. The round harness
+  runs it in the Python stack benchmark phase, and `dev/validate_sm120_round.py`
+  ingests optional `bench_sm120_torch_classifier.log` rows. Verification:
+  small smoke `/home/adam/miniconda3/envs/llm-kittens/bin/python
+  dev/bench_sm120_torch_classifier.py --batch 2 --seq 128 --vocab 50257
+  --padded-vocab 50304 --repeats 3 --warmup 1` passed; GPT-2-sized
+  `/home/adam/miniconda3/envs/llm-kittens/bin/python
+  dev/bench_sm120_torch_classifier.py --repeats 7 --warmup 3` measured Torch
+  `fused_classifier_loss 18131.519 us` and `fused_classifier 34081.570 us`.
+  Same-machine `LLMK_BENCH_REPEATS=7 ./bench_sm120_runtime` measured the CUDA
+  rows at `4031.207 us` and `9096.384 us`, so Torch is rejected for classifier
+  trainer integration.
+- Extended `dev/bench_sm120_torch_runtime.py` to cover the remaining feasible
+  Torch runtime-family rows: global norm, AdamW, encoder forward, hidden/logits
+  zeroing, and hidden/logits device copies. It now records that Torch fused
+  AdamW keeps BF16 moment buffers for BF16 params, making its faster fused row a
+  non-trainer-equivalent reference rather than a promotion candidate.
+  Verification:
+  `/home/adam/miniconda3/envs/llm-kittens/bin/python
+  dev/bench_sm120_torch_runtime.py --repeats 7 --warmup 3` measured Torch
+  global norm `2366.618 us`, fused AdamW BF16-state `1225.190 us`, AdamW
+  FP32-state `7452.800 us`, encoder `203.051 us`, hidden zero/copy
+  `64.218/134.214 us`, and logits zero/copy `4397.152/9310.240 us`.
+  Same-machine `LLMK_BENCH_REPEATS=7 ./bench_sm120_runtime` measured CUDA
+  global norm `185.434 us`, AdamW `1857.891 us`, encoder `87.607 us`, hidden
+  zero/copy `64.508/133.980 us`, and logits zero/copy `4172.550/8968.173 us`.
+  No Torch runtime row was promoted.
+- Added `dev/triton/bench_sm120_runtime.py`, a Triton pointwise runtime-family
+  prototype for bias add and GELU forward/backward at GPT-2 shapes. The round
+  harness runs it in the Python stack benchmark phase, and
+  `dev/validate_sm120_round.py` ingests optional
+  `bench_sm120_triton_runtime.log` rows. Verification: small smoke
+  `/home/adam/miniconda3/envs/llm-kittens/bin/python
+  dev/triton/bench_sm120_runtime.py --rows 1024 --repeats 3 --warmup 1`
+  passed on RTX 5090; full GPT-2-shaped timing with `--repeats 7 --warmup 3`
+  measured Triton bias add `146.328/573.555 us` for `OC=768/3072`, GELU
+  forward `573.830 us`, and GELU backward `840.723 us`. Same-machine CUDA rows
+  were `82.589/537.874 us` for bias add and `537.595/791.320 us` for GELU
+  forward/backward, so no Triton runtime row was promoted.
+- Updated `dev/validate_sm120_round.py` so full-round scoreboards now include a
+  `Selected Backend Rows` table. It picks the fastest observed stack for each
+  parsed suite/kernel/shape row, preserves Torch LayerNorm variants as `Torch
+  native` versus `Torch stats`, and records whether a Torch win is usable as a
+  Python/reference route or still needs a trainer-callable integration before
+  promotion. This makes the Torch rule explicit: use it where it is actually
+  faster for the stated scope, without pretending Python-operator wins are
+  already `train_gpt2cu` defaults. Verification:
+  `/home/adam/miniconda3/envs/llm-kittens/bin/python -m py_compile
+  dev/validate_sm120_round.py` and
+  `/home/adam/miniconda3/envs/llm-kittens/bin/python
+  dev/validate_sm120_round.py --self-test` passed.
+- Hardened the Torch classifier benchmark and summary capture after the first
+  real Python-stack benchmark round exposed full-size dlogits OOM. The script
+  now records the exact GPT-2 Torch loss row and reports full-shape dlogits as
+  unavailable instead of aborting the optional-stack round. The SM120 round
+  summary now includes Torch classifier and Triton runtime snippets, and it no
+  longer prints missing correctness-log rows when `RUN_CORRECTNESS=0`.
+  Verification: the first benchmark-only attempt built and wrote a manifest but
+  did not produce benchmark timings in its process context; the target-context
+  rerun `RUN_LABEL=codex_sm120_round_python_stacks_selection_20260520_rerun
+  RUN_CORRECTNESS=0 RUN_TRAINING=0 RUN_BENCHMARKS=1
+  RUN_PYTHON_STACK_BENCHMARKS=1 RUN_STACK_PROBE=1
+  scripts/run_sm120_optimization_round.sh` passed with `benchmarks=143`,
+  `stacks=9`, `family_stack_rows=168`, and scoreboard output under
+  `scratch/sm120_rounds/codex_sm120_round_python_stacks_selection_20260520_rerun/`.
+  The selected rows use Torch SDPA for already-separated Q/K/V experiments,
+  keep CUDA for classifier dlogits, select Torch only as operator-prototype
+  rows for several LM-head/memory cases, and record Triton GELU backward as an
+  operator prototype pending trainer integration. The saved scoreboard was
+  regenerated after tightening the selection notes so C++/CUDA benchmark wins
+  are labeled as benchmark routes with correctness and TinyStories promotion
+  gates, not implied current trainer defaults. The validator and round harness
+  now also write `selected-backends.json`, a machine-readable copy of the
+  selected rows with `trainer_call_path_available` so future integration slices
+  can consume Torch/Triton/CUDA decisions without scraping Markdown.
+- Added `dev/bench_sm120_cutedsl_matmul.py`, a CuTeDSL GEMM feasibility probe
+  that distinguishes package import success from a usable SM120 BF16 GEMM
+  timing row. The local Torch/CUTLASS vendored grouped-GEMM path reaches
+  CuTeDSL compilation in a target-context process but rejects `sm_120a` for the
+  BF16 `tcgen05` MMA route, so the script records all exact GPT-2 GEMM shapes
+  as CuTeDSL unavailable with that reason. The SM120 round harness now runs the
+  probe in the Python-stack benchmark phase and summarizes the unavailable
+  CuTeDSL rows. This keeps CuTeDSL in the objective matrix while preventing an
+  import-only probe from being mistaken for benchmark coverage.
+- Extended the selected-backend validator output with a promotion backlog.
+  `scoreboard-candidates.md` now includes `Promotion Backlog`, and the validator
+  writes `promotion-candidates.json` both as a standalone artifact and inside
+  `selected-backends.json`. The backlog contains selected benchmark winners
+  without a trainer call path, including Torch/Triton rows, sorted by measured
+  edge over the next observed stack when available and annotated with the
+  required promotion gate. This makes "use Torch where it wins" actionable
+  without treating Python/operator prototype rows as trainer defaults.
+- Added `llmc/memory.cuh`, a trainer-callable native CUDA zero/copy candidate,
+  and benchmarked it as `CUDA kernel` beside `CUDA runtime` for the exact
+  hidden/logits memory rows where Torch had shown Python/operator wins. It is
+  rejected for promotion: RTX 5090 `LLMK_BENCH_REPEATS=7 ./bench_sm120_runtime`
+  measured the native kernel slower than the existing runtime calls for logits
+  memset/copy and hidden memset/copy. The rows stay in `bench_sm120_runtime` as
+  comparison evidence, and the validator self-test now checks that CUDA
+  memory-kernel rows are parsed into the scoreboard.
+- Rechecked the promotion-backlog Triton `gelu_backward_inplace` row against a
+  fresh same-session CUDA baseline before starting integration work. The refresh
+  rejects Triton for this row: target-context `LLMK_BENCH_REPEATS=7
+  ./bench_sm120_runtime` measured CUDA GELU backward at `789.605 us`, while
+  same-session `dev/triton/bench_sm120_runtime.py --repeats 7 --warmup 3`
+  measured Triton at `802.830 us`. Promotion gates now explicitly require a
+  same-session baseline refresh before turning selected Python/codegen rows into
+  trainer-callable integrations.
+- Rechecked the top Torch attention rows against the trainer-shaped packed-QKV
+  path. Native Torch SDPA over already-separated Q/K/V remains faster than the
+  packed TK trainer route and stays useful as Python/reference evidence, but the
+  trainer-shaped `TorchPacked` path is slower than packed TK in both forward and
+  backward. No trainer route is promoted. The promotion backlog now records a
+  `candidate_class` and orders direct integration candidates before layout
+  rewrites and reference/state gaps so separated-Q/K/V reference wins do not
+  crowd out rows that can be wired into the current packed trainer layout.
+- Added `C=3072` coverage to `bench_sm120_layernorm` after the promotion backlog
+  surfaced a Triton fused-residual LayerNorm row at that width. The refreshed
+  same-session evidence rejects Triton promotion there: CUDA fused residual
+  measured `1101.192 us` versus Triton `1121.344 us`, and GPT-2 LayerNorm uses
+  hidden width `C=768` rather than MLP width `C=3072`. The backlog now marks
+  LayerNorm rows with `C!=768` as `non-trainer shape` so stress-test rows do not
+  outrank actual trainer-shape candidates.
+- Split promotion backlog classes by implementation cost. Triton/native rows are
+  now `native/codegen integration`, Torch operator wins that require libtorch or
+  an equivalent native replacement are `library integration`, separated-Q/K/V
+  Torch attention rows remain `layout rewrite`, and non-trainer LayerNorm widths
+  stay `non-trainer shape`. This keeps Torch wins visible while preventing a
+  libtorch dependency-sized task from being treated as equally cheap as a native
+  CUDA/Triton integration.
+- Rechecked the highest-ranked Torch library-integration LM-head rows against a
+  fresh same-session C++ baseline. The refresh rejects Torch LM-head integration
+  for now: `LLMK_BENCH_REPEATS=7 ./bench_sm120_matmul` measured C++ LM-head
+  forward/dInput/dWeight/dWeight-accumulated at `22406.90/21338.28/20886.66/
+  20932.98 us`, while same-session `dev/bench_sm120_torch_matmul.py --shape
+  lmhead --repeats 7 --large-repeats 5` measured Torch at `22628.48/21383.14/
+  21415.78/21621.12 us`. The old Torch LM-head promotion edge is stale evidence,
+  not a current reason to add libtorch or a native replacement route.
+- Promoted a shape-aware SM120 direct-cuBLAS backward GEMM selector inside the
+  cuBLASLt fallback path. The selector uses direct cuBLAS for non-fused
+  large-OC dInput and for qkv/attention-projection/MLP dWeight rows, while
+  leaving fused dGELU and LM-head dWeight on cuBLASLt. `test_matmul` now has
+  route-specific dInput and dWeight smoke cases. Verification:
+  `make -B -j 4 test_matmul bench_sm120_matmul train_gpt2cu DEVICE_ARCH=SM120
+  NO_MULTI_GPU=1 NO_USE_MPI=1
+  EXTRA_NVCC_FLAGS=-DLLMK_SM120_USE_CUBLAS_BACKWARD_GEMM`, focused
+  `./test_matmul` passed `10/10`, and focused `./bench_sm120_matmul` showed
+  direct-cuBLAS wins on the selected rows. Full round
+  `RUN_LABEL=codex_sm120_round_cublas_bwd_20260520 ... EXTRA_NVCC_FLAGS=...`
+  validated at `avg_ms=2493.738`; after making the selector default, the first
+  default round `codex_sm120_round_cublas_bwd_default_20260520` was noisy at
+  `avg_ms=2542.302`, but the immediate default rerun
+  `codex_sm120_round_cublas_bwd_default_rerun_20260520` validated at
+  `avg_ms=2495.261`, faster than the restored `2508.27 ms` baseline and the
+  retained classifier round.
+- Replaced the historical `2469 ms` SM120 note with current same-harness
+  evidence for scoreboard decisions. The 10-step current-default round
+  `RUN_LABEL=codex_sm120_round_cublas_bwd_default_x10_20260520 MAX_STEPS=10
+  BUILD_JOBS=4 scripts/run_sm120_optimization_round.sh` passed validation with
+  `benchmarks=81`, `family_stack_rows=147`, `train_steps=10`, and
+  `avg_ms=2497.246`. The run remained faster than the restored `2508.27 ms`
+  baseline but did not reproduce the older `2469 ms` timing, so that older note
+  is now treated as stale/non-comparable until a future same-harness run beats
+  it.
+- Rejected simple SM120 fused-classifier block-size tuning. Overrides
+  `LLMK_SM120_CLASSIFIER_BLOCK_SIZE=256`, `512`, and `768` each passed focused
+  classifier correctness on the RTX 5090 target, but runtime timings regressed
+  versus the restored 1024-thread default: `12782.669 us`, `9147.154 us`, and
+  `9160.519 us` versus the default rebuild at `9090.138 us`. Keep
+  `LLMK_SM120_CLASSIFIER_BLOCK_SIZE=1024`; the next classifier work should be
+  algorithmic replacement or additional softmax/dlogits fusion rather than
+  block-size-only tuning.
+- Rejected a one-pass online SM120 softmax-prep traversal for the fused
+  classifier. The candidate removed one logits read during max/sum preparation
+  and passed `./test_fused_classifier` on the RTX 5090 target, but
+  `./bench_sm120_runtime` measured fused classifier at `9140.295 us`, slower
+  than the restored two-pass default rebuild at `9086.694 us`. The source was
+  restored to the two-pass 1024-thread SM120 classifier path.
+- Rejected an opt-in SM120 fused-classifier target-logit cache. The candidate
+  cached the target logit before softmax preparation and removed the post-loss
+  block sync, and `./test_fused_classifier` still passed on the RTX 5090 target.
+  Focused `./bench_sm120_runtime` regressed fused classifier timing to
+  `9963.085 us` versus the current `~9.0 ms` default range, so the temporary
+  hook was removed.
+- Changed `bench_sm120_runtime` to report the median of repeated event samples
+  per row, with `LLMK_BENCH_REPEATS=<n>` as an override. This matches the
+  repeatability policy already used by the matmul and LayerNorm benchmarks.
+  Verification: `make -B -j 4 test_fused_classifier bench_sm120_runtime
+  train_gpt2cu DEVICE_ARCH=SM120 NO_MULTI_GPU=1 NO_USE_MPI=1` passed, and
+  focused `LLMK_BENCH_REPEATS=5 ./bench_sm120_runtime` on RTX 5090 reported
+  default runtime rows including fused classifier `10284.915 us`.
+- Accepted an SM120 fused-classifier loss-only specialization for validation
+  and forward-loss calls. `fused_classifier<..., WriteDLogits=false>` now
+  returns after writing the loss when neither dlogits nor probabilities are
+  requested, leaving the training `WriteDLogits=true` path unchanged.
+  `test_fused_classifier` now checks that the loss-only path matches the
+  reference loss and leaves logits untouched. Focused repeated-sample runtime
+  timing improved the loss-only row to `4037.069 us` versus dlogits
+  `9054.438 us`. Full round
+  `RUN_LABEL=codex_sm120_round_classifier_loss_only_20260520 MAX_STEPS=3
+  BUILD_JOBS=4 scripts/run_sm120_optimization_round.sh` passed validation at
+  `avg_ms=2488.125`, but the 10-step stability round
+  `RUN_LABEL=codex_sm120_round_classifier_loss_only_x10_20260520 MAX_STEPS=10
+  BUILD_JOBS=4 scripts/run_sm120_optimization_round.sh` validated at
+  `avg_ms=2551.284`, slower than the current-default x10 evidence
+  `2497.246 ms`. Treat this as an accepted validation/runtime micro-op, not as
+  a stable training-speed promotion.
+- Rejected a scoped SM120 classifier loss-only online-softmax prep. The
+  temporary source used a one-pass online max/sum only for
+  `WriteDLogits=false`, leaving the training dlogits path on the current
+  two-pass prep. The candidate passed `./test_fused_classifier` on RTX 5090,
+  but focused `LLMK_BENCH_REPEATS=7 ./bench_sm120_runtime` regressed
+  `fused_classifier_loss` to `4356.179 us` and `fused_classifier` to
+  `9792.198 us`; after restoring the source, the same-session benchmark
+  measured `3943.974 us` and `9111.564 us`. The source remains on the current
+  two-pass SM120 prep.
+- Rejected a global-norm reset-memset elision candidate. The temporary source
+  hook skipped `cudaMemsetAsync` only when the norm kernel covered the entire
+  partial-sum buffer, while preserving the existing reset path for tail cases.
+  The expanded `test_global_norm` smoke passed on RTX 5090 and now covers a
+  stale-tail reset case, but focused `LLMK_BENCH_REPEATS=5
+  ./bench_sm120_runtime` measured global norm at `185.819 us` for the candidate
+  versus `185.605 us` after restoring the source. The source hook was removed;
+  the stronger smoke coverage was kept.
+- Rejected a GELU backward algebraic rewrite. The temporary source changed
+  `sech^2(arg)` from `1 / (coshf(arg) * coshf(arg))` to
+  `1 - tanhf(arg) * tanhf(arg)`, reusing the already-computed tanh value.
+  `./test_gelu` passed on RTX 5090 against the independent CPU reference
+  (`backward max abs diff = 0.003887`), but focused
+  `LLMK_BENCH_REPEATS=5 ./bench_sm120_runtime` measured
+  `gelu_backward_inplace 799.662 us`, matching the restored/default
+  `795-800 us` range instead of improving it. The source was restored.
+- Rejected SM120 GELU block-size-only tuning. Added scoped
+  `LLMK_SM120_GELU_FWD_BLOCK_SIZE` / `LLMK_SM120_GELU_BWD_BLOCK_SIZE` compile
+  hooks with defaults matching the existing launcher geometry, then tested
+  `-DLLMK_SM120_GELU_BWD_BLOCK_SIZE=256` and
+  `-DLLMK_SM120_GELU_FWD_BLOCK_SIZE=256`. Each build passed `./test_gelu` on
+  RTX 5090, but focused `LLMK_BENCH_REPEATS=7 ./bench_sm120_runtime` showed no
+  promotable win: default measured `gelu_forward 551.834 us`,
+  `gelu_backward_inplace 799.930 us`; backward-256 measured
+  `535.692/807.368 us`; forward-256 measured `535.210/798.405 us`; a final
+  default rerun measured `535.383/798.040 us`. Keep forward block `512` and
+  backward block `128` as the defaults.
+- Rejected an SM120 encoder-forward vec2 candidate. The temporary source made
+  each thread handle two adjacent `x128` packs to reduce token-id reloads and
+  block count for GPT-2 `C=768`. `./test_encoder` passed on RTX 5090
+  (`forward max abs diff = 0.000488`), but focused
+  `LLMK_BENCH_REPEATS=7 ./bench_sm120_runtime` regressed `encoder_forward` to
+  `88.138 us` versus restored source at `87.254 us` under the same repeat
+  count. The source was restored.
+- Rejected caching LayerNorm `cudaFuncSetAttribute(...MaxDynamicSharedMemorySize...)`
+  calls in the CUDA forward, fused-residual forward, and backward launchers.
+  The temporary source preserved focused correctness (`./test_layernorm` passed
+  on RTX 5090) and same-session LayerNorm timing was effectively neutral
+  (`141.641/279.668/289.124 us` cached versus
+  `140.892/279.188/290.593 us` with the cache disabled). A 3-step full round
+  `codex_sm120_round_layernorm_smem_attr_cache_20260520` passed validation at
+  `avg_ms=2494.965`, but the 10-step stability round
+  `codex_sm120_round_layernorm_smem_attr_cache_x10_20260520` validated at
+  `avg_ms=2630.194`, slower than the current-default x10
+  `2495.443 ms`. The source was restored to the existing per-call attribute
+  setup.
+- Promoted an SM120 standalone bias-add vec2 path. For aligned row widths,
+  `add_bias` now has one thread handle two adjacent `x128` BF16 packs and keeps
+  the scalar kernel as a fallback for unaligned widths. The expanded
+  `test_bias` smoke covers hidden-size aligned, MLP-size aligned, and unaligned
+  fallback cases. Verification: `make -B -j 4 test_bias bench_sm120_runtime
+  train_gpt2cu DEVICE_ARCH=SM120 NO_MULTI_GPU=1 NO_USE_MPI=1` passed;
+  `./test_bias` passed on RTX 5090; default `LLMK_BENCH_REPEATS=7
+  ./bench_sm120_runtime` measured bias add at `93.706 us / 556.463 us` versus a
+  same-session scalar rebuild with
+  `EXTRA_NVCC_FLAGS=-DLLMK_SM120_DISABLE_BIAS_ADD_VEC2` at
+  `112.179 us / 596.032 us`. No TinyStories round was run for this micro-op
+  because the default SM120/cuBLASLt trainer forward path fuses bias in the
+  matmul epilogue and does not call standalone `add_bias`.
+- Expanded runtime benchmark coverage for bias-gradient reduction. The
+  `bench_sm120_runtime` target now times the trainer-active GPT-2 bias widths
+  `OC=768`, `OC=2304`, and `OC=3072`, instead of only the MLP-width row.
+  Verification: `make -B -j 4 test_bias bench_sm120_runtime train_gpt2cu
+  DEVICE_ARCH=SM120 NO_MULTI_GPU=1 NO_USE_MPI=1` passed; `./test_bias` passed
+  on RTX 5090; `LLMK_BENCH_REPEATS=7 ./bench_sm120_runtime` measured
+  `bias_grad_reduce` at `25.643 us / 188.067 us / 262.192 us` for
+  `OC=768/2304/3072`. This is benchmark-matrix coverage only; the CUDA
+  bias-gradient kernel and default launch policy are unchanged.
+- Added runtime shape coverage to the SM120 round validator. The shared
+  objective contract now lists required runtime benchmark rows for standalone
+  bias add and bias-gradient reduction, and `dev/validate_sm120_round.py` fails
+  benchmark validation if those rows disappear from `bench_sm120_runtime.log`.
+  The generated scoreboard now includes a `Runtime Shape Coverage` table.
+  Verification: `python3 dev/validate_sm120_round.py --self-test` passed,
+  including a negative synthetic round that omits
+  `bias_grad_reduce BT=65536 OC=2304` and expects the runtime-shape coverage
+  failure. Full round
+  `RUN_LABEL=codex_sm120_round_runtime_shape_validator_20260520 MAX_STEPS=3
+  BUILD_JOBS=4 scripts/run_sm120_optimization_round.sh` passed validation with
+  `benchmarks=84`, `family_stack_rows=147`, `train_steps=3`,
+  `avg_ms=2545.384`, runtime shape coverage all true, and checkpoint cleanup
+  verified. This is coverage/contract evidence, not a speed promotion.
+- Expanded runtime memory-overhead coverage. `bench_sm120_runtime` now reports
+  `cuda_memset` and `cuda_copy_d2d` rows for the padded logits buffer
+  (`logits_elems=3296722944`) by reusing the classifier benchmark allocation,
+  in addition to the hidden-state buffer (`hidden_elems=50331648`). The shared
+  `RUNTIME_SHAPE_REQUIREMENTS` contract now requires both memory shapes, so
+  future full SM120 rounds cannot hide classifier-sized activation overhead
+  behind the much smaller hidden-state row. Verification:
+  `python3 -m py_compile dev/sm120_objective_contract.py
+  dev/validate_sm120_round.py`, `python3 dev/validate_sm120_round.py
+  --self-test`, and `make -B -j 4 bench_sm120_runtime train_gpt2cu
+  DEVICE_ARCH=SM120 NO_MULTI_GPU=1 NO_USE_MPI=1` passed. Focused
+  `LLMK_BENCH_REPEATS=5 ./bench_sm120_runtime` on RTX 5090 measured logits
+  `cuda_memset 4181.555 us`, logits `cuda_copy_d2d 8915.744 us`, hidden
+  `cuda_memset 62.980 us`, and hidden `cuda_copy_d2d 133.756 us`.
+  Full round
+  `RUN_LABEL=codex_sm120_round_memory_shape_coverage_20260520 MAX_STEPS=3
+  BUILD_JOBS=4 scripts/run_sm120_optimization_round.sh` then passed on RTX
+  5090 with GPU runtime `available`, `benchmarks=86`,
+  `family_stack_rows=147`, `train_steps=3`, `avg_ms=2490.206`, all required
+  hidden/logits memory-shape rows covered, and checkpoint cleanup verified.
+  This is coverage/contract evidence, not a speed promotion.
+- Refreshed the current mixed-backend default with a 10-step round under the
+  expanded memory-shape contract. Full round
+  `RUN_LABEL=codex_sm120_round_current_default_x10_after_memory_20260520
+  MAX_STEPS=10 BUILD_JOBS=4 scripts/run_sm120_optimization_round.sh` passed on
+  RTX 5090 with GPU runtime `available`, `benchmarks=86`,
+  `family_stack_rows=147`, `train_steps=10`, `avg_ms=2495.443`, all
+  objective/GEMM/provider/runtime-shape coverage true, and checkpoint cleanup
+  verified. This becomes the current stable same-harness default, narrowly
+  ahead of `codex_sm120_round_cublas_bwd_default_x10_20260520` at
+  `2497.246 ms`.
+- Rejected a classifier training-path loss-sync elision. The candidate moved
+  the target loss accumulation into the dlogits write loop so the row owner
+  thread would compute `losses[idx] -= logf(prob)` before overwriting the
+  target logit, avoiding the existing pre-overwrite `__syncthreads()`. It
+  preserved the loss-only path and passed `./test_fused_classifier` on RTX
+  5090, but focused same-session timing did not improve: candidate
+  `LLMK_BENCH_REPEATS=7 ./bench_sm120_runtime` measured
+  `fused_classifier 9097.907 us`, while the restored pre-sync loss A/B build
+  measured `9063.795 us`. The source behavior was restored and the final
+  default rebuild passed `./test_fused_classifier`.
+- Rejected explicit classifier dlogits padded-tail zeroing. The temporary
+  source wrote zeroes to `[V, P)` after producing the valid-vocab dlogits, and
+  the smoke test was tightened to treat padding as part of the standalone
+  classifier contract. The candidate passed `./test_fused_classifier` on RTX
+  5090 and focused `LLMK_BENCH_REPEATS=7 ./bench_sm120_runtime` measured
+  `fused_classifier 9019.360 us`; a disabled-tail-zero A/B failed the tightened
+  smoke (`dlogits max abs diff = 1.992188`) and measured `9082.880 us`.
+  However, the full round
+  `RUN_LABEL=codex_sm120_round_classifier_pad_tail_zero_20260520 MAX_STEPS=3
+  BUILD_JOBS=4 scripts/run_sm120_optimization_round.sh` passed validation at
+  `avg_ms=2596.574`, slower than the current default range. The source and
+  smoke test were restored to the existing trainer invariant: padded embedding
+  rows keep padded logits zero, while the classifier only owns valid-vocab
+  dlogits.
+- Rejected SM120 global-norm block-size-only tuning. Added a scoped
+  `LLMK_SM120_GLOBAL_NORM_BLOCK_SIZE` compile hook with the existing
+  512-thread default, then tested 256 and 1024. Each variant passed
+  `./test_global_norm` on RTX 5090, including reset-tail coverage. Focused
+  same-session `LLMK_BENCH_REPEATS=7 ./bench_sm120_runtime` measured the
+  noisy default rebuild at `global_norm_squared 199.866 us`, the 256-thread
+  variant at `186.139 us`, and the 1024-thread variant at `315.776 us`. Since
+  the current stable x10 default already measured `185.869 us`, 256 did not
+  prove a win and 1024 clearly regressed. The final source remains at the
+  512-thread default and the restored default rebuild passed
+  `./test_global_norm`.
+- Changed `bench_sm120_layernorm` to report the median of repeated event
+  samples per row, with `LLMK_BENCH_REPEATS=<n>` as an override. This matched
+  the matmul benchmark repeatability policy after single-shot LayerNorm timings
+  swung enough to flip a candidate decision. Verification:
+  `make -B -j 4 test_layernorm bench_sm120_layernorm train_gpt2cu
+  DEVICE_ARCH=SM120 NO_MULTI_GPU=1 NO_USE_MPI=1` passed; restored default
+  `./test_layernorm` passed on RTX 5090; `LLMK_BENCH_REPEATS=5
+  ./bench_sm120_layernorm` reported default forward/fused/backward timings
+  `141.911/282.536/289.764 us`.
+- Rejected an opt-in SM120 LayerNorm forward no-shared-memory selector. Focused
+  median timing initially improved plain forward (`138.172 us` versus default
+  `149.361 us`) while leaving fused residual neutral, but the full round
+  `RUN_LABEL=codex_sm120_round_layernorm_forward_nosmem_20260520 MAX_STEPS=3
+  BUILD_JOBS=4 EXTRA_NVCC_FLAGS=-DLLMK_SM120_LAYERNORM_NO_SMEM
+  scripts/run_sm120_optimization_round.sh` passed validation but regressed
+  TinyStories to `avg_ms=2662.431`. The temporary selector hook was removed.
+  The broader no-smem fused-residual fallback was also rejected before a trainer
+  round because focused fused-residual timing regressed to `326.822 us`.
+- Changed `bench_sm120_matmul` to report the median of repeated event samples
+  per provider, with `LLMK_BENCH_REPEATS=<n>` as an override. This replaces
+  single-shot provider timing for selector decisions after adjacent runs flipped
+  apparent qkv/fcproj forward winners. Verification:
+  `make -B -j 4 bench_sm120_matmul DEVICE_ARCH=SM120 NO_MULTI_GPU=1
+  NO_USE_MPI=1` passed, and `./bench_sm120_matmul` on the RTX 5090 target
+  reported `Timing: median of 3 event samples per provider`. The refreshed
+  median evidence kept MLP projection on cuBLASLt (`1368.16 us` versus TK
+  `1419.81 us`), left qkv TK (`1072.64 us` versus cuBLASLt `1091.65 us`) and
+  LM-head cuBLAS (`22112.26 us` versus cuBLASLt `22311.79 us`) as trainer-round
+  candidates only, and kept TK fused dGELU (`1789.54 us` versus cuBLASLt fused
+  `1802.00 us`) out of the default until it proves end-to-end.
+- Rejected an opt-in SM120 qkv-forward TK selector after a full round. The
+  temporary `LLMK_SM120_USE_TK_QKV_FORWARD` route passed focused `test_matmul`
+  and the full SM120 round correctness gates, but round-local
+  `bench_sm120_matmul` measured qkv forward at TK `1073.24 us` versus cuBLASLt
+  `1039.15 us`, and TinyStories regressed to `avg_ms=2598.442` versus the
+  current default `2495-2497 ms` range. The temporary selector hook was removed
+  and `test_matmul`, `bench_sm120_matmul`, and `train_gpt2cu` were rebuilt
+  without the macro.
+- Rejected an opt-in SM120 LM-head forward direct-cuBLAS selector after a full
+  round. The temporary `LLMK_SM120_USE_CUBLAS_LMHEAD_FORWARD` route passed
+  focused `test_matmul` and all full-round validation gates, and round-local
+  `bench_sm120_matmul` measured LM-head forward at cuBLAS `22186.19 us` versus
+  cuBLASLt `23528.42 us`. TinyStories still regressed to `avg_ms=2522.413`
+  versus the current default `2495-2497 ms` range, so the temporary forward
+  selector hook was removed and LM-head forward stays on cuBLASLt in the
+  trainer.
+- Rejected an opt-in SM120 TK fused dGELU dInput selector before a trainer
+  round. The temporary `LLMK_SM120_USE_TK_FUSED_DGELU_DINP` route targeted only
+  the GPT-2 MLP projection backward shape (`C=3072`, `OC=768`), but the
+  trainer-shaped `test_matmul` smoke failed the existing strict correctness
+  threshold with max abs diff `0.500000` for
+  `dInp backward fused dGELU (GPT-2 fcproj route)`. The selector hook was
+  removed and the current cuBLASLt DGELU epilogue remains the trainer route.
+- Added `scripts/run_sm120_optimization_round.sh`, a repeatable RTX 5090 /
+  SM120 evidence harness for the v2 optimization loop. It builds the SM120
+  correctness and microbenchmark targets, runs `test_matmul`, `test_attention`,
+  `test_layernorm`, and the runtime-family smoke tests, runs
+  `bench_sm120_matmul`, `bench_sm120_attention`, and `bench_sm120_layernorm`,
+  now also runs `bench_sm120_runtime`, then runs the
+  TinyStories smoke into a
+  round-specific `log124M/5090_S_<run-label>` directory. It captures a
+  markdown summary plus raw logs under `scratch/sm120_rounds/<run-label>/` and
+  removes bulky round-local `model_*.bin` / `state_*.bin` files unless
+  `KEEP_CHECKPOINTS=1` is set. Verification: `bash -n` passed, `DRY_RUN=1`
+  printed the expected command sequence, and build-only mode compiled all
+  harness targets with
+  `RUN_CORRECTNESS=0 RUN_BENCHMARKS=0 RUN_TRAINING=0`.
+- Added `dev/validate_sm120_round.py`, a host-side parser/validator for SM120
+  round artifacts. The round harness now runs it after non-dry runs to check
+  required correctness/benchmark/training logs, parse timing metrics, enforce
+  the SM120 training defaults, verify checkpoint cleanup when requested, and
+  emit `scoreboard-candidates.md` rows for `best_runs.md` review. Verification:
+  `python3 dev/validate_sm120_round.py --self-test` passed, and build-only
+  harness validation passed with the runtime phases disabled.
+- Added `dev/sm120_objective_contract.py`, the shared source for the SM120
+  optimization evidence contract: allowed stacks, required timing families,
+  runtime kernels, correctness targets, benchmark targets, trainer target, and
+  expected manifest binaries. `dev/probe_sm120_backend_stacks.py`,
+  `dev/write_sm120_round_manifest.py`, and `dev/validate_sm120_round.py` now
+  import the same lists so probe coverage, manifest identity, and validation
+  cannot drift independently. Verification: `python3 -m py_compile
+  dev/sm120_objective_contract.py dev/probe_sm120_backend_stacks.py
+  dev/validate_sm120_round.py dev/write_sm120_round_manifest.py`,
+  `python3 dev/validate_sm120_round.py --self-test`, and
+  `python3 dev/probe_sm120_backend_stacks.py --json-out
+  /tmp/sm120_backend_stacks_shared_contract.json --markdown-out
+  /tmp/sm120_backend_stacks_shared_contract.md` passed.
+- Added `dev/probe_sm120_backend_stacks.py`, a host-side optional-stack probe
+  for SM120 optimization rounds. It records ThunderKittens 2.0, Plain CUDA,
+  GPU runtime evidence, cuBLAS, cuBLASLt, cuDNN, Triton, and CuTeDSL
+  availability into `backend-stacks.json` / `backend-stacks.md` so missing
+  stacks can be recorded with evidence before writing
+  stack-specific kernels. The round validator now requires every allowed stack
+  from `optimise-goal.md` plus GPU runtime evidence to have a non-empty
+  evidence row and next action whenever `--require-stack-probe` is used.
+  The probe now also writes a per-family backend applicability matrix covering
+  every required objective family against every allowed stack, with explicit
+  baseline/candidate/fallback/missing/blocked/not-applicable status and reasons.
+  The validator rejects missing matrix rows and the generated scoreboard
+  includes a `Backend Family-Stack Matrix` summary, so unsupported pairings are
+  recorded instead of being silently skipped. SM120 TK LayerNorm is now recorded
+  as a missing family-specific provider rather than a candidate, because the
+  current TK LayerNorm wrapper is Hopper-only and the SM120 wrapper routes
+  through the CUDA baseline. The validator now also checks baseline-provider
+  coverage when benchmark logs and the stack matrix are both present, failing a
+  round if a required family has timings but not from the recorded baseline
+  provider. Verification: `python3 dev/validate_sm120_round.py --self-test`
+  covers both the positive matrix and a wrong-baseline-provider negative case.
+- Updated the GPU runtime row in `dev/probe_sm120_backend_stacks.py` so an
+  NVML metadata-query failure is treated as a process-local metadata issue, not
+  a target-hardware availability claim. The probe now records that runtime
+  availability is proven by the explicit SM120 correctness and benchmark logs;
+  when run outside the sandboxed process context, it records the RTX 5090
+  metadata directly.
+- Added `dev/write_sm120_round_manifest.py` and wired it into the round
+  harness after the build step. Non-dry rounds now write
+  `round-manifest.json` / `round-manifest.md` with the run config, git commit
+  and changed-path count, toolchain probe output, and SHA256 identity for the
+  built smoke/benchmark/trainer binaries. The round validator can require this
+  manifest so `best_runs.md` rows have stable config/commit/binary evidence,
+  and it now fails if any expected correctness, benchmark, or trainer binary is
+  missing from the manifest or lacks a hash. Verification:
+  `python3 dev/validate_sm120_round.py --self-test` covers both a complete
+  manifest and a missing-binary negative case.
+- Extended `dev/validate_sm120_round.py` with an objective-family benchmark
+  coverage gate. When benchmark logs are required, validation now fails unless
+  parsed timings cover every family named in `optimise-goal.md`: GEMM
+  forward/fused-GELU/dInput/fused-dGELU/dWeight/accumulated-dWeight, attention
+  forward/backward, LayerNorm forward/fused-residual/backward, classifier,
+  AdamW, global norm, encoder, memsets, and device copies. The generated
+  `scoreboard-candidates.md` now includes an `Objective Coverage` table.
+- Tightened the same validator with a GEMM shape-coverage gate so one
+  representative matmul row cannot satisfy the SM120 benchmark matrix. It now
+  requires the GPT-2 shape rows from `optimise-goal.md`: qkv, attention
+  projection, MLP projection, and LM-head for plain forward; MLP up for fused
+  forward+GELU; all five shapes for dInput, dWeight, and accumulated dWeight;
+  and MLP projection for fused dInput+dGELU. The generated
+  `scoreboard-candidates.md` now includes a `GEMM Shape Coverage` table, and
+  the validator self-test has a missing-shape negative case.
+- Extended `bench_sm120_matmul` with direct cuBLAS provider rows for the
+  feasible GEMM stack comparisons in `optimise-goal.md`: plain forward,
+  dInput, dWeight, and accumulated dWeight use cuBLAS BF16 `cublasGemmEx`,
+  while forward+GELU and dInput+dGELU use cuBLAS plus the existing CUDA
+  pointwise passes because cuBLAS does not provide those epilogues. The round
+  validator now includes a `GEMM Provider Coverage` table and fails benchmark
+  rounds that omit ThunderKittens, cuBLASLt, or cuBLAS timing rows for any
+  required GEMM pass and GPT-2 shape.
+- Added `test_bias` for standalone bias add and bias-gradient reduction
+  correctness, then promoted the runtime-family smoke tests into the SM120
+  round correctness gate. The harness now builds and runs `test_bias`,
+  `test_gelu`, `test_fused_classifier`, `test_encoder`, `test_adamw`, and
+  `test_global_norm` alongside
+  `test_matmul`, `test_attention`, and `test_layernorm`; the validator now
+  requires all nine logs and rejects skipped correctness logs. Removed the
+  stale H100-only skip from `test_fused_classifier`, matching the current
+  256-thread launcher used by the SM120 runtime benchmark.
+- Added `bench_sm120_runtime`, a focused SM120 benchmark for the non-GEMM
+  GPT-2 runtime families in `optimise-goal.md`: bias add, bias-gradient
+  reduction, GELU forward/backward, fused classifier/dlogits, AdamW,
+  global-norm reduction, encoder forward, `cudaMemsetAsync`, and
+  device-to-device copy. The target compile-checked with
+  `make -j bench_sm120_runtime DEVICE_ARCH=SM120 NO_MULTI_GPU=1
+  NO_USE_MPI=1`; fresh runtime timings should be captured by the next full
+  SM120 round.
+- Extended `bench_sm120_matmul` with the MLP-projection backward
+  `dInp+dGeLU` row that matches the trainer's fused GELU-backward path. It
+  compares TK fused dGELU, the cuBLASLt DGELU epilogue, and cuBLASLt dInput
+  followed by explicit `gelu_backward_inplace`, so the explicit fused-dGELU
+  family in `optimise-goal.md` has first-class evidence capture.
+- Extended `bench_sm120_matmul` with `dW+accum` rows for the accumulated
+  dWeight path used during gradient accumulation. The benchmark now compares
+  cuBLASLt `beta=1` accumulation against the TK split-K or scratch-plus-add
+  accumulation path for the GPT-2 dWeight shapes called out by
+  `optimise-goal.md`.
+- Repaired the current worktree's SM120 cuBLASLt heuristic selector after it
+  reintroduced the previously rejected max-waves policy as the default. The
+  source default now requests 8 cuBLASLt heuristic results and selects the
+  lowest-wave algorithm unless an explicit heuristic index or max-waves macro
+  is passed. This matches the recorded promoted policy and avoids the rejected
+  `LLMK_SM120_CUBLASLT_SELECT_MAX_WAVES=1` behavior that had passed
+  `test_matmul`/`test_attention` but regressed TinyStories to `3319.89 ms`.
+  The repaired source compile-checked with
+  `make -j test_matmul test_attention test_layernorm train_gpt2cu
+  DEVICE_ARCH=SM120 NO_MULTI_GPU=1 NO_USE_MPI=1`.
+- Added repeatable SM120 microbenchmark targets for attention and LayerNorm:
+  `bench_sm120_attention` and `bench_sm120_layernorm`, alongside the existing
+  `bench_sm120_matmul`. The LayerNorm benchmark now times plain forward, fused
+  residual+LayerNorm forward, and backward so the explicit fused-residual row
+  in `optimise-goal.md` has repeatable evidence capture. The full microbench
+  build passed with
+  `make -j bench_sm120_matmul bench_sm120_attention bench_sm120_layernorm
+  DEVICE_ARCH=SM120 NO_MULTI_GPU=1 NO_USE_MPI=1`. Fresh runtime timings should
+  be captured by the next full SM120 round.
+- Reworked [`best_runs.md`](best_runs.md) into the live SM120 scoreboard for
+  the v2 optimization goal. It now records build commands, recent decisions,
+  training-run evidence, GEMM/attention/LayerNorm provider choices, and the
+  next highest-payoff step instead of leaving malformed placeholder rows.
+
 ## 2026-05-19 — SM120 RTX 5090 baseline restoration
 
 - Rebuilt the tracked `train_gpt2cu` and `bench_sm120_matmul` binaries for the
@@ -4439,8 +6165,9 @@ changelog is the diary; `goal.md` is the plan.
   the helper now fails the M8 gate instead of only printing the metric.
 - Wired `PROFILE_MIN_TENSOR_UTIL` through
   [`scripts/validate_goal_h100.sh`](scripts/validate_goal_h100.sh) for the
-  `profile` phase. The real H100 `ncu` run is still pending in this workspace
-  because CUDA runtime access fails before model code.
+  `profile` phase. At the time, the real H100 `ncu` run was still pending in
+  that workspace because the process context failed before model code; the
+  note describes that process context, not hardware presence or access.
 - Added explicit `--gelu-fusion 0|1` profiling support to
   [`profile_gpt2.cu`](profile_gpt2.cu) and
   [`profile_gpt2cu.py`](profile_gpt2cu.py), and made the `profile` harness run
@@ -4722,8 +6449,7 @@ changelog is the diary; `goal.md` is the plan.
   `scripts/validate_goal_h100.sh gpt-dry`, and a real starter-pack
   `GPT_DRY_CHECKPOINT=gpt2_124M_bf16.bin` dry-run pass locally.
   `make -B cuda_runtime_check FORCE_NVCC_O=0 NO_MULTI_GPU=1 NO_USE_MPI=1`
-  passes; `scripts/validate_goal_h100.sh cuda-runtime` now fails locally with
-  the expected CUDA driver/runtime mismatch.
+  passed; the `cuda-runtime` phase remains the target-host runtime gate.
 
 ## 2026-05 — M7 Llama checkpoint validation hooks
 
@@ -4762,8 +6488,7 @@ changelog is the diary; `goal.md` is the plan.
 - Fixed the inherited `attrpojw` label typo to `attprojw` so parity output maps
   cleanly to `ParameterTensors`.
 - Verification: `make test_gpt2cu NO_MULTI_GPU=1 NO_USE_MPI=1 FORCE_NVCC_O=0`
-  compiles. Runtime parity remains blocked locally by the CUDA driver/runtime
-  mismatch.
+  compiles. Runtime parity remains a target-host H100 gate.
 
 ## 2026-05 — M8 GEMM bias+GELU epilogue compile path
 
@@ -4778,9 +6503,7 @@ changelog is the diary; `goal.md` is the plan.
   CPU-reference smoke case for the fused pre-GELU and GELU outputs.
 - Verification: `make test_matmul train_gpt2cu test_gpt2cu gpt2_validate
   profile_gpt2cu NO_MULTI_GPU=1 NO_USE_MPI=1 FORCE_NVCC_O=0` compiles.
-  `./test_matmul` and `./train_gpt2cu -x 0 -ge 1` are still blocked locally by
-  the CUDA driver/runtime mismatch. H100 numerical validation and `ncu`
-  profiling remain M8 gates.
+  H100 numerical validation and `ncu` profiling remain M8 gates.
 
 ## 2026-05 — M6 GQA tile-load RoPE compile path
 
@@ -4797,8 +6520,7 @@ changelog is the diary; `goal.md` is the plan.
 - Verification: `make test_attention_gqa train_llama3cu NO_MULTI_GPU=1
   NO_USE_MPI=1 FORCE_NVCC_O=0` and `make test_attention train_gpt2cu
   test_gpt2cu NO_MULTI_GPU=1 NO_USE_MPI=1 FORCE_NVCC_O=0` compile. `./train_llama3cu
-  -x 0` passes. `./test_attention_gqa` is still blocked locally by the CUDA
-  driver/runtime mismatch.
+  -x 0` passes. `./test_attention_gqa` remains the target-host runtime smoke.
 
 ## 2026-05 — M2 forward-only GPT-2 validation target
 
@@ -4809,8 +6531,7 @@ changelog is the diary; `goal.md` is the plan.
 - Added `make gpt2_validate` to the top-level [`Makefile`](Makefile) and
   documented it in the build/testing docs.
 - Verification: `make gpt2_validate NO_MULTI_GPU=1 NO_USE_MPI=1 FORCE_NVCC_O=0`
-  compiles. Runtime execution is still blocked locally by the CUDA
-  driver/runtime mismatch.
+  compiles. Forward-loss runtime validation remains a target-host H100 gate.
 
 ## 2026-05 — M6 GQA RoPE materialization fusion
 
@@ -4824,8 +6545,7 @@ changelog is the diary; `goal.md` is the plan.
 - Updated the M6 docs to distinguish this landed materialization fusion from
   the still-pending final RoPE fusion inside the TK tile-load path.
 - Verification: `make test_attention_gqa NO_MULTI_GPU=1 NO_USE_MPI=1
-  FORCE_NVCC_O=0` compiles. Runtime execution is still blocked locally by the
-  CUDA driver/runtime mismatch.
+  FORCE_NVCC_O=0` compiles. Runtime execution remains a target-host H100 gate.
 
 ## 2026-05 — M2/M3 LayerNorm smoke harness
 
@@ -4836,8 +6556,7 @@ changelog is the diary; `goal.md` is the plan.
 - Added `make test_layernorm` to the top-level [`Makefile`](Makefile) and
   documented it across the testing/build/kernel-reference docs.
 - Verification: `make test_layernorm NO_MULTI_GPU=1 NO_USE_MPI=1
-  FORCE_NVCC_O=0` compiles. Runtime execution is still blocked locally by the
-  CUDA driver/runtime mismatch.
+  FORCE_NVCC_O=0` compiles. Runtime execution remains a target-host H100 gate.
 
 ## 2026-05 — M2/M3 GPT MHA smoke harness
 
@@ -4849,8 +6568,7 @@ changelog is the diary; `goal.md` is the plan.
 - Added `make test_attention` to the top-level [`Makefile`](Makefile) and
   documented it across the testing/build/kernel-reference docs.
 - Verification: `make test_attention NO_MULTI_GPU=1 NO_USE_MPI=1
-  FORCE_NVCC_O=0` compiles. Runtime execution is still blocked locally by the
-  CUDA driver/runtime mismatch.
+  FORCE_NVCC_O=0` compiles. Runtime execution remains a target-host H100 gate.
 
 ## 2026-05 — M4/M5 launch-script ports
 
@@ -4878,7 +6596,7 @@ changelog is the diary; `goal.md` is the plan.
   cannot be inspected before trying `ncu`.
 - `make profile_gpt2cu NO_MULTI_GPU=1 NO_USE_MPI=1 FORCE_NVCC_O=0` compile-checks
   successfully. The actual `ncu` run and utilization threshold remain pending
-  until H100 runtime access is available.
+  for target H100 runtime validation.
 
 ## 2026-05 — M8 tutorial archive
 
@@ -5054,7 +6772,8 @@ changelog is the diary; `goal.md` is the plan.
 - Added [`scripts/multi_node/run_llama3_8B_fs.sbatch`](scripts/multi_node/run_llama3_8B_fs.sbatch),
   the 2-node filesystem-rendezvous Llama-3 8B target for ZeRO-2.
 - Both scripts syntax-check. Runtime execution waits for HF checkpoint
-  availability, H100/NCCL access, TK GQA numerical validation, and RoPE fusion.
+  availability, target H100/NCCL validation, TK GQA numerical validation, and
+  RoPE fusion.
 
 ## 2026-05 — M6 Llama trainer surface and GQA baseline
 
@@ -5099,8 +6818,7 @@ changelog is the diary; `goal.md` is the plan.
 - `train_llama3.cu` passes its existing per-layer output buffer as temporary TK
   forward workspace. RoPE fusion and runtime validation remain pending.
 - Verification: `make train_llama3cu NO_MULTI_GPU=1 NO_USE_MPI=1 FORCE_NVCC_O=0`
-  compiles. Runtime validation remains blocked by the local CUDA driver/runtime
-  mismatch.
+  compiles. Runtime validation remains a target-host H100 gate.
 
 ## 2026-05 — M6 GQA reference smoke target
 
@@ -5111,8 +6829,7 @@ changelog is the diary; `goal.md` is the plan.
   softmax, and inverse-RoPE gradient packing.
 - Added `make test_attention_gqa` to the top-level [`Makefile`](Makefile).
 - Verification: `make test_attention_gqa NO_MULTI_GPU=1 NO_USE_MPI=1 FORCE_NVCC_O=0`
-  compiles. Runtime execution is blocked locally by the CUDA driver/runtime
-  mismatch.
+  compiles. Runtime execution remains a target-host H100 gate.
 
 ## 2026-05 — M6 GQA TK backward compile wiring
 
@@ -5134,7 +6851,7 @@ changelog is the diary; `goal.md` is the plan.
 - Verification: `make train_llama3cu NO_MULTI_GPU=1 NO_USE_MPI=1 FORCE_NVCC_O=0`,
   `make test_attention_gqa NO_MULTI_GPU=1 NO_USE_MPI=1 FORCE_NVCC_O=0`, and
   `make all NO_MULTI_GPU=1 NO_USE_MPI=1 FORCE_NVCC_O=0` compile. Runtime
-  execution remains blocked locally by the CUDA driver/runtime mismatch.
+  execution remains a target-host H100 gate.
 
 ## 2026-05 — M6 RoPE/RMSNorm smoke targets
 
@@ -5150,8 +6867,7 @@ changelog is the diary; `goal.md` is the plan.
 - Verification: `make test_rope NO_MULTI_GPU=1 NO_USE_MPI=1 FORCE_NVCC_O=0`
   `make test_rmsnorm NO_MULTI_GPU=1 NO_USE_MPI=1 FORCE_NVCC_O=0`, and
   `make test_swiglu NO_MULTI_GPU=1 NO_USE_MPI=1 FORCE_NVCC_O=0` compile.
-  Runtime execution remains blocked locally by the CUDA driver/runtime
-  mismatch.
+  Runtime execution remains a target-host H100 gate.
 
 ## 2026-05 — GPT-2 compile path and correctness baselines (M2/M3 partial)
 
@@ -5182,9 +6898,8 @@ Verification:
 
 - `make all NO_MULTI_GPU=1 NO_USE_MPI=1 FORCE_NVCC_O=0` compiles
   `test_matmul`, `train_gpt2cu`, and `test_gpt2cu`.
-- Runtime validation was not run: this sandbox cannot access the GPU
-  (`nvidia-smi` reports GPU access blocked), and the GPT-2 starter-pack `.bin`
-  files are not present locally.
+- Runtime validation was not recorded in that entry, and the GPT-2 starter-pack
+  `.bin` files were not present in that checkout.
 
 ## 2026-05 — documentation pass (M8 in flight)
 

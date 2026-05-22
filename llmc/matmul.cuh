@@ -55,10 +55,11 @@ namespace llmk::cublaslt_sm120 {
 static constexpr size_t workspace_size = (size_t)LLMK_SM120_CUBLASLT_WORKSPACE_MB * 1024 * 1024;
 static void* workspace = nullptr;
 static cublasLtHandle_t handle = nullptr;
+static cublasHandle_t blas_handle = nullptr;
 static cublasComputeType_t compute_type = CUBLAS_COMPUTE_32F;
 
 #ifndef LLMK_SM120_CUBLASLT_HEURISTIC_RESULTS
-#define LLMK_SM120_CUBLASLT_HEURISTIC_RESULTS 1
+#define LLMK_SM120_CUBLASLT_HEURISTIC_RESULTS 8
 #endif
 static_assert(LLMK_SM120_CUBLASLT_HEURISTIC_RESULTS >= 1 &&
               LLMK_SM120_CUBLASLT_HEURISTIC_RESULTS <= 64,
@@ -103,6 +104,7 @@ inline void check(cublasStatus_t status, const char* file, int line) {
 inline void init() {
     if (handle != nullptr) return;
     LLMK_CUBLASLT_CHECK(cublasLtCreate(&handle));
+    LLMK_CUBLASLT_CHECK(cublasCreate(&blas_handle));
     cudaCheck(cudaMalloc(&workspace, workspace_size));
 }
 
@@ -123,6 +125,10 @@ inline void destroy() {
         LLMK_CUBLASLT_CHECK(cublasLtDestroy(handle));
         handle = nullptr;
     }
+    if (blas_handle != nullptr) {
+        LLMK_CUBLASLT_CHECK(cublasDestroy(blas_handle));
+        blas_handle = nullptr;
+    }
 }
 
 inline bool same_key(const PlanKey& a, const PlanKey& b) {
@@ -140,12 +146,6 @@ inline int select_heuristic(const cublasLtMatmulHeuristicResult_t* heuristics, i
     best = LLMK_SM120_CUBLASLT_HEURISTIC_INDEX;
     if (best < 0) best = 0;
     if (best >= returnedResults) best = returnedResults - 1;
-#elif defined(LLMK_SM120_CUBLASLT_SELECT_MIN_WAVES)
-    for (int i = 1; i < returnedResults; ++i) {
-        if (heuristics[i].wavesCount < heuristics[best].wavesCount) {
-            best = i;
-        }
-    }
 #elif defined(LLMK_SM120_CUBLASLT_SELECT_MAX_WAVES)
     for (int i = 1; i < returnedResults; ++i) {
         if (heuristics[i].wavesCount > heuristics[best].wavesCount) {
@@ -153,8 +153,11 @@ inline int select_heuristic(const cublasLtMatmulHeuristicResult_t* heuristics, i
         }
     }
 #else
-    (void)heuristics;
-    (void)returnedResults;
+    for (int i = 1; i < returnedResults; ++i) {
+        if (heuristics[i].wavesCount < heuristics[best].wavesCount) {
+            best = i;
+        }
+    }
 #endif
     return best;
 }
@@ -409,6 +412,29 @@ inline void matmul(floatX* d, const floatX* a, const floatX* b, const floatX* bi
     cudaCheck(cudaGetLastError());
 }
 
+inline void matmul_blas(floatX* d, const floatX* a, const floatX* b,
+                        int m, int n, int k, cudaStream_t stream,
+                        bool transA, bool transB,
+                        int lda, int ldb, int ldc,
+                        bool accumulate = false) {
+    assert(blas_handle != nullptr && "llmk::cublaslt_sm120::init() must run before matmul_blas");
+    const float alpha = 1.0f;
+    const float beta = accumulate ? 1.0f : 0.0f;
+    const cublasOperation_t opA = transA ? CUBLAS_OP_T : CUBLAS_OP_N;
+    const cublasOperation_t opB = transB ? CUBLAS_OP_T : CUBLAS_OP_N;
+    LLMK_CUBLASLT_CHECK(cublasSetStream(blas_handle, stream));
+    LLMK_CUBLASLT_CHECK(cublasGemmEx(
+        blas_handle, opA, opB, m, n, k,
+        &alpha,
+        a, CUDA_R_16BF, lda,
+        b, CUDA_R_16BF, ldb,
+        &beta,
+        d, CUDA_R_16BF, ldc,
+        CUBLAS_COMPUTE_32F,
+        CUBLAS_GEMM_DEFAULT));
+    cudaCheck(cudaGetLastError());
+}
+
 #undef LLMK_CUBLASLT_CHECK
 
 } // namespace llmk::cublaslt_sm120
@@ -523,6 +549,26 @@ __global__ void add_bias_kernel(floatX* out, const floatX* bias, int N, int OC) 
     out[idx] = (floatX)((float)out[idx] + (float)bias[oc]);
 }
 
+#if defined(KITTENS_SM120) && !defined(LLMK_SM120_DISABLE_BIAS_ADD_VEC2)
+__global__ void add_bias_kernel_vec2(floatX* out, const floatX* bias, size_t total, int OC) {
+    const size_t idx = ((size_t)blockIdx.x * blockDim.x + threadIdx.x) * (2 * x128::size);
+    if (idx >= total) return;
+    const int oc = idx % OC;
+
+    x128 out0 = load128(out + idx);
+    x128 bias0 = load128(bias + oc);
+    x128 out1 = load128(out + idx + x128::size);
+    x128 bias1 = load128(bias + oc + x128::size);
+    for (int k = 0; k < x128::size; ++k) {
+        out0[k] = (floatX)((float)out0[k] + (float)bias0[k]);
+        out1[k] = (floatX)((float)out1[k] + (float)bias1[k]);
+    }
+    store128(out + idx, out0);
+    store128(out + idx + x128::size, out1);
+}
+
+#endif
+
 __global__ void matmul_forward_cuda_kernel(floatX* out, const floatX* inp,
                                            const floatX* weight, const floatX* bias,
                                            int row_offset, int rows, int C, int OC) {
@@ -561,7 +607,27 @@ __global__ void matmul_forward_gelu_cuda_kernel(floatX* out, floatX* pre_gelu,
 
 inline void add_bias(floatX* out, const floatX* bias, int N, int OC, cudaStream_t stream) {
     if (bias == nullptr) return;
-    const int block = 256;
+#ifndef LLMK_SM120_BIAS_ADD_BLOCK_SIZE
+#define LLMK_SM120_BIAS_ADD_BLOCK_SIZE 256
+#endif
+#ifndef LLMK_SM120_BIAS_ADD_WIDE_BLOCK_SIZE
+#define LLMK_SM120_BIAS_ADD_WIDE_BLOCK_SIZE LLMK_SM120_BIAS_ADD_BLOCK_SIZE
+#endif
+#if defined(KITTENS_SM120)
+    const int block = OC >= 3072 ? LLMK_SM120_BIAS_ADD_WIDE_BLOCK_SIZE : LLMK_SM120_BIAS_ADD_BLOCK_SIZE;
+#else
+    const int block = LLMK_SM120_BIAS_ADD_BLOCK_SIZE;
+#endif
+#if defined(KITTENS_SM120) && !defined(LLMK_SM120_DISABLE_BIAS_ADD_VEC2)
+    const size_t total = (size_t)N * OC;
+    if (OC % (2 * (int)x128::size) == 0 && total % (2 * x128::size) == 0) {
+        const size_t vec2_items = total / (2 * x128::size);
+        const int grid = (int)CEIL_DIV(vec2_items, (size_t)block);
+        add_bias_kernel_vec2<<<grid, block, 0, stream>>>(out, bias, total, OC);
+        cudaCheck(cudaGetLastError());
+        return;
+    }
+#endif
     const int grid  = CEIL_DIV(N * OC, block);
     add_bias_kernel<<<grid, block, 0, stream>>>(out, bias, N, OC);
     cudaCheck(cudaGetLastError());
@@ -828,6 +894,40 @@ inline bool matmul_backward_gelu_fusion_supported() {
 #endif
     return LLMK_SM120_FUSE_DGELU != 0;
 #else
+    return false;
+#endif
+}
+
+inline bool matmul_sm120_use_cublas_dinp(int C, int OC, bool fuse_backward_gelu) {
+#if defined(KITTENS_SM120) && !defined(LLMK_SM120_DISABLE_CUBLAS_BACKWARD_GEMM)
+    if (fuse_backward_gelu) return false;
+#if defined(LLMK_SM120_USE_CUBLAS_DINP_ATTPROJ)
+    if (C == 768 && OC == 768) return true;
+#endif
+#if defined(LLMK_SM120_USE_CUBLAS_DINP_QKV)
+    if (C == 768 && OC == 2304) return true;
+#endif
+#if defined(LLMK_SM120_USE_CUBLAS_DINP_FC)
+    if (C == 768 && OC == 3072) return true;
+#endif
+#if defined(LLMK_SM120_USE_CUBLAS_DINP_FCPROJ)
+    if (C == 3072 && OC == 768) return true;
+#endif
+    return OC >= 8192;
+#else
+    (void)C;
+    (void)OC;
+    (void)fuse_backward_gelu;
+    return false;
+#endif
+}
+
+inline bool matmul_sm120_use_cublas_dweight(int C, int OC) {
+#if defined(KITTENS_SM120) && !defined(LLMK_SM120_DISABLE_CUBLAS_BACKWARD_GEMM)
+    return OC < 8192 && (C == 768 || C == 3072);
+#else
+    (void)C;
+    (void)OC;
     return false;
 #endif
 }
@@ -1154,13 +1254,28 @@ inline void matmul_backward(floatX* dinp, floatX* dweight, floatX* dbias,
 
     if (dinp != nullptr) {
 #if defined(LLMK_SM120_USE_CUBLASLT_GEMM) && defined(KITTENS_SM120)
-        llmk::cublaslt_sm120::matmul(
-            dinp, weight, dout, nullptr, C, M, OC, stream,
-            /*transA=*/false, /*transB=*/false,
-            /*batch_count=*/0, /*strideA=*/0, /*strideB=*/0, /*strideOut=*/0,
-            /*accumulate=*/false,
-            /*pre_gelu=*/fuse_backward_gelu ? pre_gelu : nullptr,
-            /*backward=*/true);
+#if defined(LLMK_SM120_USE_TK_FUSED_DGELU_DINP)
+        if (fuse_backward_gelu && matmul_tk_shape_ok(M, C, OC)) {
+            matmul_dispatch_tk_ab(
+                dinp, dout, weight, M, C, OC, stream, pre_gelu, true);
+        } else
+#endif
+        if (matmul_sm120_use_cublas_dinp(C, OC, fuse_backward_gelu)) {
+            // Row-major dinp(M,C)=dout(M,OC)*weight(OC,C) as column-major dinp(C,M).
+            llmk::cublaslt_sm120::matmul_blas(
+                dinp, weight, dout, C, M, OC, stream,
+                /*transA=*/false, /*transB=*/false,
+                /*lda=*/C, /*ldb=*/OC, /*ldc=*/C,
+                /*accumulate=*/false);
+        } else {
+            llmk::cublaslt_sm120::matmul(
+                dinp, weight, dout, nullptr, C, M, OC, stream,
+                /*transA=*/false, /*transB=*/false,
+                /*batch_count=*/0, /*strideA=*/0, /*strideB=*/0, /*strideOut=*/0,
+                /*accumulate=*/false,
+                /*pre_gelu=*/fuse_backward_gelu ? pre_gelu : nullptr,
+                /*backward=*/true);
+        }
 #else
         if (matmul_tk_shape_ok(M, C, OC)) {
             matmul_dispatch_tk_ab(
@@ -1179,11 +1294,20 @@ inline void matmul_backward(floatX* dinp, floatX* dweight, floatX* dbias,
         const size_t dweight_elements = (size_t)OC * C;
 #if defined(LLMK_SM120_USE_CUBLASLT_GEMM) && defined(KITTENS_SM120)
         (void)dweight_elements;
-        llmk::cublaslt_sm120::matmul(
-            dweight, inp, dout, nullptr, C, OC, M, stream,
-            /*transA=*/false, /*transB=*/true,
-            /*batch_count=*/0, /*strideA=*/0, /*strideB=*/0, /*strideOut=*/0,
-            /*accumulate=*/dweight_accumulate, /*pre_gelu=*/nullptr, /*backward=*/true);
+        if (matmul_sm120_use_cublas_dweight(C, OC)) {
+            // Row-major dweight(OC,C)=dout(M,OC)^T*inp(M,C) as column-major dweight(C,OC).
+            llmk::cublaslt_sm120::matmul_blas(
+                dweight, inp, dout, C, OC, M, stream,
+                /*transA=*/false, /*transB=*/true,
+                /*lda=*/C, /*ldb=*/OC, /*ldc=*/C,
+                /*accumulate=*/dweight_accumulate);
+        } else {
+            llmk::cublaslt_sm120::matmul(
+                dweight, inp, dout, nullptr, C, OC, M, stream,
+                /*transA=*/false, /*transB=*/true,
+                /*batch_count=*/0, /*strideA=*/0, /*strideB=*/0, /*strideOut=*/0,
+                /*accumulate=*/dweight_accumulate, /*pre_gelu=*/nullptr, /*backward=*/true);
+        }
 #else
         if (matmul_tk_shape_ok(OC, C, M)) {
             if (matmul_dispatch_tk_atb_splitk(

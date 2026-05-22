@@ -557,7 +557,7 @@ phase_preflight() {
     local gpu_csv
     if ! gpu_csv="$(nvidia-smi --query-gpu=name,compute_cap --format=csv,noheader 2>&1)"; then
         printf '%s\n' "$gpu_csv" >&2
-        die "nvidia-smi could not query GPU inventory"
+        die "nvidia-smi GPU metadata query failed in this process context"
     fi
     printf '%s\n' "$gpu_csv"
     if [ "${ALLOW_NON_H100:-0}" != "1" ]; then

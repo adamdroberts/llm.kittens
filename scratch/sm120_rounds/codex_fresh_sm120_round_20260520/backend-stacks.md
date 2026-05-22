@@ -1,0 +1,164 @@
+# SM120 Backend Stack Probe
+
+| Stack | Status | Candidate use | Evidence | Next action |
+|---|---|---|---|---|
+| ThunderKittens 2.0 | available | native TK kernels and current SM120 packed-QKV attention path | TK_ROOT=/mnt/disk1/home/adam/dev/open-source/ThunderKittens<br>header=/mnt/disk1/home/adam/dev/open-source/ThunderKittens/include/kittens.cuh<br>prototype=/mnt/disk1/home/adam/dev/open-source/ThunderKittens/prototype/prototype.cuh | benchmark against cuBLASLt/plain CUDA by shape before promoting TK-only wins |
+| Plain CUDA | available | plain CUDA baselines and C++ benchmarks | nvcc=/usr/local/cuda/bin/nvcc<br>Build cuda_13.2.r13.2/compiler.37668154_0 | run the SM120 round on the RTX 5090 target for runtime timings |
+| GPU runtime | available on target | runtime timing and correctness execution | GPU runtime availability is established by target-context timing and correctness runs; metadata-only queries are not used as availability evidence. | run timing/correctness on the target GPU runtime and treat process-local runtime initialization failures as context-specific |
+| cuBLAS | available | baseline GEMM comparison where cuBLASLt epilogues are not needed | header=/usr/local/cuda/include/cublas_v2.h<br>library=libcublas.so.13 | add explicit cuBLAS benchmark/parity rows before selecting it over cuBLASLt |
+| cuBLASLt | available | current SM120 GEMM baseline and fused GEMM epilogues | header=/usr/local/cuda/include/cublasLt.h<br>library=libcublasLt.so.13 | keep benchmark rows shape-specific; do not switch global defaults from one isolated win |
+| cuDNN | missing | attention alternatives if local headers/libs and shape support line up | cudnn.h not found<br>cuDNN library not found | prototype as an opt-in benchmark first; current v1 build contract intentionally avoids -lcudnn |
+| Triton | missing | attention, normalization, elementwise fusion, and GEMM candidates | modules missing: triton<br>requirements.txt lists triton | install triton in the active environment before benchmarking this stack |
+| CuTeDSL | missing | Blackwell GEMM and fused epilogue candidates | modules missing: cutlass, cutlass_cppgen, nvidia.cutlass<br>requirements.txt lists nvidia-cutlass-dsl | install nvidia-cutlass-dsl in the active environment before benchmarking this stack |
+
+## Family Applicability Matrix
+
+| Family | Stack | Status | Reason | Next action |
+|---|---|---|---|---|
+| gemm_forward | ThunderKittens 2.0 | candidate | native TK GEMM rows are benchmarked by GPT-2 shape | keep only shape wins that preserve the TinyStories smoke |
+| gemm_forward | cuBLAS | candidate | cuBLAS BF16 GEMM is a direct baseline; fused rows use cuBLAS plus explicit CUDA pointwise work | compare against cuBLASLt and TK for every required pass and shape |
+| gemm_forward | cuBLASLt | baseline | current SM120 GEMM baseline, including fused epilogue candidates | keep selector decisions shape-specific |
+| gemm_forward | cuDNN | not_applicable | cuDNN is not used as a GEMM provider in this project | none until a cuDNN GEMM-equivalent path is intentionally scoped |
+| gemm_forward | Triton | missing | Triton is missing; intended use: Triton can express GEMM or fused epilogue variants if installed | add Triton parity tests before timing or trainer promotion |
+| gemm_forward | CuTeDSL | missing | CuTeDSL is missing; intended use: CuTeDSL can generate Blackwell GEMM or fused epilogue kernels if installed | add CuTeDSL parity tests before timing or trainer promotion |
+| gemm_forward | Plain CUDA | fallback | plain CUDA is a correctness fallback for GEMM-scale work, not the expected performance winner | use only as a safety fallback unless focused timing proves otherwise |
+| gemm_forward_fused_gelu | ThunderKittens 2.0 | candidate | native TK GEMM rows are benchmarked by GPT-2 shape | keep only shape wins that preserve the TinyStories smoke |
+| gemm_forward_fused_gelu | cuBLAS | candidate | cuBLAS BF16 GEMM is a direct baseline; fused rows use cuBLAS plus explicit CUDA pointwise work | compare against cuBLASLt and TK for every required pass and shape |
+| gemm_forward_fused_gelu | cuBLASLt | baseline | current SM120 GEMM baseline, including fused epilogue candidates | keep selector decisions shape-specific |
+| gemm_forward_fused_gelu | cuDNN | not_applicable | cuDNN is not used as a GEMM provider in this project | none until a cuDNN GEMM-equivalent path is intentionally scoped |
+| gemm_forward_fused_gelu | Triton | missing | Triton is missing; intended use: Triton can express GEMM or fused epilogue variants if installed | add Triton parity tests before timing or trainer promotion |
+| gemm_forward_fused_gelu | CuTeDSL | missing | CuTeDSL is missing; intended use: CuTeDSL can generate Blackwell GEMM or fused epilogue kernels if installed | add CuTeDSL parity tests before timing or trainer promotion |
+| gemm_forward_fused_gelu | Plain CUDA | fallback | plain CUDA is a correctness fallback for GEMM-scale work, not the expected performance winner | use only as a safety fallback unless focused timing proves otherwise |
+| gemm_backward_dinput | ThunderKittens 2.0 | candidate | native TK GEMM rows are benchmarked by GPT-2 shape | keep only shape wins that preserve the TinyStories smoke |
+| gemm_backward_dinput | cuBLAS | candidate | cuBLAS BF16 GEMM is a direct baseline; fused rows use cuBLAS plus explicit CUDA pointwise work | compare against cuBLASLt and TK for every required pass and shape |
+| gemm_backward_dinput | cuBLASLt | baseline | current SM120 GEMM baseline, including fused epilogue candidates | keep selector decisions shape-specific |
+| gemm_backward_dinput | cuDNN | not_applicable | cuDNN is not used as a GEMM provider in this project | none until a cuDNN GEMM-equivalent path is intentionally scoped |
+| gemm_backward_dinput | Triton | missing | Triton is missing; intended use: Triton can express GEMM or fused epilogue variants if installed | add Triton parity tests before timing or trainer promotion |
+| gemm_backward_dinput | CuTeDSL | missing | CuTeDSL is missing; intended use: CuTeDSL can generate Blackwell GEMM or fused epilogue kernels if installed | add CuTeDSL parity tests before timing or trainer promotion |
+| gemm_backward_dinput | Plain CUDA | fallback | plain CUDA is a correctness fallback for GEMM-scale work, not the expected performance winner | use only as a safety fallback unless focused timing proves otherwise |
+| gemm_backward_dinput_fused_dgelu | ThunderKittens 2.0 | candidate | native TK GEMM rows are benchmarked by GPT-2 shape | keep only shape wins that preserve the TinyStories smoke |
+| gemm_backward_dinput_fused_dgelu | cuBLAS | candidate | cuBLAS BF16 GEMM is a direct baseline; fused rows use cuBLAS plus explicit CUDA pointwise work | compare against cuBLASLt and TK for every required pass and shape |
+| gemm_backward_dinput_fused_dgelu | cuBLASLt | baseline | current SM120 GEMM baseline, including fused epilogue candidates | keep selector decisions shape-specific |
+| gemm_backward_dinput_fused_dgelu | cuDNN | not_applicable | cuDNN is not used as a GEMM provider in this project | none until a cuDNN GEMM-equivalent path is intentionally scoped |
+| gemm_backward_dinput_fused_dgelu | Triton | missing | Triton is missing; intended use: Triton can express GEMM or fused epilogue variants if installed | add Triton parity tests before timing or trainer promotion |
+| gemm_backward_dinput_fused_dgelu | CuTeDSL | missing | CuTeDSL is missing; intended use: CuTeDSL can generate Blackwell GEMM or fused epilogue kernels if installed | add CuTeDSL parity tests before timing or trainer promotion |
+| gemm_backward_dinput_fused_dgelu | Plain CUDA | fallback | plain CUDA is a correctness fallback for GEMM-scale work, not the expected performance winner | use only as a safety fallback unless focused timing proves otherwise |
+| gemm_backward_dweight | ThunderKittens 2.0 | candidate | native TK GEMM rows are benchmarked by GPT-2 shape | keep only shape wins that preserve the TinyStories smoke |
+| gemm_backward_dweight | cuBLAS | candidate | cuBLAS BF16 GEMM is a direct baseline; fused rows use cuBLAS plus explicit CUDA pointwise work | compare against cuBLASLt and TK for every required pass and shape |
+| gemm_backward_dweight | cuBLASLt | baseline | current SM120 GEMM baseline, including fused epilogue candidates | keep selector decisions shape-specific |
+| gemm_backward_dweight | cuDNN | not_applicable | cuDNN is not used as a GEMM provider in this project | none until a cuDNN GEMM-equivalent path is intentionally scoped |
+| gemm_backward_dweight | Triton | missing | Triton is missing; intended use: Triton can express GEMM or fused epilogue variants if installed | add Triton parity tests before timing or trainer promotion |
+| gemm_backward_dweight | CuTeDSL | missing | CuTeDSL is missing; intended use: CuTeDSL can generate Blackwell GEMM or fused epilogue kernels if installed | add CuTeDSL parity tests before timing or trainer promotion |
+| gemm_backward_dweight | Plain CUDA | fallback | plain CUDA is a correctness fallback for GEMM-scale work, not the expected performance winner | use only as a safety fallback unless focused timing proves otherwise |
+| gemm_backward_dweight_accum | ThunderKittens 2.0 | candidate | native TK GEMM rows are benchmarked by GPT-2 shape | keep only shape wins that preserve the TinyStories smoke |
+| gemm_backward_dweight_accum | cuBLAS | candidate | cuBLAS BF16 GEMM is a direct baseline; fused rows use cuBLAS plus explicit CUDA pointwise work | compare against cuBLASLt and TK for every required pass and shape |
+| gemm_backward_dweight_accum | cuBLASLt | baseline | current SM120 GEMM baseline, including fused epilogue candidates | keep selector decisions shape-specific |
+| gemm_backward_dweight_accum | cuDNN | not_applicable | cuDNN is not used as a GEMM provider in this project | none until a cuDNN GEMM-equivalent path is intentionally scoped |
+| gemm_backward_dweight_accum | Triton | missing | Triton is missing; intended use: Triton can express GEMM or fused epilogue variants if installed | add Triton parity tests before timing or trainer promotion |
+| gemm_backward_dweight_accum | CuTeDSL | missing | CuTeDSL is missing; intended use: CuTeDSL can generate Blackwell GEMM or fused epilogue kernels if installed | add CuTeDSL parity tests before timing or trainer promotion |
+| gemm_backward_dweight_accum | Plain CUDA | fallback | plain CUDA is a correctness fallback for GEMM-scale work, not the expected performance winner | use only as a safety fallback unless focused timing proves otherwise |
+| bias_add | ThunderKittens 2.0 | not_applicable | ThunderKittens 2.0 is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| bias_add | cuBLAS | not_applicable | cuBLAS is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| bias_add | cuBLASLt | not_applicable | cuBLASLt is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| bias_add | cuDNN | not_applicable | cuDNN is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| bias_add | Triton | missing | Triton is missing; intended use: Triton can express selected pointwise or reduction fusions if installed | add stack-specific parity tests before timing |
+| bias_add | CuTeDSL | not_applicable | CuTeDSL is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| bias_add | Plain CUDA | baseline | current SM120 runtime-family baseline | keep until a fused candidate improves focused timing and trainer smoke |
+| bias_gradient_reduce | ThunderKittens 2.0 | not_applicable | ThunderKittens 2.0 is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| bias_gradient_reduce | cuBLAS | not_applicable | cuBLAS is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| bias_gradient_reduce | cuBLASLt | not_applicable | cuBLASLt is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| bias_gradient_reduce | cuDNN | not_applicable | cuDNN is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| bias_gradient_reduce | Triton | missing | Triton is missing; intended use: Triton can express selected pointwise or reduction fusions if installed | add stack-specific parity tests before timing |
+| bias_gradient_reduce | CuTeDSL | not_applicable | CuTeDSL is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| bias_gradient_reduce | Plain CUDA | baseline | current SM120 runtime-family baseline | keep until a fused candidate improves focused timing and trainer smoke |
+| gelu_forward | ThunderKittens 2.0 | not_applicable | ThunderKittens 2.0 is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| gelu_forward | cuBLAS | not_applicable | cuBLAS is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| gelu_forward | cuBLASLt | not_applicable | cuBLASLt is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| gelu_forward | cuDNN | not_applicable | cuDNN is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| gelu_forward | Triton | missing | Triton is missing; intended use: Triton can express selected pointwise or reduction fusions if installed | add stack-specific parity tests before timing |
+| gelu_forward | CuTeDSL | not_applicable | CuTeDSL is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| gelu_forward | Plain CUDA | baseline | current SM120 runtime-family baseline | keep until a fused candidate improves focused timing and trainer smoke |
+| gelu_backward | ThunderKittens 2.0 | not_applicable | ThunderKittens 2.0 is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| gelu_backward | cuBLAS | not_applicable | cuBLAS is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| gelu_backward | cuBLASLt | not_applicable | cuBLASLt is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| gelu_backward | cuDNN | not_applicable | cuDNN is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| gelu_backward | Triton | missing | Triton is missing; intended use: Triton can express selected pointwise or reduction fusions if installed | add stack-specific parity tests before timing |
+| gelu_backward | CuTeDSL | not_applicable | CuTeDSL is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| gelu_backward | Plain CUDA | baseline | current SM120 runtime-family baseline | keep until a fused candidate improves focused timing and trainer smoke |
+| attention_forward | ThunderKittens 2.0 | baseline | SM120 packed-QKV attention is the current focused benchmark path | compare only against stack-specific parity-tested alternatives |
+| attention_forward | cuBLAS | not_applicable | cuBLAS is a GEMM library and does not implement causal attention | none |
+| attention_forward | cuBLASLt | not_applicable | cuBLASLt is a GEMM library and does not implement causal attention | none |
+| attention_forward | cuDNN | missing | cuDNN is missing; intended use: cuDNN attention may be relevant if headers, libraries, and GPT-2 BF16 shape support line up | prototype as an opt-in attention benchmark before trainer promotion |
+| attention_forward | Triton | missing | Triton is missing; intended use: Triton can express FlashAttention-style alternatives if installed | add parity checks against the TK packed-QKV reference |
+| attention_forward | CuTeDSL | not_applicable | CuTeDSL is being considered for GEMM/codegen work here, not attention | none until an attention-specific CuTeDSL prototype is scoped |
+| attention_forward | Plain CUDA | fallback | plain CUDA recompute attention remains a correctness fallback for unsupported shapes | time only as a fallback comparison, not a default candidate |
+| attention_backward | ThunderKittens 2.0 | baseline | SM120 packed-QKV attention is the current focused benchmark path | compare only against stack-specific parity-tested alternatives |
+| attention_backward | cuBLAS | not_applicable | cuBLAS is a GEMM library and does not implement causal attention | none |
+| attention_backward | cuBLASLt | not_applicable | cuBLASLt is a GEMM library and does not implement causal attention | none |
+| attention_backward | cuDNN | missing | cuDNN is missing; intended use: cuDNN attention may be relevant if headers, libraries, and GPT-2 BF16 shape support line up | prototype as an opt-in attention benchmark before trainer promotion |
+| attention_backward | Triton | missing | Triton is missing; intended use: Triton can express FlashAttention-style alternatives if installed | add parity checks against the TK packed-QKV reference |
+| attention_backward | CuTeDSL | not_applicable | CuTeDSL is being considered for GEMM/codegen work here, not attention | none until an attention-specific CuTeDSL prototype is scoped |
+| attention_backward | Plain CUDA | fallback | plain CUDA recompute attention remains a correctness fallback for unsupported shapes | time only as a fallback comparison, not a default candidate |
+| layernorm_forward | ThunderKittens 2.0 | missing | the current TK LayerNorm wrapper is Hopper-only; SM120 routes LayerNorm through the CUDA baseline | port and parity-test an SM120 TK LayerNorm path before benchmarking it |
+| layernorm_forward | cuBLAS | not_applicable | cuBLAS is not the scoped LayerNorm provider for this optimization round | none until a concrete LayerNorm implementation for this stack is scoped |
+| layernorm_forward | cuBLASLt | not_applicable | cuBLASLt is not the scoped LayerNorm provider for this optimization round | none until a concrete LayerNorm implementation for this stack is scoped |
+| layernorm_forward | cuDNN | not_applicable | cuDNN is not the scoped LayerNorm provider for this optimization round | none until a concrete LayerNorm implementation for this stack is scoped |
+| layernorm_forward | Triton | missing | Triton is missing; intended use: Triton is a practical candidate for normalization kernels if installed | add parity tests before timing |
+| layernorm_forward | CuTeDSL | not_applicable | CuTeDSL is not the scoped LayerNorm provider for this optimization round | none until a concrete LayerNorm implementation for this stack is scoped |
+| layernorm_forward | Plain CUDA | baseline | current SM120 LayerNorm benchmark baseline | keep as default until a focused benchmark and TinyStories smoke improve |
+| layernorm_fused_residual_forward | ThunderKittens 2.0 | missing | the current TK LayerNorm wrapper is Hopper-only; SM120 routes LayerNorm through the CUDA baseline | port and parity-test an SM120 TK LayerNorm path before benchmarking it |
+| layernorm_fused_residual_forward | cuBLAS | not_applicable | cuBLAS is not the scoped LayerNorm provider for this optimization round | none until a concrete LayerNorm implementation for this stack is scoped |
+| layernorm_fused_residual_forward | cuBLASLt | not_applicable | cuBLASLt is not the scoped LayerNorm provider for this optimization round | none until a concrete LayerNorm implementation for this stack is scoped |
+| layernorm_fused_residual_forward | cuDNN | not_applicable | cuDNN is not the scoped LayerNorm provider for this optimization round | none until a concrete LayerNorm implementation for this stack is scoped |
+| layernorm_fused_residual_forward | Triton | missing | Triton is missing; intended use: Triton is a practical candidate for normalization kernels if installed | add parity tests before timing |
+| layernorm_fused_residual_forward | CuTeDSL | not_applicable | CuTeDSL is not the scoped LayerNorm provider for this optimization round | none until a concrete LayerNorm implementation for this stack is scoped |
+| layernorm_fused_residual_forward | Plain CUDA | baseline | current SM120 LayerNorm benchmark baseline | keep as default until a focused benchmark and TinyStories smoke improve |
+| layernorm_backward | ThunderKittens 2.0 | missing | the current TK LayerNorm wrapper is Hopper-only; SM120 routes LayerNorm through the CUDA baseline | port and parity-test an SM120 TK LayerNorm path before benchmarking it |
+| layernorm_backward | cuBLAS | not_applicable | cuBLAS is not the scoped LayerNorm provider for this optimization round | none until a concrete LayerNorm implementation for this stack is scoped |
+| layernorm_backward | cuBLASLt | not_applicable | cuBLASLt is not the scoped LayerNorm provider for this optimization round | none until a concrete LayerNorm implementation for this stack is scoped |
+| layernorm_backward | cuDNN | not_applicable | cuDNN is not the scoped LayerNorm provider for this optimization round | none until a concrete LayerNorm implementation for this stack is scoped |
+| layernorm_backward | Triton | missing | Triton is missing; intended use: Triton is a practical candidate for normalization kernels if installed | add parity tests before timing |
+| layernorm_backward | CuTeDSL | not_applicable | CuTeDSL is not the scoped LayerNorm provider for this optimization round | none until a concrete LayerNorm implementation for this stack is scoped |
+| layernorm_backward | Plain CUDA | baseline | current SM120 LayerNorm benchmark baseline | keep as default until a focused benchmark and TinyStories smoke improve |
+| classifier_softmax_cross_entropy_dlogits | ThunderKittens 2.0 | not_applicable | ThunderKittens 2.0 is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| classifier_softmax_cross_entropy_dlogits | cuBLAS | not_applicable | cuBLAS is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| classifier_softmax_cross_entropy_dlogits | cuBLASLt | not_applicable | cuBLASLt is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| classifier_softmax_cross_entropy_dlogits | cuDNN | not_applicable | cuDNN is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| classifier_softmax_cross_entropy_dlogits | Triton | missing | Triton is missing; intended use: Triton can express selected pointwise or reduction fusions if installed | add stack-specific parity tests before timing |
+| classifier_softmax_cross_entropy_dlogits | CuTeDSL | not_applicable | CuTeDSL is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| classifier_softmax_cross_entropy_dlogits | Plain CUDA | baseline | current SM120 runtime-family baseline | keep until a fused candidate improves focused timing and trainer smoke |
+| adamw | ThunderKittens 2.0 | not_applicable | ThunderKittens 2.0 is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| adamw | cuBLAS | not_applicable | cuBLAS is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| adamw | cuBLASLt | not_applicable | cuBLASLt is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| adamw | cuDNN | not_applicable | cuDNN is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| adamw | Triton | missing | Triton is missing; intended use: Triton can express selected pointwise or reduction fusions if installed | add stack-specific parity tests before timing |
+| adamw | CuTeDSL | not_applicable | CuTeDSL is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| adamw | Plain CUDA | baseline | current SM120 runtime-family baseline | keep until a fused candidate improves focused timing and trainer smoke |
+| global_norm | ThunderKittens 2.0 | not_applicable | ThunderKittens 2.0 is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| global_norm | cuBLAS | not_applicable | cuBLAS is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| global_norm | cuBLASLt | not_applicable | cuBLASLt is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| global_norm | cuDNN | not_applicable | cuDNN is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| global_norm | Triton | missing | Triton is missing; intended use: Triton can express selected pointwise or reduction fusions if installed | add stack-specific parity tests before timing |
+| global_norm | CuTeDSL | not_applicable | CuTeDSL is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| global_norm | Plain CUDA | baseline | current SM120 runtime-family baseline | keep until a fused candidate improves focused timing and trainer smoke |
+| encoder_forward | ThunderKittens 2.0 | not_applicable | ThunderKittens 2.0 is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| encoder_forward | cuBLAS | not_applicable | cuBLAS is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| encoder_forward | cuBLASLt | not_applicable | cuBLASLt is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| encoder_forward | cuDNN | not_applicable | cuDNN is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| encoder_forward | Triton | missing | Triton is missing; intended use: Triton can express selected pointwise or reduction fusions if installed | add stack-specific parity tests before timing |
+| encoder_forward | CuTeDSL | not_applicable | CuTeDSL is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| encoder_forward | Plain CUDA | baseline | current SM120 runtime-family baseline | keep until a fused candidate improves focused timing and trainer smoke |
+| cuda_memset | ThunderKittens 2.0 | not_applicable | ThunderKittens 2.0 is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| cuda_memset | cuBLAS | not_applicable | cuBLAS is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| cuda_memset | cuBLASLt | not_applicable | cuBLASLt is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| cuda_memset | cuDNN | not_applicable | cuDNN is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| cuda_memset | Triton | missing | Triton is missing; intended use: Triton can express selected pointwise or reduction fusions if installed | add stack-specific parity tests before timing |
+| cuda_memset | CuTeDSL | not_applicable | CuTeDSL is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| cuda_memset | Plain CUDA | baseline | current SM120 runtime-family baseline | keep until a fused candidate improves focused timing and trainer smoke |
+| cuda_copy_d2d | ThunderKittens 2.0 | not_applicable | ThunderKittens 2.0 is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| cuda_copy_d2d | cuBLAS | not_applicable | cuBLAS is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| cuda_copy_d2d | cuBLASLt | not_applicable | cuBLASLt is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| cuda_copy_d2d | cuDNN | not_applicable | cuDNN is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| cuda_copy_d2d | Triton | missing | Triton is missing; intended use: Triton can express selected pointwise or reduction fusions if installed | add stack-specific parity tests before timing |
+| cuda_copy_d2d | CuTeDSL | not_applicable | CuTeDSL is not a reasonable provider for this pointwise/reduction/runtime family | none |
+| cuda_copy_d2d | Plain CUDA | baseline | current SM120 runtime-family baseline | keep until a fused candidate improves focused timing and trainer smoke |

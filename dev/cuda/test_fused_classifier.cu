@@ -41,19 +41,6 @@ int main() {
     cudaCheck(cudaGetDeviceProperties(&deviceProp, 0));
     printf("Device: %s (sm_%d%d)\n", deviceProp.name, deviceProp.major, deviceProp.minor);
 
-    // The fused_classifier kernel is hard-coded to a 1024-thread block with a
-    // __launch_bounds__(1024, 2) hint that requests 2*1024 = 2048 threads/SM —
-    // valid on H100 (sm_90, maxThreadsPerSM=2048) but exceeds RTX 5090's
-    // (sm_120) maxThreadsPerSM=1536, where launches deadlock. Until a
-    // consumer-friendly variant exists we report a clean skip on non-Hopper.
-    if (deviceProp.major != 9) {
-        printf("SKIPPED: fused_classifier kernel requires sm_90 (H100); "
-               "detected sm_%d%d. Run on H100 (USE_RUNPOD_FLASH=1) for runtime coverage.\n",
-               deviceProp.major, deviceProp.minor);
-        printf("test_fused_classifier smoke OK\n");
-        return EXIT_SUCCESS;
-    }
-
     constexpr int B = 2, T = 8;
     constexpr int V = 1003;     // unaligned vocab tail
     constexpr int P = 1024;     // padded multiple of x128::size=8
@@ -96,69 +83,95 @@ int main() {
             float indicator = (j == tgt) ? 1.0f : 0.0f;
             ref_dlogits[(size_t)r * P + j] = (prob - indicator) * dloss;
         }
-        // Padding columns [V..P) are written by the kernel only if `i < V/x128::size`
-        // covers them — they actually do get written within the vectorized loop when
-        // the unaligned start straddles V. For comparison, mirror the CPU value as
-        // (prob_pad - 0) * dloss, where prob_pad uses the actual logit value.
         for (int j = V; j < P; ++j) {
-            // The kernel's vectorized loop runs for i in [0, V/x128::size), which
-            // touches columns [0, (V/8)*8). For V=1003, that's [0, 1000). Columns
-            // [1000, 1024) are written by the bounds-checked tail loop only for
-            // [V, P). Concretely: tail writes [unaligned_start..V) = [1000..1003),
-            // and columns [1003..1024) are NEVER written. Mark them as "ignore".
-            ref_dlogits[(size_t)r * P + j] = INFINITY;  // sentinel
+            // The kernel leaves padding columns untouched. The trainer relies
+            // on zero initialized padded embedding rows, so ignore this tail in
+            // the classifier-local dlogits comparison.
+            ref_dlogits[(size_t)r * P + j] = INFINITY;
         }
-        // The vectorized loop writes [0, (V/8)*8) = [0, 1000); the tail loop
-        // writes [1000, V) = [1000, 1003). Together they cover [0, V). Good.
     }
 
     __nv_bfloat16* d_logits = nullptr;
+    __nv_bfloat16* d_logits_loss_only = nullptr;
     int* d_targets = nullptr;
     float* d_losses = nullptr;
+    float* d_losses_loss_only = nullptr;
     cudaCheck(cudaMalloc(&d_logits, (size_t)rows * P * sizeof(__nv_bfloat16)));
+    cudaCheck(cudaMalloc(&d_logits_loss_only, (size_t)rows * P * sizeof(__nv_bfloat16)));
     cudaCheck(cudaMalloc(&d_targets, rows * sizeof(int)));
     cudaCheck(cudaMalloc(&d_losses, rows * sizeof(float)));
+    cudaCheck(cudaMalloc(&d_losses_loss_only, rows * sizeof(float)));
 
     cudaCheck(cudaMemcpy(d_logits, h_logits.data(), (size_t)rows * P * sizeof(__nv_bfloat16), cudaMemcpyHostToDevice));
+    cudaCheck(cudaMemcpy(d_logits_loss_only, h_logits.data(), (size_t)rows * P * sizeof(__nv_bfloat16), cudaMemcpyHostToDevice));
     cudaCheck(cudaMemcpy(d_targets, h_targets.data(), rows * sizeof(int), cudaMemcpyHostToDevice));
     cudaCheck(cudaMemset(d_losses, 0, rows * sizeof(float)));
+    cudaCheck(cudaMemset(d_losses_loss_only, 0, rows * sizeof(float)));
+
+    fused_classifier<__nv_bfloat16, false>(d_logits_loss_only, d_losses_loss_only, dloss, d_targets,
+                                           B, T, V, P, False, 0);
+    cudaCheck(cudaDeviceSynchronize());
 
     fused_classifier<__nv_bfloat16, true>(d_logits, d_losses, dloss, d_targets,
                                           B, T, V, P, True, 0);
     cudaCheck(cudaDeviceSynchronize());
 
     std::vector<float> g_loss(rows);
+    std::vector<float> g_loss_only(rows);
     std::vector<__nv_bfloat16> g_dlogits((size_t)rows * P);
+    std::vector<__nv_bfloat16> g_logits_loss_only((size_t)rows * P);
     cudaCheck(cudaMemcpy(g_loss.data(), d_losses, rows * sizeof(float), cudaMemcpyDeviceToHost));
+    cudaCheck(cudaMemcpy(g_loss_only.data(), d_losses_loss_only, rows * sizeof(float), cudaMemcpyDeviceToHost));
     cudaCheck(cudaMemcpy(g_dlogits.data(), d_logits, (size_t)rows * P * sizeof(__nv_bfloat16), cudaMemcpyDeviceToHost));
+    cudaCheck(cudaMemcpy(g_logits_loss_only.data(), d_logits_loss_only, (size_t)rows * P * sizeof(__nv_bfloat16), cudaMemcpyDeviceToHost));
 
     double loss_diff = 0.0;
+    double loss_only_diff = 0.0;
     for (int r = 0; r < rows; ++r) {
         double d = std::abs((double)g_loss[r] - (double)ref_loss[r]);
         if (d > loss_diff) loss_diff = d;
+        double d_loss_only = std::abs((double)g_loss_only[r] - (double)ref_loss[r]);
+        if (d_loss_only > loss_only_diff) loss_only_diff = d_loss_only;
     }
     double dlogits_diff = 0.0;
+    double loss_only_logits_diff = 0.0;
     for (int r = 0; r < rows; ++r) {
         for (int j = 0; j < P; ++j) {
             float r_v = ref_dlogits[(size_t)r * P + j];
-            if (std::isinf(r_v)) continue;  // unwritten padding
+            if (std::isinf(r_v)) continue;
             double d = std::abs((double)bf16_to_float(g_dlogits[(size_t)r * P + j]) - (double)r_v);
             if (d > dlogits_diff) dlogits_diff = d;
+        }
+        for (int j = 0; j < P; ++j) {
+            double d = std::abs((double)bf16_to_float(g_logits_loss_only[(size_t)r * P + j])
+                              - (double)bf16_to_float(h_logits[(size_t)r * P + j]));
+            if (d > loss_only_logits_diff) loss_only_logits_diff = d;
         }
     }
 
     double loss_tol = 5e-3;     // bf16 logits → fp32 loss; small V*max_log_softmax error
     double dlogits_tol = 1e-3;  // dlogits ≈ prob*dloss, small magnitudes
+    double unchanged_tol = 0.0;
+    printf("loss-only loss max abs diff = %.6f (tol %.4f) %s\n", loss_only_diff, loss_tol,
+           loss_only_diff <= loss_tol ? "PASS" : "FAIL");
+    printf("loss-only logits max abs diff = %.6f (tol %.4f) %s\n",
+           loss_only_logits_diff, unchanged_tol,
+           loss_only_logits_diff <= unchanged_tol ? "PASS" : "FAIL");
     printf("loss    max abs diff = %.6f (tol %.4f) %s\n", loss_diff, loss_tol,
            loss_diff <= loss_tol ? "PASS" : "FAIL");
     printf("dlogits max abs diff = %.6f (tol %.4f) %s\n", dlogits_diff, dlogits_tol,
            dlogits_diff <= dlogits_tol ? "PASS" : "FAIL");
 
     cudaCheck(cudaFree(d_logits));
+    cudaCheck(cudaFree(d_logits_loss_only));
     cudaCheck(cudaFree(d_targets));
     cudaCheck(cudaFree(d_losses));
+    cudaCheck(cudaFree(d_losses_loss_only));
 
-    bool ok = loss_diff <= loss_tol && dlogits_diff <= dlogits_tol;
+    bool ok = loss_only_diff <= loss_tol
+           && loss_only_logits_diff <= unchanged_tol
+           && loss_diff <= loss_tol
+           && dlogits_diff <= dlogits_tol;
     if (ok) printf("test_fused_classifier smoke OK\n");
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

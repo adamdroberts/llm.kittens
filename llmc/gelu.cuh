@@ -6,6 +6,13 @@
 #include "cuda_common.h"
 #include "cuda_utils.cuh"
 
+#if defined(KITTENS_SM120) && !defined(LLMK_SM120_GELU_FWD_BLOCK_SIZE)
+#define LLMK_SM120_GELU_FWD_BLOCK_SIZE 512
+#endif
+#if defined(KITTENS_SM120) && !defined(LLMK_SM120_GELU_BWD_BLOCK_SIZE)
+#define LLMK_SM120_GELU_BWD_BLOCK_SIZE 128
+#endif
+
 // ----------------------------------------------------------------------------
 // CUDA kernels
 
@@ -49,7 +56,11 @@ __global__ void gelu_backward_inplace_kernel(floatX* d_in_out, const floatX* inp
 
 void gelu_forward(floatX* out, const floatX* inp, int N, cudaStream_t stream) {
     NVTX_RANGE_FN();
+#if defined(KITTENS_SM120)
+    const int block_size = LLMK_SM120_GELU_FWD_BLOCK_SIZE;
+#else
     const int block_size = 512;
+#endif
     assert(N % (block_size * x128::size) == 0);
     const int grid_size = CEIL_DIV(N, block_size * x128::size);
     gelu_forward_kernel2<<<grid_size, block_size, 0, stream>>>(out, inp);
@@ -58,7 +69,11 @@ void gelu_forward(floatX* out, const floatX* inp, int N, cudaStream_t stream) {
 
 void gelu_backward_inplace(floatX* d_in_out, const floatX* inp, const int N, cudaStream_t stream) {
     NVTX_RANGE_FN();
+#if defined(KITTENS_SM120)
+    const int block_size = LLMK_SM120_GELU_BWD_BLOCK_SIZE;
+#else
     const int block_size = 128;
+#endif
     assert(N % (block_size * x128::size) == 0);
     const int grid_size = CEIL_DIV(N, block_size * x128::size);
     gelu_backward_inplace_kernel<<<grid_size, block_size, 0, stream>>>(d_in_out, inp);

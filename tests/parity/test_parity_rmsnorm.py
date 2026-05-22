@@ -11,7 +11,7 @@ from .conftest import load_bf16, max_abs_diff, save_bf16, save_shape
 def test_parity_rmsnorm(kernel_runner, iodir):
     torch = pytest.importorskip("torch")
     if not torch.cuda.is_available():
-        pytest.skip("CUDA unavailable on this host")
+        pytest.skip("torch.cuda is not initialized for this pytest process")
 
     N, C = 256, 768
     eps = 1e-5

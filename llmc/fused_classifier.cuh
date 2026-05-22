@@ -8,6 +8,13 @@ Fused Classifier:
 #include "cuda_common.h"
 #include "cuda_utils.cuh"
 
+#if defined(KITTENS_SM120) && !defined(LLMK_SM120_CLASSIFIER_BLOCK_SIZE)
+#define LLMK_SM120_CLASSIFIER_BLOCK_SIZE 1024
+#endif
+#if defined(KITTENS_SM120) && !defined(LLMK_SM120_CLASSIFIER_LOSS_ONLY_BLOCK_SIZE)
+#define LLMK_SM120_CLASSIFIER_LOSS_ONLY_BLOCK_SIZE LLMK_SM120_CLASSIFIER_BLOCK_SIZE
+#endif
+
 // ----------------------------------------------------------------------------
 // CUDA kernels
 
@@ -16,13 +23,88 @@ struct SoftmaxParams {
     float Offset;
 };
 
-__device__ SoftmaxParams prepare_softmax_blockwide3(int64_t idx, const floatX* inp, int V, int P) {
+__device__ inline float classifier_exp(float x) {
+#if defined(KITTENS_SM120) && defined(LLMK_SM120_CLASSIFIER_EXP2)
+    return exp2f(x * 1.4426950408889634f);
+#else
+    return expf(x);
+#endif
+}
+
+__device__ inline float classifier_block_reduce_max(float val, float* shared) {
+    const int lane_id = threadIdx.x % WARP_SIZE;
+    const int warp_id = threadIdx.x / WARP_SIZE;
+    const int num_warps = blockDim.x / WARP_SIZE;
+
+    float warp_val = warpReduceMax(val);
+    if (lane_id == 0) {
+        shared[warp_id] = warp_val;
+    }
+    __syncthreads();
+
+    warp_val = (lane_id < num_warps) ? shared[lane_id] : -INFINITY;
+    float block_val = warpReduceMax(warp_val);
+    __syncthreads();
+    return block_val;
+}
+
+__device__ inline float classifier_block_reduce_sum(float val, float* shared) {
+    const int lane_id = threadIdx.x % WARP_SIZE;
+    const int warp_id = threadIdx.x / WARP_SIZE;
+    const int num_warps = blockDim.x / WARP_SIZE;
+
+    float warp_val = warpReduceSum(val);
+    if (lane_id == 0) {
+        shared[warp_id] = warp_val;
+    }
+    __syncthreads();
+
+    warp_val = (lane_id < num_warps) ? shared[lane_id] : 0.0f;
+    float block_val = warpReduceSum(warp_val);
+    __syncthreads();
+    return block_val;
+}
+
+__device__ SoftmaxParams prepare_softmax_blockwide3(int64_t idx, const floatX* inp, int V, int P,
+                                                    float* max_shared, float* sum_shared) {
     // same but not float4
     // one row of inp, i.e. inp[idx, :] of shape (V,)
 
     const floatX* x = inp + idx * P;
     float thread_maxval = -INFINITY;
     float thread_sumval = 0.0f;
+#if defined(KITTENS_SM120)
+    // The upstream reverse/tail traversal hangs on RTX 5090 once the block has
+    // four or more warps for the small unaligned smoke shape. Use a simpler
+    // two-pass traversal on SM120: one vectorized pass for the row max, then a
+    // second vectorized pass for the sumexp under the block max.
+    const int vecs = V / x128::size;
+    const int tail_start = vecs * x128::size;
+    for (int i = threadIdx.x; i < vecs; i += blockDim.x) {
+        x128 packed_x = load128(x + i * x128::size);
+        for (int k = 0; k < x128::size; ++k) {
+            thread_maxval = fmaxf(thread_maxval, (float)packed_x[k]);
+        }
+    }
+    for (int i = tail_start + threadIdx.x; i < V; i += blockDim.x) {
+        thread_maxval = fmaxf(thread_maxval, (float)x[i]);
+    }
+
+    float block_maxval = classifier_block_reduce_max(thread_maxval, max_shared);
+
+    for (int i = threadIdx.x; i < vecs; i += blockDim.x) {
+        x128 packed_x = load128(x + i * x128::size);
+        for (int k = 0; k < x128::size; ++k) {
+            thread_sumval += classifier_exp((float)packed_x[k] - block_maxval);
+        }
+    }
+    for (int i = tail_start + threadIdx.x; i < V; i += blockDim.x) {
+        thread_sumval += classifier_exp((float)x[i] - block_maxval);
+    }
+
+    float block_sumval = classifier_block_reduce_sum(thread_sumval, sum_shared);
+    return SoftmaxParams{1.f / block_sumval, block_maxval};
+#else
     int i = (V+x128::size-1)/x128::size + threadIdx.x - blockDim.x;
 
     // special-case loop to handle the unaligned elements at the end of the array
@@ -35,8 +117,8 @@ __device__ SoftmaxParams prepare_softmax_blockwide3(int64_t idx, const floatX* i
             float v = (float)x[i*x128::size+k];
             float old_maxval = thread_maxval;
             thread_maxval = fmaxf(thread_maxval, v);
-            thread_sumval *= expf((old_maxval - thread_maxval));
-            thread_sumval += expf(v - thread_maxval);
+            thread_sumval *= classifier_exp((old_maxval - thread_maxval));
+            thread_sumval += classifier_exp(v - thread_maxval);
         }
         i -= blockDim.x;
     }
@@ -48,18 +130,21 @@ __device__ SoftmaxParams prepare_softmax_blockwide3(int64_t idx, const floatX* i
             float v = (float)packed_x[k];
             float old_maxval = thread_maxval;
             thread_maxval = fmaxf(thread_maxval, v);
-            thread_sumval *= expf((old_maxval - thread_maxval));
-            thread_sumval += expf(v - thread_maxval);
+            thread_sumval *= classifier_exp((old_maxval - thread_maxval));
+            thread_sumval += classifier_exp(v - thread_maxval);
         }
     }
 
     // Block Max Reduction -> Maths -> Block Sum Reduction
+    (void)max_shared;
+    (void)sum_shared;
     float block_maxval = blockReduce<warpReduceMax>(thread_maxval, false, -INFINITY);
-    thread_sumval *= expf(thread_maxval - block_maxval);
+    thread_sumval *= classifier_exp(thread_maxval - block_maxval);
     float block_sumval = blockReduce<warpReduceSum>(thread_sumval);
 
     // return the softmax parameters
     return SoftmaxParams{1.f / block_sumval, block_maxval};
+#endif
 }
 
 // will _update_ logits to logit gradients
@@ -83,13 +168,20 @@ __global__ void
     int64_t idx = gridDim.x - (blockIdx.x+1); // reverse order for cache hits on matmul data
     int ix = targets[idx];
 
+    __shared__ float max_shared[WARP_SIZE];
+    __shared__ float sum_shared[WARP_SIZE];
+
     // softmax (reading B * T * V, same logits read again below, hopefully still in cache)
-    SoftmaxParams sp = prepare_softmax_blockwide3(idx, logits, V, P);
+    SoftmaxParams sp = prepare_softmax_blockwide3(idx, logits, V, P, max_shared, sum_shared);
 
     // calculate the probability needed for the loss and update (single-threaded)
     if(threadIdx.x == 0) {
-        float prob = expf((float)logits[idx * P + ix] - sp.Offset) * sp.Scale;
+        float prob = classifier_exp((float)logits[idx * P + ix] - sp.Offset) * sp.Scale;
         losses[idx] -= logf(prob);
+    }
+
+    if constexpr (!WriteDLogits && !WriteProbs) {
+        return;
     }
 
     // without this synchronization point we have a race condition:
@@ -108,7 +200,7 @@ __global__ void
         x128 packed_probs;
         for(int k = 0; k < x128::size; ++k) {
             int element = i*x128::size + k;
-            float prob = expf((float)packed_logits_vec[k] - sp.Offset) * sp.Scale;
+            float prob = classifier_exp((float)packed_logits_vec[k] - sp.Offset) * sp.Scale;
             packed_probs[k] = (floatX)prob;
             float indicator = (element == ix) ? 1.0f : 0.0f;
             packed_logits_vec[k] = (floatX)((prob - indicator) * dloss);
@@ -127,7 +219,7 @@ __global__ void
     // e.g. if V = 8003, and x128::size = 8, we need to handle the last 3 elements
     int unaligned_start = V & ~(x128::size - 1); // round down to multiple of x128::size
     for (int i = threadIdx.x + unaligned_start; i < V; i++) {
-        float prob = expf((float)logits_vec[i] - sp.Offset) * sp.Scale;
+        float prob = classifier_exp((float)logits_vec[i] - sp.Offset) * sp.Scale;
         float indicator = (i == ix) ? 1.0f : 0.0f;
         float dlogit = (prob - indicator) * dloss;
         if (WriteDLogits){
@@ -137,6 +229,7 @@ __global__ void
             probs[idx * P + i] = (floatX)prob;
         }
     }
+
 }
 
 // ----------------------------------------------------------------------------
@@ -150,10 +243,15 @@ void fused_classifier(Type* logits, float* losses,
     NVTX_RANGE_FN();
     // Was 1024 in upstream llm.c; reduced to 256 for the H100 build because
     // the 1024-thread variant hangs on cudaDeviceSynchronize under sm_90a
-    // (300s timeout) — see notes above the kernel definition. 256 threads /
-    // 8 warps still saturates an SM and avoids whatever the NVCC 12.8 issue
-    // is with the 32-warp blockReduce.
+    // (300s timeout) — see notes above the kernel definition. SM120 currently
+    // hung at 128+ threads in the generic blockReduce path on SM120. The
+    // classifier-local reduction above keeps explicit shared arrays and a
+    // trailing sync for each reduction, so SM120 can use a larger block again.
+#if defined(KITTENS_SM120)
+    const int block_size = WriteDLogits ? LLMK_SM120_CLASSIFIER_BLOCK_SIZE : LLMK_SM120_CLASSIFIER_LOSS_ONLY_BLOCK_SIZE;
+#else
     const int block_size = 256;
+#endif
     const int N = B * T;
     const int grid_size = N;
     fused_classifier_kernel5<<<grid_size, block_size, 0, stream>>>(logits, losses, (floatX*)NULL, dloss, targets, B, T, V, P, write_dlogits);

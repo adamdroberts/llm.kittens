@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "device_name": "NVIDIA GeForce RTX 5090",
+  "capability": "sm_120",
+  "repeats": 5,
+  "warmup": 2,
+  "results": [
+    {
+      "route": "TorchQKVSinglePacked",
+      "pass": "forward",
+      "shape": "B=64 T=1024 C=768 NH=12 HS=64",
+      "time_us": 2030.2400588989258
+    },
+    {
+      "route": "TorchQKVSinglePacked",
+      "pass": "backward",
+      "shape": "B=64 T=1024 C=768 NH=12 HS=64",
+      "time_us": 6334.176063537598
+    },
+    {
+      "route": "TorchQKVSplitStrided",
+      "pass": "forward",
+      "shape": "B=64 T=1024 C=768 NH=12 HS=64",
+      "time_us": 2108.191967010498
+    },
+    {
+      "route": "TorchQKVSplitStrided",
+      "pass": "backward",
+      "shape": "B=64 T=1024 C=768 NH=12 HS=64",
+      "time_us": 4822.080135345459
+    },
+    {
+      "route": "TorchQKVSplitMaterialized",
+      "pass": "forward",
+      "shape": "B=64 T=1024 C=768 NH=12 HS=64",
+      "time_us": 2653.696060180664
+    },
+    {
+      "route": "TorchQKVSplitMaterialized",
+      "pass": "backward",
+      "shape": "B=64 T=1024 C=768 NH=12 HS=64",
+      "time_us": 5388.319969177246
+    }
+  ]
+}

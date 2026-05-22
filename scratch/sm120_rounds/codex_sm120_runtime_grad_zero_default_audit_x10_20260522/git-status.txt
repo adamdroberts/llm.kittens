@@ -1,0 +1,688 @@
+ M CHANGELOG.md
+ M Makefile
+ M bench_sm120_matmul
+ M dev/cuda/bench_sm120_matmul.cu
+ M dev/cuda/test_adamw.cu
+ M dev/cuda/test_fused_classifier.cu
+ M dev/cuda/test_global_norm.cu
+ M dev/cuda/test_layernorm.cu
+ M dev/cuda/test_matmul.cu
+ M docs/build-and-run.md
+ M docs/kernel-reference.md
+ M docs/testing.md
+ M docs/validation-harness.md
+ M goal.md
+ D gpt2_validate
+ M llmc/adamw.cuh
+ M llmc/attention.cuh
+ M llmc/fused_classifier.cuh
+ M llmc/gelu.cuh
+ M llmc/global_norm.cuh
+ M llmc/layernorm.cuh
+ M llmc/matmul.cuh
+ M llmc/tk/gemm_sm120.cuh
+ M llms-full.txt
+ M llms.txt
+ D log124M/5090_S/DONE_00001765
+ M log124M/5090_S/main.log
+ D log124M/5090_S_attn_bwd32_after_largek/DONE_00000003
+ D log124M/5090_S_attn_bwd32_after_vectorization/DONE_00000003
+ D log124M/5090_S_attn_bwd32_current/DONE_00000003
+ D log124M/5090_S_attn_dq_first/DONE_00000003
+ D log124M/5090_S_attn_fwd_block16/DONE_00000003
+ D log124M/5090_S_attproj_forward_superm1/DONE_00000003
+ D log124M/5090_S_attproj_forward_superm2/DONE_00000003
+ D log124M/5090_S_attproj_forward_superm3/DONE_00000003
+ D log124M/5090_S_attproj_forward_superm4/DONE_00000003
+ D log124M/5090_S_attproj_forward_superm5/DONE_00000003
+ D log124M/5090_S_attproj_forward_superm6/DONE_00000003
+ D log124M/5090_S_backward_n96/DONE_00000003
+ D log124M/5090_S_bias_block1024_after_largek/DONE_00000003
+ D log124M/5090_S_bias_block704/DONE_00000003
+ D log124M/5090_S_bias_present_branchless/DONE_00000003
+ D log124M/5090_S_cublaslt_cached/DONE_00000003
+ D log124M/5090_S_cublaslt_cached_default/DONE_00000003
+ D log124M/5090_S_cublaslt_cached_heur8_default/DONE_00000003
+ D log124M/5090_S_cublaslt_cached_heur8_maxwaves/DONE_00000003
+ D log124M/5090_S_cublaslt_cached_heur8_minwaves/DONE_00000003
+ D log124M/5090_S_cublaslt_dinp_dweight_fallback_after_k32/DONE_00000003
+ D log124M/5090_S_cublaslt_dinp_dweight_fallback_corrected/DONE_00000003
+ D log124M/5090_S_cublaslt_dinp_dweight_profile/DONE_00000003
+ D log124M/5090_S_cublaslt_dinp_fallback/DONE_00000003
+ D log124M/5090_S_cublaslt_dinp_fallback_after_k32/DONE_00000003
+ D log124M/5090_S_cublaslt_dweight_fallback/DONE_00000003
+ D log124M/5090_S_cublaslt_dweight_fallback_after_k32/DONE_00000003
+ D log124M/5090_S_cublaslt_forward_dinp_fallback/DONE_00000003
+ D log124M/5090_S_cublaslt_forward_dinp_fallback_corrected/DONE_00000003
+ D log124M/5090_S_cublaslt_forward_dweight_fallback_corrected/DONE_00000003
+ D log124M/5090_S_cublaslt_forward_fallback/DONE_00000003
+ D log124M/5090_S_cublaslt_forward_fallback_corrected/DONE_00000003
+ D log124M/5090_S_current_default_refresh_after_rejects/DONE_00000003
+ D log124M/5090_S_defer_attproj_dweight_finish/DONE_00000003
+ D log124M/5090_S_defer_lmhead_past_fcproj/DONE_00000003
+ D log124M/5090_S_defer_lmhead_splitk2/DONE_00000003
+ D log124M/5090_S_defer_lmhead_splitk2_default/DONE_00000003
+ D log124M/5090_S_defer_qkv_dweight_finish/DONE_00000003
+ D log124M/5090_S_dgelu_superm7/DONE_00000003
+ D log124M/5090_S_dgelu_superm9/DONE_00000003
+ D log124M/5090_S_dinp_dgelu_superm10/DONE_00000003
+ D log124M/5090_S_dinp_dgelu_superm11/DONE_00000003
+ D log124M/5090_S_dinp_dgelu_superm11_default/DONE_00000003
+ D log124M/5090_S_dinp_dgelu_superm12/DONE_00000003
+ D log124M/5090_S_dinp_dgelu_superm6/DONE_00000003
+ D log124M/5090_S_dinp_direct_bcol_dgelu_fc_exact/DONE_00000003
+ D log124M/5090_S_dinp_direct_bcol_fcproj/DONE_00000003
+ D log124M/5090_S_dinp_direct_bcol_kcap3072/DONE_00000003
+ D log124M/5090_S_dinp_direct_bcol_largek/DONE_00000003
+ D log124M/5090_S_dinp_direct_bcol_largek_default/DONE_00000003
+ D log124M/5090_S_dinp_direct_bcol_largek_superm16/DONE_00000003
+ D log124M/5090_S_dinp_direct_bcol_smallk/DONE_00000003
+ D log124M/5090_S_dinp_direct_bcol_smallk_off/DONE_00000003
+ D log124M/5090_S_dinp_direct_bcol_smallk_rebaseline/DONE_00000003
+ D log124M/5090_S_dinp_direct_bcol_superm12/DONE_00000003
+ D log124M/5090_S_dinp_direct_bcol_superm13/DONE_00000003
+ D log124M/5090_S_dinp_direct_bcol_superm15/DONE_00000003
+ D log124M/5090_S_dinp_direct_bcol_superm7_o3_retest/DONE_00000003
+ D log124M/5090_S_dinp_direct_bcol_superm8_after_kcap3072/DONE_00000003
+ D log124M/5090_S_dinp_fcproj_wide_direct_bcol_v2/DONE_00000003
+ D log124M/5090_S_dinp_kcap1024/DONE_00000003
+ D log124M/5090_S_dinp_kcap3072_superm7/DONE_00000003
+ D log124M/5090_S_dinp_kcap3072_superm7_default/DONE_00000003
+ D log124M/5090_S_dinp_kcap3072_superm8_default/DONE_00000003
+ D log124M/5090_S_dinp_largek_direct_bcol_superm7/DONE_00000003
+ D log124M/5090_S_dinp_largek_wide_direct_bcol/DONE_00000003
+ D log124M/5090_S_dinp_superm1_current/DONE_00000003
+ D log124M/5090_S_dinp_superm9/DONE_00000003
+ D log124M/5090_S_dinp_superm9_after_largek/DONE_00000003
+ D log124M/5090_S_direct_bcol_kcap2304_after_vectorization/DONE_00000003
+ D log124M/5090_S_direct_bcol_largek_off_after_vectorization/DONE_00000003
+ D log124M/5090_S_direct_bcol_largek_superm6_after_vectorization/DONE_00000003
+ D log124M/5090_S_direct_bcol_superm10_after_vectorization/DONE_00000003
+ D log124M/5090_S_direct_bcol_superm11_after_vectorization/DONE_00000003
+ D log124M/5090_S_direct_bcol_superm2_o3/DONE_00000003
+ D log124M/5090_S_direct_bcol_superm3_o3/DONE_00000003
+ D log124M/5090_S_direct_bcol_superm4_o3/DONE_00000003
+ D log124M/5090_S_direct_bcol_superm5_o3/DONE_00000003
+ D log124M/5090_S_direct_bcol_superm6_after_largek/DONE_00000003
+ D log124M/5090_S_direct_bcol_superm7_after_largek/DONE_00000003
+ D log124M/5090_S_direct_bcol_superm7_after_vectorization/DONE_00000003
+ D log124M/5090_S_direct_bcol_superm9_after_vectorization/DONE_00000003
+ D log124M/5090_S_dprep_warps10/DONE_00000003
+ D log124M/5090_S_dprep_warps11/DONE_00000003
+ D log124M/5090_S_dprep_warps12/DONE_00000003
+ D log124M/5090_S_dprep_warps4_after_largek/DONE_00000003
+ D log124M/5090_S_dprep_warps9/DONE_00000003
+ D log124M/5090_S_dweight_lmhead_n64_k16/DONE_00000003
+ D log124M/5090_S_dweight_m2304_superm3/DONE_00000003
+ D log124M/5090_S_dweight_m3072_superm4/DONE_00000003
+ D log124M/5090_S_dweight_m768_superm3/DONE_00000003
+ D log124M/5090_S_dweight_n128_k32/DONE_00000003
+ D log124M/5090_S_dweight_n128_m64_current/DONE_00000003
+ D log124M/5090_S_dweight_n128_off/DONE_00000003
+ D log124M/5090_S_dweight_no_direct_accum_after_largek/DONE_00000003
+ D log124M/5090_S_dweight_reduce_block128_after_largek/DONE_00000003
+ D log124M/5090_S_dweight_reduce_fixed8/DONE_00000003
+ D log124M/5090_S_dweight_smallm_superm3_current/DONE_00000003
+ D log124M/5090_S_dweight_splitk12/DONE_00000003
+ D log124M/5090_S_dweight_splitk128/DONE_00000003
+ D log124M/5090_S_dweight_splitk16_after_dinp_kcap3072/DONE_00000003
+ D log124M/5090_S_dweight_splitk16_after_largek/DONE_00000003
+ D log124M/5090_S_dweight_splitk16_after_vectorization/DONE_00000003
+ D log124M/5090_S_dweight_splitk16_nonqkv16_current/DONE_00000003
+ D log124M/5090_S_dweight_splitk2/DONE_00000003
+ D log124M/5090_S_dweight_splitk32_after_largek/DONE_00000003
+ D log124M/5090_S_dweight_splitk4_current/DONE_00000003
+ D log124M/5090_S_dweight_splitk64/DONE_00000003
+ D log124M/5090_S_dweight_superm1_o3_retest/DONE_00000003
+ D log124M/5090_S_dweight_superm20/DONE_00000003
+ D log124M/5090_S_dweight_superm3_after_largek/DONE_00000003
+ D log124M/5090_S_dweight_superm6_current/DONE_00000003
+ D log124M/5090_S_extend_lmhead_dweight_defer/DONE_00000003
+ D log124M/5090_S_extend_lmhead_dweight_defer_default/DONE_00000003
+ D log124M/5090_S_extra_device_vectorization/DONE_00000003
+ D log124M/5090_S_extra_device_vectorization_default/DONE_00000003
+ D log124M/5090_S_fcproj_forward_superm1/DONE_00000003
+ D log124M/5090_S_fcproj_forward_superm2/DONE_00000003
+ D log124M/5090_S_fcproj_forward_superm3/DONE_00000003
+ D log124M/5090_S_fcproj_forward_superm4/DONE_00000003
+ D log124M/5090_S_fcproj_forward_superm5/DONE_00000003
+ D log124M/5090_S_fcproj_forward_superm6/DONE_00000003
+ D log124M/5090_S_fcproj_forward_superm8/DONE_00000003
+ D log124M/5090_S_fcproj_forward_wide/DONE_00000003
+ D log124M/5090_S_forward_gelu_fast_tanh/DONE_00000003
+ D log124M/5090_S_forward_gelu_n96_k64_default_hook/DONE_00000003
+ D log124M/5090_S_forward_gelu_superm1/DONE_00000003
+ D log124M/5090_S_forward_gelu_superm2/DONE_00000003
+ D log124M/5090_S_forward_gelu_superm4/DONE_00000003
+ D log124M/5090_S_forward_gelu_superm5/DONE_00000003
+ D log124M/5090_S_forward_gelu_superm6/DONE_00000003
+ D log124M/5090_S_forward_gelu_superm8/DONE_00000003
+ D log124M/5090_S_forward_k64_current/DONE_00000003
+ D log124M/5090_S_forward_n96_off_current/DONE_00000003
+ D log124M/5090_S_forward_superm4/DONE_00000003
+ D log124M/5090_S_forward_superm5/DONE_00000003
+ D log124M/5090_S_forward_superm6/DONE_00000003
+ D log124M/5090_S_forward_superm8_after_largek/DONE_00000003
+ D log124M/5090_S_forward_superm8_current/DONE_00000003
+ D log124M/5090_S_forward_superm8_default/DONE_00000003
+ D log124M/5090_S_fused_gelu_superm3/DONE_00000003
+ D log124M/5090_S_huge_n_dweight_superm2_source/DONE_00000003
+ D log124M/5090_S_huge_n_forward_superm1/DONE_00000003
+ D log124M/5090_S_huge_n_forward_superm11/DONE_00000003
+ D log124M/5090_S_huge_n_forward_superm12/DONE_00000003
+ D log124M/5090_S_huge_n_forward_superm13/DONE_00000003
+ D log124M/5090_S_huge_n_forward_superm14/DONE_00000003
+ D log124M/5090_S_huge_n_forward_superm15/DONE_00000003
+ D log124M/5090_S_huge_n_forward_superm16/DONE_00000003
+ D log124M/5090_S_huge_n_forward_superm2/DONE_00000003
+ D log124M/5090_S_huge_n_forward_superm3/DONE_00000003
+ D log124M/5090_S_huge_n_forward_superm4/DONE_00000003
+ D log124M/5090_S_huge_n_forward_superm5/DONE_00000003
+ D log124M/5090_S_huge_n_forward_superm6/DONE_00000003
+ D log124M/5090_S_huge_n_forward_superm8/DONE_00000003
+ D log124M/5090_S_huge_n_forward_superm9/DONE_00000003
+ D log124M/5090_S_huge_n_forward_wide_after_largek/DONE_00000003
+ D log124M/5090_S_huge_n_k16_o3_retest/DONE_00000003
+ D log124M/5090_S_huge_n_k32_after_largek/DONE_00000003
+ D log124M/5090_S_huge_n_k32_dweight_k16/DONE_00000003
+ D log124M/5090_S_huge_n_k32_dweight_k16_default/DONE_00000003
+ D log124M/5090_S_huge_n_k32_superm7/DONE_00000003
+ D log124M/5090_S_huge_n_k64_dweight_k16/DONE_00000003
+ D log124M/5090_S_huge_n_n192_current/DONE_00000003
+ D log124M/5090_S_huge_n_n192_default/DONE_00000003
+ D log124M/5090_S_largek_direct_bcol_superm4/DONE_00000003
+ D log124M/5090_S_lmhead_dweight_split2_after_vectorization/DONE_00000003
+ D log124M/5090_S_maxrreg128_superm7/DONE_00000003
+ D log124M/5090_S_no_dinp_dweight_overlap/DONE_00000003
+ D log124M/5090_S_no_direct_accum/DONE_00000003
+ D log124M/5090_S_no_direct_accum_after_bcol/DONE_00000003
+ D log124M/5090_S_no_direct_dweight_overlap/DONE_00000003
+ D log124M/5090_S_no_lmhead_dweight_defer_after_largek/DONE_00000003
+ D log124M/5090_S_nt_pipe3/DONE_00000003
+ D log124M/5090_S_o2_after_largek/DONE_00000003
+ D log124M/5090_S_o2_after_vectorization/DONE_00000003
+ D log124M/5090_S_o2_superm7_retest/DONE_00000003
+ D log124M/5090_S_o2_superm9_old_dweight_stack/DONE_00000003
+ D log124M/5090_S_o2_superm9_splitk16_default/DONE_00000003
+ D log124M/5090_S_o2_superm9_splitk16_focused/DONE_00000003
+ D log124M/5090_S_o3_dweight_n128_off/DONE_00000003
+ D log124M/5090_S_o3_forward_n96_off/DONE_00000003
+ D log124M/5090_S_o3_huge_n_k64/DONE_00000003
+ D log124M/5090_S_o3_ptxas_dlcm_cg/DONE_00000003
+ D log124M/5090_S_o3_superm8_retest/DONE_00000003
+ D log124M/5090_S_profile_after_dgelu_superm11/DONE_00000003
+ D log124M/5090_S_profile_after_dinp_kcap3072_superm7/DONE_00000003
+ D log124M/5090_S_profile_after_k32_default/DONE_00000003
+ D log124M/5090_S_profile_after_largek_default/DONE_00000003
+ D log124M/5090_S_profile_current_after_bcol/DONE_00000003
+ D log124M/5090_S_profile_phase_refresh/DONE_00000003
+ D log124M/5090_S_profile_refresh_after_rejects/DONE_00000003
+ D log124M/5090_S_ptxas_dlcm_ca/DONE_00000003
+ D log124M/5090_S_ptxas_dlcm_ca_default/DONE_00000003
+ D log124M/5090_S_ptxas_dlcm_cg/DONE_00000003
+ D log124M/5090_S_ptxas_expensive_opts/DONE_00000003
+ D log124M/5090_S_ptxas_no_expensive_opts/DONE_00000003
+ D log124M/5090_S_puretk_after_cublaslt_selector/DONE_00000003
+ D log124M/5090_S_qkv_direct_bcol_superm3_split/DONE_00000003
+ D log124M/5090_S_qkv_dweight_split1/DONE_00000003
+ D log124M/5090_S_qkv_forward_superm1/DONE_00000003
+ D log124M/5090_S_qkv_forward_superm2/DONE_00000003
+ D log124M/5090_S_qkv_forward_superm3/DONE_00000003
+ D log124M/5090_S_qkv_forward_superm4/DONE_00000003
+ D log124M/5090_S_qkv_forward_superm5/DONE_00000003
+ D log124M/5090_S_qkv_forward_superm6/DONE_00000003
+ D log124M/5090_S_reduce_partials_streaming/DONE_00000003
+ D log124M/5090_S_splitk_single_stream/DONE_00000003
+ D log124M/5090_S_superm13_shared/DONE_00000003
+ D log124M/5090_S_superm14/DONE_00000003
+ D log124M/5090_S_superm4_shared/DONE_00000003
+ D log124M/5090_S_tn_direct_acol/DONE_00000003
+ D log124M/5090_S_tn_direct_acol_pure/DONE_00000003
+ D log124M/5090_S_tn_direct_bcol/DONE_00000003
+ D log124M/5090_S_tn_direct_bcol_default/DONE_00000003
+ D log124M/5090_S_tn_direct_bcol_dwk32/DONE_00000003
+ D log124M/5090_S_tn_direct_bcol_dwsuperm3/DONE_00000003
+ D log124M/5090_S_tn_direct_bcol_dwsuperm4/DONE_00000003
+ D log124M/5090_S_tn_direct_bcol_o3_default/DONE_00000003
+ D log124M/5090_S_tn_direct_bcol_off/DONE_00000003
+ D log124M/5090_S_tn_direct_bcol_splitk16/DONE_00000003
+ D log124M/5090_S_tn_direct_bcol_splitk4/DONE_00000003
+ D log124M/5090_async_gradnorm_x3/DONE_00000003
+ D log124M/5090_async_memsets_x3/DONE_00000003
+ D log124M/5090_attn32_cublaslt_idx1_x3/DONE_00000003
+ D log124M/5090_attn32_cublaslt_idx2_x3/DONE_00000003
+ D log124M/5090_attn32_plancache_x3/DONE_00000003
+ D log124M/5090_attn_block32_x3/DONE_00000003
+ D log124M/5090_attn_block64_x3/DONE_00000003
+ D log124M/5090_attn_fwd32_bwd16_x3/DONE_00000003
+ D log124M/5090_attn_fwd64_bwd32_x3/DONE_00000003
+ D log124M/5090_bias_block1024_x3/DONE_00000003
+ D log124M/5090_bias_block256_x3/DONE_00000003
+ D log124M/5090_bias_block384_x3/DONE_00000003
+ D log124M/5090_bias_block512_x3/DONE_00000003
+ D log124M/5090_cublaslt_after_dwsuperm2_x3/DONE_00000003
+ D log124M/5090_cublaslt_atomicdq_ge1_x3/DONE_00000003
+ D log124M/5090_cublaslt_best_r1_ge1_x3/DONE_00000003
+ D log124M/5090_cublaslt_best_rerun_ge1_x3/DONE_00000003
+ D log124M/5090_cublaslt_best_z0_ge1_x3/DONE_00000003
+ D log124M/5090_cublaslt_bf16attn2_ge1_x3/DONE_00000003
+ D log124M/5090_cublaslt_bf16attn_ge1_x3/DONE_00000003
+ D log124M/5090_cublaslt_dgelu_ge1_x3/DONE_00000003
+ D log124M/5090_cublaslt_fusedprep8_ge1_x3/DONE_00000003
+ D log124M/5090_cublaslt_fusedprep_ge1_x3/DONE_00000003
+ D log124M/5090_cublaslt_gemm_ge1_x3/DONE_00000003
+ D log124M/5090_cublaslt_gemm_x3/DONE_00000003
+ D log124M/5090_cublaslt_maxwaves8_current_x3/DONE_00000003
+ D log124M/5090_cublaslt_maxwaves_cache_x3/DONE_00000003
+ D log124M/5090_cublaslt_minwaves8_current_x3/DONE_00000003
+ D log124M/5090_cublaslt_minwaves_cache_x3/DONE_00000003
+ D log124M/5090_cublaslt_plancache_current_x3/DONE_00000003
+ D log124M/5090_cublaslt_plancache_ge1_x3/DONE_00000003
+ D log124M/5090_cublaslt_savedo_ge1_x3/DONE_00000003
+ D log124M/5090_cublaslt_syncprune_dgelu_default_x3/DONE_00000003
+ D log124M/5090_cublaslt_ws128_ge1_x3/DONE_00000003
+ D log124M/5090_cublaslt_ws160_ge1_x3/DONE_00000003
+ D log124M/5090_cublaslt_ws256_ge1_x3/DONE_00000003
+ D log124M/5090_cublaslt_ws64_ge1_x3/DONE_00000003
+ D log124M/5090_current_x3/DONE_00000003
+ D log124M/5090_default_after_atomic_reject_x3/DONE_00000003
+ D log124M/5090_default_after_correctness_x3/DONE_00000003
+ D log124M/5090_default_after_dgelu_reject_x3/DONE_00000003
+ D log124M/5090_default_after_direct_reject_cleanup_x3/DONE_00000003
+ D log124M/5090_default_after_ge_default_patch_x3/DONE_00000003
+ D log124M/5090_default_after_more_rejects_x3/DONE_00000003
+ D log124M/5090_default_after_no_cpu_guard_x3/DONE_00000003
+ D log124M/5090_default_after_splitk_overlap_rejects_x3/DONE_00000003
+ D log124M/5090_default_attn_fwd16_bwd16_x3/DONE_00000003
+ D log124M/5090_default_final_after_rejects_x3/DONE_00000003
+ D log124M/5090_default_final_after_reverts_x3/DONE_00000003
+ D log124M/5090_default_final_cleanup_x3/DONE_00000003
+ D log124M/5090_default_final_rebaseline_x3/DONE_00000003
+ D log124M/5090_default_final_x3/DONE_00000003
+ D log124M/5090_default_ge0_compare_x3/DONE_00000003
+ D log124M/5090_default_post_rejects_x3/DONE_00000003
+ D log124M/5090_default_tile_ge1_x3/DONE_00000003
+ D log124M/5090_default_tile_x3/DONE_00000003
+ D log124M/5090_direct_attn_fwd_bwd_x3/DONE_00000003
+ D log124M/5090_direct_btc_attn_x3/DONE_00000003
+ D log124M/5090_dprep8_x3/DONE_00000003
+ D log124M/5090_final_after_tk_tune_x3/DONE_00000003
+ D log124M/5090_final_attn32_x3/DONE_00000003
+ D log124M/5090_final_bias512_default_rerun_x3/DONE_00000003
+ D log124M/5090_final_bias512_default_x3/DONE_00000003
+ D log124M/5090_final_corrected_x3/DONE_00000003
+ D log124M/5090_final_default_fwd32_bwd16_rerun_x3/DONE_00000003
+ D log124M/5090_final_default_scalar_dprep_x3/DONE_00000003
+ D log124M/5090_final_exact_x3/DONE_00000003
+ D log124M/5090_final_fwd32_bwd16_x3/DONE_00000003
+ D log124M/5090_final_make_x3/DONE_00000003
+ D log124M/5090_final_packed_qkv_guarded_x3/DONE_00000003
+ D log124M/5090_final_packed_qkv_rebuilt_x3/DONE_00000003
+ D log124M/5090_final_recheck_x3/DONE_00000003
+ D log124M/5090_forward_async_x3/DONE_00000003
+ D log124M/5090_kt64_default_ge1_x3/DONE_00000003
+ D log124M/5090_kt64_sm16_ge1_x3/DONE_00000003
+ D log124M/5090_kt64_sm4_ge1_x3/DONE_00000003
+ D log124M/5090_maxrreg128_x3/DONE_00000003
+ D log124M/5090_packed_qkv_attention_x3/DONE_00000003
+ D log124M/5090_packed_qkv_plancache_retest_x3/DONE_00000003
+ D log124M/5090_profile_final_x3/DONE_00000003
+ D log124M/5090_puretk_approxdgelu_default_rerun_x3/DONE_00000003
+ D log124M/5090_puretk_approxdgelu_default_x3/DONE_00000003
+ D log124M/5090_puretk_approxdgelu_x3/DONE_00000003
+ D log124M/5090_puretk_attnfwd16_x3/DONE_00000003
+ D log124M/5090_puretk_dgelu_noclamp_x3/DONE_00000003
+ D log124M/5090_puretk_directfirstpart_x3/DONE_00000003
+ D log124M/5090_puretk_dwsuperm2_default_x3/DONE_00000003
+ D log124M/5090_puretk_dwsuperm2_exactdgelu_x3/DONE_00000003
+ D log124M/5090_puretk_dwsuperm2_splitk16_x3/DONE_00000003
+ D log124M/5090_puretk_dwsuperm2_x3/DONE_00000003
+ D log124M/5090_puretk_dwsuperm3_x3/DONE_00000003
+ D log124M/5090_puretk_fastdgelu_inplaceswap_default_x3/DONE_00000003
+ D log124M/5090_puretk_fastdgelu_inplaceswap_hugewide_x3/DONE_00000003
+ D log124M/5090_puretk_inplace_fastdgelu_x3/DONE_00000003
+ D log124M/5090_puretk_inplace_swap_x3/DONE_00000003
+ D log124M/5090_puretk_n96_dgelu_splitk8_attnbwd32_x3/DONE_00000003
+ D log124M/5090_puretk_n96_dgelu_splitk8_default_rerun_x3/DONE_00000003
+ D log124M/5090_puretk_n96_dgelu_splitk8_default_x3/DONE_00000003
+ D log124M/5090_puretk_n96_dgelu_splitk8_x3/DONE_00000003
+ D log124M/5090_puretk_n96_dgelu_x3/DONE_00000003
+ D log124M/5090_puretk_n96_x3/DONE_00000003
+ D log124M/5090_streamcopy_lastsync_x3/DONE_00000003
+ D log124M/5090_sync_pruned_final_x3/DONE_00000003
+ D log124M/5090_sync_pruned_rerun_x3/DONE_00000003
+ D log124M/5090_tk_correct_dinp_rerun_x3/DONE_00000003
+ D log124M/5090_tk_correct_dinp_x3/DONE_00000003
+ D log124M/5090_tk_corrected_x3/DONE_00000003
+ D log124M/5090_tk_current_default_bias512_x3/DONE_00000003
+ D log124M/5090_tk_current_default_rebaseline_x3/DONE_00000003
+ D log124M/5090_tk_default_fused_dgelu_enabled_rerun_x3/DONE_00000003
+ D log124M/5090_tk_default_fused_dgelu_enabled_x3/DONE_00000003
+ D log124M/5090_tk_default_ge1_after_patch_x3/DONE_00000003
+ D log124M/5090_tk_default_ge1_dgelu_disabled_ab_x3/DONE_00000003
+ D log124M/5090_tk_default_ge1_fused_dgelu_retest_x3/DONE_00000003
+ D log124M/5090_tk_default_kt64_sm2_x3/DONE_00000003
+ D log124M/5090_tk_default_optimized_x3/DONE_00000003
+ D log124M/5090_tk_dgelu_correct_x3/DONE_00000003
+ D log124M/5090_tk_dgelu_wide_only_x3/DONE_00000003
+ D log124M/5090_tk_dweight_force_default_tile_x3/DONE_00000003
+ D log124M/5090_tk_dweight_splitk16_all_x3/DONE_00000003
+ D log124M/5090_tk_fusebias_fusegelu_gradk64_x3/DONE_00000003
+ D log124M/5090_tk_fusebias_fusegelu_lmheadsplit_x3/DONE_00000003
+ D log124M/5090_tk_fusebias_gradk64_x3/DONE_00000003
+ D log124M/5090_tk_fused_dgelu_bias512_x3/DONE_00000003
+ D log124M/5090_tk_ge0_dinp_k32_x3/DONE_00000003
+ D log124M/5090_tk_ge0_dweight64x128_compact_x3/DONE_00000003
+ D log124M/5090_tk_ge0_dweight64x128_x3/DONE_00000003
+ D log124M/5090_tk_ge0_dwreduce512_x3/DONE_00000003
+ D log124M/5090_tk_ge0_fused_dgelu_splitk32_x3/DONE_00000003
+ D log124M/5090_tk_ge0_fused_dgelu_x3/DONE_00000003
+ D log124M/5090_tk_ge0_gelubwd512_x3/DONE_00000003
+ D log124M/5090_tk_ge0_gelubwd64_x3/DONE_00000003
+ D log124M/5090_tk_ge0_gradk32_x3/DONE_00000003
+ D log124M/5090_tk_ge0_hugek32_wait1_x3/DONE_00000003
+ D log124M/5090_tk_ge0_nnlaunch2_x3/DONE_00000003
+ D log124M/5090_tk_ge0_patched_default_rerun_x3/DONE_00000003
+ D log124M/5090_tk_ge0_rebaseline_x3/DONE_00000003
+ D log124M/5090_tk_ge1_default_retest_x3/DONE_00000003
+ D log124M/5090_tk_gradk32_bias512_x3/DONE_00000003
+ D log124M/5090_tk_gradk64_splitstreams_x3/DONE_00000003
+ D log124M/5090_tk_huge256_x3/DONE_00000003
+ D log124M/5090_tk_huge256x128_x3/DONE_00000003
+ D log124M/5090_tk_huge_n_tile192_x3/DONE_00000003
+ D log124M/5090_tk_kt64_bias512_rerun_x3/DONE_00000003
+ D log124M/5090_tk_kt64_sm2_x3/DONE_00000003
+ D log124M/5090_tk_kt64_sm4_current_x3/DONE_00000003
+ D log124M/5090_tk_layernorm_x3/DONE_00000003
+ D log124M/5090_tk_overlap_backward_gemms_x3/DONE_00000003
+ D log124M/5090_tk_restored_after_inplace_reject_x3/DONE_00000003
+ D log124M/5090_tk_restored_ge1_retest_x3/DONE_00000003
+ D log124M/5090_tk_shapeaware_dweight_superm8_x3/DONE_00000003
+ D log124M/5090_tk_shapeaware_split_x3/DONE_00000003
+ D log124M/5090_tk_source_default_dgelu_disabled_x3/DONE_00000003
+ D log124M/5090_tk_splitk32_bias512_x3/DONE_00000003
+ D log124M/5090_tk_tn_inplace_guarded_x3/DONE_00000003
+ D log124M/5090_vecdprep_x3/DONE_00000003
+ D log124M/5090_ws256_fwd32_bwd16_x3/DONE_00000003
+ D profile_gpt2cu
+ M requirements.txt
+ M scripts/validate_goal_h100.sh
+ D test_gpt2cu
+ M tests/parity/test_parity_attention_gqa.py
+ M tests/parity/test_parity_rmsnorm.py
+ M tests/parity/test_parity_rope.py
+ M tests/parity/test_parity_swiglu.py
+ M train_gpt2.cu
+ M train_gpt2cu
+ D train_llama3cu
+?? .antigravitycli/
+?? bench_sm120_attention
+?? bench_sm120_cublaslt_epilogue_algos
+?? bench_sm120_layernorm
+?? bench_sm120_runtime
+?? best_runs.md
+?? build/
+?? dev/audit_sm120_optimization_goal.py
+?? dev/bench_sm120_cudnn_attention.py
+?? dev/bench_sm120_cutedsl_matmul.py
+?? dev/bench_sm120_libtorch_matmul.py
+?? dev/bench_sm120_libtorch_runtime.py
+?? dev/bench_sm120_torch_attention.py
+?? dev/bench_sm120_torch_attention_layouts.py
+?? dev/bench_sm120_torch_classifier.py
+?? dev/bench_sm120_torch_matmul.py
+?? dev/bench_sm120_torch_runtime.py
+?? dev/cuda/bench_sm120_attention.cu
+?? dev/cuda/bench_sm120_cublaslt_epilogue_algos.cu
+?? dev/cuda/bench_sm120_layernorm.cu
+?? dev/cuda/bench_sm120_runtime.cu
+?? dev/cuda/test_bias.cu
+?? dev/probe_sm120_backend_stacks.py
+?? dev/sm120_objective_contract.py
+?? dev/sm120_promotion_decisions.json
+?? dev/triton/
+?? dev/validate_libtorch_trainer_link.py
+?? dev/validate_sm120_round.py
+?? dev/write_sm120_current_selection.py
+?? dev/write_sm120_round_manifest.py
+?? llmc/libtorch_memory.cpp
+?? llmc/memory.cuh
+?? log124M/5090_S/DONE_00000010
+?? log124M/5090_S_antigravity_probe_x3_20260522/
+?? log124M/5090_S_attn_16/
+?? log124M/5090_S_attn_32/
+?? log124M/5090_S_cache/
+?? log124M/5090_S_codex_sm120_async_grad_norm_copy_x3_20260521/
+?? log124M/5090_S_codex_sm120_attention_atomic_dq_x3_20260521/
+?? log124M/5090_S_codex_sm120_attention_dprep3_current_x3_20260521/
+?? log124M/5090_S_codex_sm120_attn_bwd64_recovered_x3_20260522/
+?? log124M/5090_S_codex_sm120_attn_fwd64_recovered_x3_20260522/
+?? log124M/5090_S_codex_sm120_bias_vec4_retest_x3_20260521/
+?? log124M/5090_S_codex_sm120_bias_wide1024_x10_20260521/
+?? log124M/5090_S_codex_sm120_clock_probe_x3_20260521/
+?? log124M/5090_S_codex_sm120_combo_all_native_winners_maxconn1_x3_20260521/
+?? log124M/5090_S_codex_sm120_combo_all_native_winners_x3_20260521/
+?? log124M/5090_S_codex_sm120_combo_bias_wide1024_layernorm_bwd1_x3_20260521/
+?? log124M/5090_S_codex_sm120_combo_cublas_dinp_attproj_fc_dprep3_x3_20260521/
+?? log124M/5090_S_codex_sm120_combo_cublas_dinp_attproj_layernorm_bwd1_x3_20260521/
+?? log124M/5090_S_codex_sm120_combo_cublas_dinp_fc_bias_wide1024_x3_20260521/
+?? log124M/5090_S_codex_sm120_combo_cublas_dinp_fc_layernorm_bwd1_x3_20260521/
+?? log124M/5090_S_codex_sm120_combo_cublas_fc_tk_dgelu_x3_20260521/
+?? log124M/5090_S_codex_sm120_combo_cuda_grad_zero_libtorch_dresidual_zero_dprep3_block1024_x10_20260521/
+?? log124M/5090_S_codex_sm120_combo_cuda_grad_zero_libtorch_dresidual_zero_dprep3_block1024_x3_20260521/
+?? log124M/5090_S_codex_sm120_combo_cuda_grad_zero_libtorch_dresidual_zero_dprep3_layernorm_bwd1_block1024_maxconn1_confirm_x10_20260521/
+?? log124M/5090_S_codex_sm120_combo_cuda_grad_zero_libtorch_dresidual_zero_dprep3_layernorm_bwd1_block1024_maxconn1_x10_20260521/
+?? log124M/5090_S_codex_sm120_combo_cuda_grad_zero_libtorch_dresidual_zero_dprep3_layernorm_bwd1_block1024_maxconn1_x3_20260521/
+?? log124M/5090_S_codex_sm120_combo_cuda_grad_zero_libtorch_dresidual_zero_dprep3_layernorm_bwd1_block1024_x10_20260521/
+?? log124M/5090_S_codex_sm120_combo_cuda_grad_zero_libtorch_dresidual_zero_dprep3_layernorm_bwd1_block1024_x3_20260521/
+?? log124M/5090_S_codex_sm120_combo_cuda_grad_zero_libtorch_dresidual_zero_dprep3_layernorm_bwd1_block256_x10_20260521/
+?? log124M/5090_S_codex_sm120_combo_cuda_grad_zero_libtorch_dresidual_zero_dprep3_layernorm_bwd1_block256_x3_20260521/
+?? log124M/5090_S_codex_sm120_combo_cuda_grad_zero_libtorch_dresidual_zero_dprep3_layernorm_bwd1_block512_x10_20260521/
+?? log124M/5090_S_codex_sm120_combo_cuda_grad_zero_libtorch_dresidual_zero_dprep3_layernorm_bwd1_block512_x3_20260521/
+?? log124M/5090_S_codex_sm120_combo_cuda_grad_zero_libtorch_dresidual_zero_dprep4_layernorm_bwd1_block1024_x10_20260521/
+?? log124M/5090_S_codex_sm120_combo_cuda_grad_zero_libtorch_dresidual_zero_dprep4_layernorm_bwd1_block1024_x3_20260521/
+?? log124M/5090_S_codex_sm120_combo_cuda_zero_block1024_layernorm_bwd1_x3_20260521/
+?? log124M/5090_S_codex_sm120_combo_layernorm_bwd1_classifier_exp2_x3_20260521/
+?? log124M/5090_S_codex_sm120_combo_libtorch_dresidual_zero_bias_wide1024_x3_20260521/
+?? log124M/5090_S_codex_sm120_combo_libtorch_dresidual_zero_dprep3_layernorm_bwd1_x10_20260521/
+?? log124M/5090_S_codex_sm120_combo_libtorch_dresidual_zero_dprep3_layernorm_bwd1_x3_20260521/
+?? log124M/5090_S_codex_sm120_combo_libtorch_dresidual_zero_dprep3_x10_20260521/
+?? log124M/5090_S_codex_sm120_combo_libtorch_dresidual_zero_dprep3_x3_20260521/
+?? log124M/5090_S_codex_sm120_combo_libtorch_dresidual_zero_fastest_dinp_tk_dgelu_x3_20260521/
+?? log124M/5090_S_codex_sm120_combo_libtorch_dresidual_zero_layernorm_bwd1_x3_20260521/
+?? log124M/5090_S_codex_sm120_combo_libtorch_dresidual_zero_maxconn1_x3_20260521/
+?? log124M/5090_S_codex_sm120_combo_libtorch_grad_dresidual_zero_x3_20260521/
+?? log124M/5090_S_codex_sm120_combo_libtorch_grad_zero_all_native_winners_x10_20260522/
+?? log124M/5090_S_codex_sm120_combo_libtorch_grad_zero_all_native_winners_x3_20260521/
+?? log124M/5090_S_codex_sm120_combo_libtorch_grad_zero_bias_wide1024_x3_20260521/
+?? log124M/5090_S_codex_sm120_combo_libtorch_grad_zero_dprep3_x10_20260521/
+?? log124M/5090_S_codex_sm120_combo_libtorch_grad_zero_dprep3_x3_20260521/
+?? log124M/5090_S_codex_sm120_combo_libtorch_grad_zero_fastest_dinp_tk_dgelu_maxconn1_x3_20260521/
+?? log124M/5090_S_codex_sm120_combo_libtorch_grad_zero_fastest_dinp_tk_dgelu_x3_20260521/
+?? log124M/5090_S_codex_sm120_combo_libtorch_grad_zero_layernorm_bwd1_x3_20260521/
+?? log124M/5090_S_codex_sm120_combo_libtorch_grad_zero_maxconn1_dprep3_x10_20260521/
+?? log124M/5090_S_codex_sm120_combo_libtorch_grad_zero_maxconn1_dprep3_x3_20260521/
+?? log124M/5090_S_codex_sm120_combo_libtorch_grad_zero_precompute_scale_x3_20260521/
+?? log124M/5090_S_codex_sm120_combo_libtorch_grad_zero_tk_dgelu_x3_20260521/
+?? log124M/5090_S_codex_sm120_combo_project_fastest_dinp_tk_dgelu_x3_20260521/
+?? log124M/5090_S_codex_sm120_combo_tk_dgelu_layernorm_bwd1_x3_20260521/
+?? log124M/5090_S_codex_sm120_cublas_dinp_fcproj_current_rerun_x10_20260522/
+?? log124M/5090_S_codex_sm120_cublas_dinp_fcproj_maxconn8_x3_20260522/
+?? log124M/5090_S_codex_sm120_cublas_dinp_fcproj_x3_20260521/
+?? log124M/5090_S_codex_sm120_cublas_dinp_qkv_x3_20260521/
+?? log124M/5090_S_codex_sm120_cublaslt_plan_cache_x3_20260521/
+?? log124M/5090_S_codex_sm120_cublaslt_ws256_heur16_x3_20260521/
+?? log124M/5090_S_codex_sm120_cublaslt_ws64_x3_20260522/
+?? log124M/5090_S_codex_sm120_cuda_kernel_zero_both_block1024_x3_20260521/
+?? log124M/5090_S_codex_sm120_cuda_kernel_zero_both_x3_20260521_escalated/
+?? log124M/5090_S_codex_sm120_cuda_maxconn1_x10_20260521/
+?? log124M/5090_S_codex_sm120_cuda_maxconn1_x3_20260521/
+?? log124M/5090_S_codex_sm120_cuda_maxconn32_x3_20260521/
+?? log124M/5090_S_codex_sm120_current_control_x3_20260521/
+?? log124M/5090_S_codex_sm120_current_default_refresh_x10_20260521/
+?? log124M/5090_S_codex_sm120_current_direct_control_x10_20260521/
+?? log124M/5090_S_codex_sm120_default_after_combo_rebuild_x3_20260521/
+?? log124M/5090_S_codex_sm120_default_after_cuda_kernel_zero_hook_x3_20260521/
+?? log124M/5090_S_codex_sm120_default_after_qkv_selector_x3_20260521/
+?? log124M/5090_S_codex_sm120_default_after_vec4_symbol_x3_20260521/
+?? log124M/5090_S_codex_sm120_default_dmon_probe_x3_20260521/
+?? log124M/5090_S_codex_sm120_default_native_benchmark_warmup_x3_20260521/
+?? log124M/5090_S_codex_sm120_default_post_bench_reset_x3_20260521/
+?? log124M/5090_S_codex_sm120_device_grad_scale_adamw_x3_20260521/
+?? log124M/5090_S_codex_sm120_direct_after_p0_x3_20260521/
+?? log124M/5090_S_codex_sm120_direct_now_x10_20260521/
+?? log124M/5090_S_codex_sm120_disable_cublas_bwd_attn_bwd32_x3_20260522/
+?? log124M/5090_S_codex_sm120_disable_cublas_bwd_maxconn8_x3_20260522/
+?? log124M/5090_S_codex_sm120_disable_cublas_bwd_runtime_grad_zero_x3_20260522/
+?? log124M/5090_S_codex_sm120_disable_cublas_bwd_tk_dgelu_x3_20260522/
+?? log124M/5090_S_codex_sm120_disable_cuda_profiler_x10_20260521/
+?? log124M/5090_S_codex_sm120_disable_cuda_profiler_x3_20260521/
+?? log124M/5090_S_codex_sm120_dprep1_recovered_x3_20260522/
+?? log124M/5090_S_codex_sm120_dprep2_recovered_x3_20260522/
+?? log124M/5090_S_codex_sm120_fcproj_precompute_grad_scale_x3_20260522/
+?? log124M/5090_S_codex_sm120_fcproj_precompute_zero0_x3_20260522/
+?? log124M/5090_S_codex_sm120_fcproj_runtime_grad_zero_x3_20260522/
+?? log124M/5090_S_codex_sm120_fcproj_zero0_x3_20260522/
+?? log124M/5090_S_codex_sm120_fresh_rebuild_selected_control_x3_20260522/
+?? log124M/5090_S_codex_sm120_ge0_current_x3_20260521/
+?? log124M/5090_S_codex_sm120_global_norm_block768_x3_20260522/
+?? log124M/5090_S_codex_sm120_guard_adamw_helpers_default_x3_20260521/
+?? log124M/5090_S_codex_sm120_libtorch_grad_zero_current_refresh_x10_20260522/
+?? log124M/5090_S_codex_sm120_libtorch_grad_zero_current_refresh_x3_20260522/
+?? log124M/5090_S_codex_sm120_libtorch_grad_zero_live_retest_x3_20260521/
+?? log124M/5090_S_codex_sm120_libtorch_grad_zero_maxconn1_x10_20260521/
+?? log124M/5090_S_codex_sm120_libtorch_grad_zero_maxconn1_x3_20260521/
+?? log124M/5090_S_codex_sm120_live_default_control_x3_20260521/
+?? log124M/5090_S_codex_sm120_matmul_dbias768_x3_20260522/
+?? log124M/5090_S_codex_sm120_nonblocking_main_stream_x3_20260521/
+?? log124M/5090_S_codex_sm120_precompute_disable_profiler_x3_20260522/
+?? log124M/5090_S_codex_sm120_precompute_grad_scale_adamw_x3_20260521/
+?? log124M/5090_S_codex_sm120_precompute_grad_scale_maxconn8_x3_20260522/
+?? log124M/5090_S_codex_sm120_precompute_grad_scale_zero0_x3_20260522/
+?? log124M/5090_S_codex_sm120_promoted_async_grad_norm_copy_x3_20260522/
+?? log124M/5090_S_codex_sm120_promoted_attn_bwd32_x3_20260522/
+?? log124M/5090_S_codex_sm120_promoted_attn_fwd16_x3_20260522/
+?? log124M/5090_S_codex_sm120_promoted_backward_n96_x3_20260522/
+?? log124M/5090_S_codex_sm120_promoted_bias_wide1024_x3_20260521/
+?? log124M/5090_S_codex_sm120_promoted_classifier_exp2_x3_20260521/
+?? log124M/5090_S_codex_sm120_promoted_cublas_dinp_attproj_fc_x3_20260521/
+?? log124M/5090_S_codex_sm120_promoted_cublas_dinp_fcproj_confirm_x10_20260522/
+?? log124M/5090_S_codex_sm120_promoted_cublas_dinp_fcproj_x10_20260522/
+?? log124M/5090_S_codex_sm120_promoted_cublas_dinp_fcproj_x3_20260521/
+?? log124M/5090_S_codex_sm120_promoted_cublas_dinp_qkv_x3_20260521/
+?? log124M/5090_S_codex_sm120_promoted_cublas_dinp_tk_dgelu_x10_20260521/
+?? log124M/5090_S_codex_sm120_promoted_cublas_dinp_tk_dgelu_x3_20260521/
+?? log124M/5090_S_codex_sm120_promoted_cublaslt_heur1_x3_20260522/
+?? log124M/5090_S_codex_sm120_promoted_cublaslt_plan_cache_x3_20260521/
+?? log124M/5090_S_codex_sm120_promoted_cublaslt_ws256_heur16_x3_20260521/
+?? log124M/5090_S_codex_sm120_promoted_cuda_dresidual_x3_20260521/
+?? log124M/5090_S_codex_sm120_promoted_default_after_epilogue_probe_x3_20260522/
+?? log124M/5090_S_codex_sm120_promoted_default_post_sched_x10_20260522/
+?? log124M/5090_S_codex_sm120_promoted_default_same_session_x10_20260522/
+?? log124M/5090_S_codex_sm120_promoted_device_grad_scale_adamw_x3_20260522/
+?? log124M/5090_S_codex_sm120_promoted_disable_backward_stream_sync_x3_20260522/
+?? log124M/5090_S_codex_sm120_promoted_disable_cublas_bwd_x3_20260522/
+?? log124M/5090_S_codex_sm120_promoted_disable_cuda_profiler_recovered_x3_20260522/
+?? log124M/5090_S_codex_sm120_promoted_global_norm_block256_x3_20260521/
+?? log124M/5090_S_codex_sm120_promoted_libtorch_grad_zero_recovered_x3_20260522/
+?? log124M/5090_S_codex_sm120_promoted_libtorch_grad_zero_tk_dgelu_x3_20260521/
+?? log124M/5090_S_codex_sm120_promoted_libtorch_grad_zero_x3_20260521/
+?? log124M/5090_S_codex_sm120_promoted_matmul_dbias1024_x3_20260522/
+?? log124M/5090_S_codex_sm120_promoted_matmul_dbias256_x3_20260522/
+?? log124M/5090_S_codex_sm120_promoted_maxconn16_x10_20260522/
+?? log124M/5090_S_codex_sm120_promoted_maxconn16_x3_20260522/
+?? log124M/5090_S_codex_sm120_promoted_maxconn2_x3_20260521/
+?? log124M/5090_S_codex_sm120_promoted_maxconn4_x3_20260522/
+?? log124M/5090_S_codex_sm120_promoted_maxconn8_x10_20260522/
+?? log124M/5090_S_codex_sm120_promoted_maxconn8_x3_20260522/
+?? log124M/5090_S_codex_sm120_promoted_memory_store_cg_x3_20260521/
+?? log124M/5090_S_codex_sm120_promoted_memory_store_default_x3_20260521/
+?? log124M/5090_S_codex_sm120_promoted_no_maxconn_x10_20260521/
+?? log124M/5090_S_codex_sm120_promoted_no_maxconn_x3_20260521/
+?? log124M/5090_S_codex_sm120_promoted_precompute_grad_scale_recovered_x3_20260522/
+?? log124M/5090_S_codex_sm120_promoted_precompute_grad_scale_x3_20260521/
+?? log124M/5090_S_codex_sm120_promoted_tk_dgelu_classifier_exp2_x3_20260521/
+?? log124M/5090_S_codex_sm120_promoted_tk_dgelu_x3_20260521/
+?? log124M/5090_S_codex_sm120_restored_default_hash_x3_20260521/
+?? log124M/5090_S_codex_sm120_round_adamw1024_20260520/
+?? log124M/5090_S_codex_sm120_round_adamw_nomaster_specialized_20260520/
+?? log124M/5090_S_codex_sm120_round_adamw_nomaster_specialized_x10_20260520/
+?? log124M/5090_S_codex_sm120_round_after_lnfix_clsfix_20260520/
+?? log124M/5090_S_codex_sm120_round_backward_stream_sync_20260521/
+?? log124M/5090_S_codex_sm120_round_backward_stream_sync_default_x10_20260521/
+?? log124M/5090_S_codex_sm120_round_backward_stream_sync_x10_20260521/
+?? log124M/5090_S_codex_sm120_round_bias_add_vec4_20260521/
+?? log124M/5090_S_codex_sm120_round_bias_add_wide1024_20260521/
+?? log124M/5090_S_codex_sm120_round_classifier_1024_20260520/
+?? log124M/5090_S_codex_sm120_round_classifier_loss_only_20260520/
+?? log124M/5090_S_codex_sm120_round_classifier_loss_only_x10_20260520/
+?? log124M/5090_S_codex_sm120_round_classifier_pad_tail_zero_20260520/
+?? log124M/5090_S_codex_sm120_round_cublas_bwd_20260520/
+?? log124M/5090_S_codex_sm120_round_cublas_bwd_default_20260520/
+?? log124M/5090_S_codex_sm120_round_cublas_bwd_default_rerun_20260520/
+?? log124M/5090_S_codex_sm120_round_cublas_bwd_default_x10_20260520/
+?? log124M/5090_S_codex_sm120_round_cublas_dinp_attproj_fc_20260521/
+?? log124M/5090_S_codex_sm120_round_cublas_dinp_attproj_fc_x10_20260521/
+?? log124M/5090_S_codex_sm120_round_cublas_dinp_attproj_only_20260521/
+?? log124M/5090_S_codex_sm120_round_cublas_dinp_attproj_only_x10_20260521/
+?? log124M/5090_S_codex_sm120_round_cublas_dinp_fc_only_20260521/
+?? log124M/5090_S_codex_sm120_round_cublas_dinp_fc_only_x10_20260521/
+?? log124M/5090_S_codex_sm120_round_cublas_lmhead_forward_20260520/
+?? log124M/5090_S_codex_sm120_round_current_default_x10_after_memory_20260520/
+?? log124M/5090_S_codex_sm120_round_current_mix_final_smoke_20260521/
+?? log124M/5090_S_codex_sm120_round_current_native_x10_median_20260521/
+?? log124M/5090_S_codex_sm120_round_layernorm_bwd_blocks1_20260520/
+?? log124M/5090_S_codex_sm120_round_layernorm_bwd_blocks1_x10_20260520/
+?? log124M/5090_S_codex_sm120_round_layernorm_forward_nosmem_20260520/
+?? log124M/5090_S_codex_sm120_round_layernorm_smem_attr_cache_20260520/
+?? log124M/5090_S_codex_sm120_round_layernorm_smem_attr_cache_x10_20260520/
+?? log124M/5090_S_codex_sm120_round_libtorch_dresidual_zero_20260521/
+?? log124M/5090_S_codex_sm120_round_libtorch_dresidual_zero_x10_20260521/
+?? log124M/5090_S_codex_sm120_round_libtorch_grad_zero_20260521/
+?? log124M/5090_S_codex_sm120_round_libtorch_grad_zero_x10_20260521/
+?? log124M/5090_S_codex_sm120_round_memory_shape_coverage_20260520/
+?? log124M/5090_S_codex_sm120_round_runtime_shape_validator_20260520/
+?? log124M/5090_S_codex_sm120_round_tk_fused_dgelu_exact_20260521/
+?? log124M/5090_S_codex_sm120_round_tk_fused_dgelu_exact_x10_20260521/
+?? log124M/5090_S_codex_sm120_round_tk_qkv_forward_20260520/
+?? log124M/5090_S_codex_sm120_runtime_grad_zero_current2_x10_20260522/
+?? log124M/5090_S_codex_sm120_runtime_grad_zero_disable_profiler_x3_20260522/
+?? log124M/5090_S_codex_sm120_runtime_grad_zero_dprep2_x3_20260522/
+?? log124M/5090_S_codex_sm120_runtime_grad_zero_precompute_x3_20260522/
+?? log124M/5090_S_codex_sm120_runtime_grad_zero_recovered_x10_20260522/
+?? log124M/5090_S_codex_sm120_runtime_grad_zero_recovered_x3_20260522/
+?? log124M/5090_S_codex_sm120_runtime_grad_zero_zero0_x3_20260522/
+?? log124M/5090_S_codex_sm120_selected_current_audit_x10_20260522/
+?? log124M/5090_S_codex_sm120_selected_restore_after_libtorch_grad_current_x3_20260522/
+?? log124M/5090_S_codex_sm120_tk_dgelu_current_retest_x3_20260521/
+?? log124M/5090_S_codex_sm120_tk_dgelu_precompute_grad_scale_x3_20260522/
+?? log124M/5090_S_codex_sm120_tk_dgelu_runtime_grad_zero_x3_20260522/
+?? log124M/5090_S_codex_sm120_zero0_disable_profiler_x3_20260522/
+?? log124M/5090_S_default_after_combo_bias_wide1024_layernorm_bwd1_x3_20260521/
+?? log124M/5090_S_default_after_combo_libtorch_dresidual_zero_bias_wide1024_x3_20260521/
+?? log124M/5090_S_default_after_combo_libtorch_grad_zero_layernorm_bwd1_x3_20260521/
+?? log124M/5090_S_default_after_combo_libtorch_grad_zero_precompute_scale_x3_20260521/
+?? log124M/5090_S_default_after_combo_project_fastest_dinp_tk_dgelu_rerun_x3_20260521/
+?? log124M/5090_S_default_after_combo_project_fastest_dinp_tk_dgelu_x3_20260521/
+?? log124M/5090_S_default_after_libtorch_grad_zero_live_retest_x3_20260521/
+?? log124M/5090_S_h0/
+?? log124M/5090_S_h1/
+?? log124M/5090_S_h2/
+?? log124M/5090_S_h3/
+?? log124M/5090_S_h4/
+?? log124M/5090_S_h5/
+?? log124M/5090_S_no_cache/
+?? log124M/5090_S_raw/
+?? log124M/5090_S_runtime_telemetry_probe_x3_20260522/
+?? log124M/5090_S_tk_only/
+?? log124M/5090_S_zero0_probe_x3_20260522/
+?? new-goal.md
+?? optimise-goal.md
+?? scratch/
+?? scripts/run_sm120_optimization_round.sh
+?? sm120_matmul_tuning.json
+?? train-sm120.sh
+?? train_gpt2cu_antigravity
+?? training-combinations.json
+?? training-combinations.md
+?? walkthrough.md
