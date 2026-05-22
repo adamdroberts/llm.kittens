@@ -1,0 +1,162 @@
+{
+  "binaries": [
+    {
+      "exists": true,
+      "path": "test_matmul",
+      "sha256": "4665594dd5ce86051c72a77fcdd753b3b8c3fbac74104d94c7cc7fc355d04227",
+      "size_bytes": 2173624
+    },
+    {
+      "exists": true,
+      "path": "test_attention",
+      "sha256": "e678c4e79e3401b64eb5f313f2edb49278fed1eebdf2019d63dfb5f03d95ae8d",
+      "size_bytes": 1800528
+    },
+    {
+      "exists": true,
+      "path": "test_layernorm",
+      "sha256": "7f60326ae7de9dfa8a8b8b03724504978425327d09ac22f7d2c829d7698c85f0",
+      "size_bytes": 1278296
+    },
+    {
+      "exists": true,
+      "path": "test_bias",
+      "sha256": "1d86d3ef4dde73b020149c45c4508370b0ab99fa7ae6ff98bc4ef75ebb014cc5",
+      "size_bytes": 2089120
+    },
+    {
+      "exists": true,
+      "path": "test_gelu",
+      "sha256": "70922b790fca348f262e1feb6bed90a72589acc4705e78d1932b37a551f4f5ca",
+      "size_bytes": 1179912
+    },
+    {
+      "exists": true,
+      "path": "test_fused_classifier",
+      "sha256": "a27c243873a2f4c93ae3bf8baa88f74e42d6836f3572f63c0e67f10baff2b3fe",
+      "size_bytes": 1208704
+    },
+    {
+      "exists": true,
+      "path": "test_encoder",
+      "sha256": "d207b72e9629a12ae31746316bf9f9a71eb97ba365933bf7822c3226c2cbcd07",
+      "size_bytes": 1210168
+    },
+    {
+      "exists": true,
+      "path": "test_adamw",
+      "sha256": "a1524edbabf2697cdb17d6ab78b79d644799ea71e60ff1d7a813c7ab1a6e88fb",
+      "size_bytes": 1183768
+    },
+    {
+      "exists": true,
+      "path": "test_global_norm",
+      "sha256": "27781fcbb12b538afa3d20b9f8d78036bd00c2023390a257ea6fe28d4d89c2ea",
+      "size_bytes": 1179464
+    },
+    {
+      "exists": true,
+      "path": "bench_sm120_matmul",
+      "sha256": "5e944c3bb106ecf1dae8f89465a2b611ed48a514f09997d6d04a8aa86d6dc32d",
+      "size_bytes": 2410304
+    },
+    {
+      "exists": true,
+      "path": "bench_sm120_attention",
+      "sha256": "8d1739d4b39eb140fc8840babe9aa7f9e157705ae359a2772965d000b755eaca",
+      "size_bytes": 1768800
+    },
+    {
+      "exists": true,
+      "path": "bench_sm120_layernorm",
+      "sha256": "930f821d3a89b7f37269779bdabc3bd906710df21fa5a6241aceaf0691491d29",
+      "size_bytes": 1274232
+    },
+    {
+      "exists": true,
+      "path": "bench_sm120_runtime",
+      "sha256": "8886584eb5f573391876a24513f1b2f1302b0c02f2ae898858e1d70e4cd6f17a",
+      "size_bytes": 2271168
+    },
+    {
+      "exists": true,
+      "path": "train_gpt2cu",
+      "sha256": "799c99b2afd4ad4dd0b1dcba9f497be2bfbf0733487e6ef9c05599657972aa34",
+      "size_bytes": 3105552
+    }
+  ],
+  "config": {
+    "artifact_dir": "scratch/sm120_rounds/codex_sm120_combo_cuda_grad_zero_libtorch_dresidual_zero_dprep3_layernorm_bwd1_block1024_maxconn1_x10_20260521",
+    "build_jobs": "4",
+    "cudnn_packed_backward_route": "saved-forward",
+    "device_arch": "SM120",
+    "keep_checkpoints": "0",
+    "libtorch_matmul_shapes": "qkv attproj fc fcproj lmhead",
+    "libtorch_runtime_route": "cxx-api-raw-pointer",
+    "libtorch_runtime_supplemental_shapes": "gelu_forward",
+    "max_steps": "10",
+    "no_multi_gpu": "1",
+    "no_use_mpi": "1",
+    "run_benchmarks": "0",
+    "run_correctness": "1",
+    "run_label": "codex_sm120_combo_cuda_grad_zero_libtorch_dresidual_zero_dprep3_layernorm_bwd1_block1024_maxconn1_x10_20260521",
+    "run_libtorch_matmul_benchmarks": "0",
+    "run_libtorch_trainer_link_probe": "0",
+    "run_python_stack_benchmarks": "0",
+    "run_stack_probe": "0",
+    "run_training": "1",
+    "sm120_use_libtorch_dresidual_zero": "1",
+    "sm120_use_libtorch_grad_zero": "0",
+    "sm120_use_libtorch_memory": "0",
+    "train_out_dir": "log124M/5090_S_codex_sm120_combo_cuda_grad_zero_libtorch_dresidual_zero_dprep3_layernorm_bwd1_block1024_maxconn1_x10_20260521"
+  },
+  "created_utc": "2026-05-21T21:16:28.496902+00:00",
+  "environment": {
+    "CONDA_DEFAULT_ENV": "llm-kittens",
+    "CONDA_PREFIX": "/home/adam/miniconda3/envs/llm-kittens",
+    "CUDA_HOME": "/usr/local/cuda",
+    "CUDA_VISIBLE_DEVICES": "",
+    "LD_LIBRARY_PATH": "/usr/local/cuda/lib64:",
+    "LLMK_LIBTORCH_RUNTIME_ROUTE": "",
+    "LLMK_SM120_CUBLASLT_HEURISTIC_INDEX": "",
+    "LLMK_SM120_CUBLASLT_HEURISTIC_RESULTS": "",
+    "LLMK_SM120_CUBLASLT_SELECT_MAX_WAVES": "",
+    "PYTHON_BIN": "/home/adam/miniconda3/envs/llm-kittens/bin/python",
+    "SM120_USE_CUBLASLT_GEMM": "",
+    "SM120_USE_LIBTORCH_DRESIDUAL_ZERO": "1",
+    "SM120_USE_LIBTORCH_GRAD_ZERO": "0",
+    "SM120_USE_LIBTORCH_MEMORY": "",
+    "VIRTUAL_ENV": ""
+  },
+  "git": {
+    "commit": "0f2174743c0b94e92e25d7390038a5959d5f565f",
+    "short_commit": "0f21747",
+    "status_count": 603,
+    "status_path": "git-status.txt"
+  },
+  "host": {
+    "platform": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.43",
+    "python": "3.13.13",
+    "python_executable": "/home/adam/miniconda3/envs/llm-kittens/bin/python"
+  },
+  "schema_version": 1,
+  "toolchain": {
+    "nvcc": {
+      "command": [
+        "nvcc",
+        "--version"
+      ],
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "nvcc: NVIDIA (R) Cuda compiler driver\nCopyright (c) 2005-2026 NVIDIA Corporation\nBuilt on Thu_Mar_19_11:12:51_PM_PDT_2026\nCuda compilation tools, release 13.2, V13.2.78\nBuild cuda_13.2.r13.2/compiler.37668154_0"
+    },
+    "nvidia_smi": {
+      "command": [
+        "nvidia-smi"
+      ],
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "Thu May 21 22:16:28 2026       \n+-----------------------------------------------------------------------------------------+\n| NVIDIA-SMI 595.71.01              Driver Version: 596.36         CUDA Version: 13.2     |\n+-----------------------------------------+------------------------+----------------------+\n| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |\n| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |\n|                                         |                        |               MIG M. |\n|=========================================+========================+======================|\n|   0  NVIDIA GeForce RTX 5090        On  |   00000000:E1:00.0  On |                  N/A |\n|100%   30C    P8             54W /  575W |    3906MiB /  32607MiB |      1%      Default |\n|                                         |                        |                  N/A |\n+-----------------------------------------+------------------------+----------------------+\n\n+-----------------------------------------------------------------------------------------+\n| Processes:                                                                              |\n|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |\n|        ID   ID                                                               Usage      |\n|=========================================================================================|\n|  No running processes found                                                             |\n+-----------------------------------------------------------------------------------------+"
+    }
+  }
+}

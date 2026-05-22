@@ -15,8 +15,8 @@ from .conftest import load_bf16, max_abs_diff, save_bf16, save_shape
 def test_parity_swiglu(kernel_runner, iodir):
     torch = pytest.importorskip("torch")
     if not torch.cuda.is_available():
-        pytest.skip("CUDA unavailable on this host (torch reference needs a GPU "
-                    "to mirror the kernel's bf16 quantization order)")
+        pytest.skip("torch.cuda is not initialized for this pytest process "
+                    "(the reference mirrors the kernel's bf16 quantization order)")
 
     N = 4096
     rng = np.random.default_rng(123)

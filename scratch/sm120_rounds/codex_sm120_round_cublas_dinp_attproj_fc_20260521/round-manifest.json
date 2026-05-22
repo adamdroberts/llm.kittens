@@ -1,0 +1,149 @@
+{
+  "binaries": [
+    {
+      "exists": true,
+      "path": "test_matmul",
+      "sha256": "846c20461fa983ebf03015c1bad810c9f6b2ccce5ab86986d6ef7b9775eb2bd2",
+      "size_bytes": 2141112
+    },
+    {
+      "exists": true,
+      "path": "test_attention",
+      "sha256": "d6e5962c30f78e2237302819f319581d5475f6c5bd14b2cd5630de7c65b2f184",
+      "size_bytes": 1760032
+    },
+    {
+      "exists": true,
+      "path": "test_layernorm",
+      "sha256": "7cd5728fdaf0c3ea77c2a5d1b6d79c181e49a59266e7052610bb6ead3f678138",
+      "size_bytes": 1237784
+    },
+    {
+      "exists": true,
+      "path": "test_bias",
+      "sha256": "5b88d646b2417fb980a76429343ee0415ba932114ad78668a5154aef26eafa6f",
+      "size_bytes": 2048616
+    },
+    {
+      "exists": true,
+      "path": "test_gelu",
+      "sha256": "59b59fd6c6c34330520bad1d0200f6d0ef8ee3d393710d338cf4e7c9ac373aa6",
+      "size_bytes": 1139336
+    },
+    {
+      "exists": true,
+      "path": "test_fused_classifier",
+      "sha256": "8a08d3b9600d73f4095b4428874d051cf4416971a28bce16782ee0095c7438ad",
+      "size_bytes": 1164032
+    },
+    {
+      "exists": true,
+      "path": "test_encoder",
+      "sha256": "59a3041caefd1e5343b7280e15f0de2cedb2d33eca533a7c08eda9d48d07b648",
+      "size_bytes": 1165512
+    },
+    {
+      "exists": true,
+      "path": "test_adamw",
+      "sha256": "ee98653b2a57fda76450e81e5ab0b718589658462f0907df2f50b1e25c8dc88e",
+      "size_bytes": 1138408
+    },
+    {
+      "exists": true,
+      "path": "test_global_norm",
+      "sha256": "e2abc079a22f50c88279c5f0a12db15239dbeb7f72aafc244ecb943e4240e73c",
+      "size_bytes": 1138880
+    },
+    {
+      "exists": true,
+      "path": "bench_sm120_matmul",
+      "sha256": "d728e76238729dc01de77ac7e1831735836edb003abac6ffa20cb664b7d14906",
+      "size_bytes": 2373912
+    },
+    {
+      "exists": true,
+      "path": "bench_sm120_attention",
+      "sha256": "7c0a184aec750b4d8c75c002ed8fdc1569ef5dce701eeb243b75301e4c719473",
+      "size_bytes": 1731352
+    },
+    {
+      "exists": true,
+      "path": "bench_sm120_layernorm",
+      "sha256": "18cd936ee47476c17f21642726eac657a66b9f0fdc889769868b1a5d77655f71",
+      "size_bytes": 1233728
+    },
+    {
+      "exists": true,
+      "path": "bench_sm120_runtime",
+      "sha256": "f2623653da847ad400aa2003aaada1f1e20bfe7fa6116c9381af904a9fc77034",
+      "size_bytes": 2217576
+    },
+    {
+      "exists": true,
+      "path": "train_gpt2cu",
+      "sha256": "0f399f030f2fe4aa5b6c9a2faf3fd17d557e213e43bacff20249410f6a87be4f",
+      "size_bytes": 3045944
+    }
+  ],
+  "config": {
+    "artifact_dir": "scratch/sm120_rounds/codex_sm120_round_cublas_dinp_attproj_fc_20260521",
+    "build_jobs": "4",
+    "device_arch": "SM120",
+    "keep_checkpoints": "0",
+    "max_steps": "3",
+    "no_multi_gpu": "1",
+    "no_use_mpi": "1",
+    "run_benchmarks": "1",
+    "run_correctness": "1",
+    "run_label": "codex_sm120_round_cublas_dinp_attproj_fc_20260521",
+    "run_python_stack_benchmarks": "0",
+    "run_stack_probe": "1",
+    "run_training": "1",
+    "train_out_dir": "log124M/5090_S_codex_sm120_round_cublas_dinp_attproj_fc_20260521"
+  },
+  "created_utc": "2026-05-21T00:24:57.054588+00:00",
+  "environment": {
+    "CONDA_DEFAULT_ENV": "llm-kittens",
+    "CONDA_PREFIX": "/home/adam/miniconda3/envs/llm-kittens",
+    "CUDA_HOME": "/usr/local/cuda",
+    "CUDA_VISIBLE_DEVICES": "",
+    "LD_LIBRARY_PATH": "/usr/local/cuda/lib64:",
+    "LLMK_SM120_CUBLASLT_HEURISTIC_INDEX": "",
+    "LLMK_SM120_CUBLASLT_HEURISTIC_RESULTS": "",
+    "LLMK_SM120_CUBLASLT_SELECT_MAX_WAVES": "",
+    "PYTHON_BIN": "",
+    "SM120_USE_CUBLASLT_GEMM": "",
+    "VIRTUAL_ENV": ""
+  },
+  "git": {
+    "commit": "0f2174743c0b94e92e25d7390038a5959d5f565f",
+    "short_commit": "0f21747",
+    "status_count": 480,
+    "status_path": "git-status.txt"
+  },
+  "host": {
+    "platform": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.43",
+    "python": "3.13.13",
+    "python_executable": "/home/adam/miniconda3/envs/llm-kittens/bin/python"
+  },
+  "schema_version": 1,
+  "toolchain": {
+    "nvcc": {
+      "command": [
+        "nvcc",
+        "--version"
+      ],
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "nvcc: NVIDIA (R) Cuda compiler driver\nCopyright (c) 2005-2026 NVIDIA Corporation\nBuilt on Thu_Mar_19_11:12:51_PM_PDT_2026\nCuda compilation tools, release 13.2, V13.2.78\nBuild cuda_13.2.r13.2/compiler.37668154_0"
+    },
+    "nvidia_smi": {
+      "command": [
+        "nvidia-smi"
+      ],
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "Thu May 21 01:24:57 2026       \n+-----------------------------------------------------------------------------------------+\n| NVIDIA-SMI 595.71.01              Driver Version: 596.36         CUDA Version: 13.2     |\n+-----------------------------------------+------------------------+----------------------+\n| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |\n| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |\n|                                         |                        |               MIG M. |\n|=========================================+========================+======================|\n|   0  NVIDIA GeForce RTX 5090        On  |   00000000:E1:00.0  On |                  N/A |\n|100%   30C    P5             56W /  575W |    2467MiB /  32607MiB |      1%      Default |\n|                                         |                        |                  N/A |\n+-----------------------------------------+------------------------+----------------------+\n\n+-----------------------------------------------------------------------------------------+\n| Processes:                                                                              |\n|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |\n|        ID   ID                                                               Usage      |\n|=========================================================================================|\n|  No running processes found                                                             |\n+-----------------------------------------------------------------------------------------+"
+    }
+  }
+}

@@ -272,7 +272,6 @@ __global__ void __launch_bounds__(512, 2) // todo - any warnings on Turing with 
     extern __shared__ float shared[];
 
     int warpId = threadIdx.x / WARP_SIZE; // warp index within a block
-    int baseIdx = blockIdx.x * warpsInBlock + warpId;
     int warpThreadIdx = threadIdx.x % WARP_SIZE; // Thread index within the warp
     int warpsInGrid = gridDim.x * warpsInBlock;
     int C_per_iteration = WARP_SIZE * x128::size;
@@ -297,15 +296,17 @@ __global__ void __launch_bounds__(512, 2) // todo - any warnings on Turing with 
     }
     __syncthreads();
 
-    for (int bt = baseIdx; bt < B * T; bt += warpsInGrid) {
-        const floatX* dout_bt = dout + bt * C;
-        const floatX* inp_bt = inp +bt * C;
-        floatX* dinp_bt = dinp + bt * C;
+    for (int blockBase = blockIdx.x * warpsInBlock; blockBase < B * T; blockBase += warpsInGrid) {
+        int bt = blockBase + warpId;
+        bool active_bt = bt < B * T;
+        const floatX* dout_bt = active_bt ? dout + bt * C : dout;
+        const floatX* inp_bt = active_bt ? inp + bt * C : inp;
+        floatX* dinp_bt = active_bt ? dinp + bt * C : dinp;
 
         // first: two reduce operations
         float dnorm_mean = 0.0f;
         float dnorm_norm_mean = 0.0f;
-        for (int i = warpThreadIdx * x128::size; i < C; i += WARP_SIZE * x128::size) {
+        for (int i = warpThreadIdx * x128::size; active_bt && i < C; i += WARP_SIZE * x128::size) {
             x128 dout128_i   = load128(dout_bt + i);
             x128 inp128_i    = load128(inp_bt  + i);
             x128 weight128_i = load128(weight  + i);
@@ -316,8 +317,8 @@ __global__ void __launch_bounds__(512, 2) // todo - any warnings on Turing with 
             }
         }
 
-        const float mean_bt = mean[bt];
-        const float rstd_bt = rstd[bt];
+        const float mean_bt = active_bt ? mean[bt] : 0.0f;
+        const float rstd_bt = active_bt ? rstd[bt] : 1.0f;
         dnorm_mean = layernorm_tk_warp_sum(dnorm_mean, tk_reduce_warp) / C;
         dnorm_norm_mean = layernorm_tk_warp_sum(dnorm_norm_mean, tk_reduce_warp) / C * rstd_bt - dnorm_mean * mean_bt * rstd_bt;
 
@@ -329,7 +330,7 @@ __global__ void __launch_bounds__(512, 2) // todo - any warnings on Turing with 
             x128 dinp128   = x128::zeros();
             x128 weight128 = x128::zeros();
 
-            if(global_index < C) {
+            if(active_bt && global_index < C) {
                 dout128 = load128cs(dout_bt + global_index);
                 inp128 = load128cs(inp_bt + global_index);
                 dinp128 = load128(dinp_bt + global_index);
@@ -385,7 +386,7 @@ __global__ void __launch_bounds__(512, 2) // todo - any warnings on Turing with 
                     store128(dweight_shared + global_index + f128::size * o, dweight_f);
                 }
             }
-            if(global_index < C) {
+            if(active_bt && global_index < C) {
                 // cache in L2 as this is read by the next kernel, but bypass L1 to minimise thrashing
                 store128cg(dinp_bt + global_index, dinp128);
             }
@@ -565,7 +566,10 @@ void layernorm_backward(floatX* dinp, floatX* dweight, floatX* dbias, float* scr
                         int B, int T, int C, cudaStream_t stream) {
     NVTX_RANGE_FN();
     const int block_size = 512;
-    const int blocks_per_sm = 2; // supported on every architecture and less cache thrashing than 3
+#ifndef LLMK_SM120_LAYERNORM_BWD_BLOCKS_PER_SM
+#define LLMK_SM120_LAYERNORM_BWD_BLOCKS_PER_SM 1
+#endif
+    const int blocks_per_sm = LLMK_SM120_LAYERNORM_BWD_BLOCKS_PER_SM;
     const int grid_size = blocks_per_sm * deviceProp.multiProcessorCount;
     size_t rounded_C = CEIL_DIV(C, (32 * x128::size)) * (32 * x128::size);
     size_t shared_mem_size = (2 * rounded_C + 2 * (block_size - 32) * f128::size

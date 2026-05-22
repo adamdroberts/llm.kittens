@@ -58,6 +58,8 @@ GPT-2 Transformer Neural Net training loop. See README.md for usage.
 #include "llmc/adamw.cuh"
 // defines: global_norm_squared
 #include "llmc/global_norm.cuh"
+// defines: memory_libtorch_* optional Torch C++ memory route
+#include "llmc/memory.cuh"
 // ----------- Multi-GPU support -----------
 // defines: ncclFloatX, ncclCheck, MultiGpuConfig, ShardInfo
 // defines: printf0, multi_gpu_config
@@ -362,6 +364,7 @@ typedef struct {
     // gradients of the weights
     ParameterTensors grads;
     void* grads_memory;
+    void* grads_memory_libtorch;
     // buffers for the AdamW optimizer
     float* m_memory;
     float* v_memory;
@@ -370,6 +373,7 @@ typedef struct {
     ActivationTensors acts;
     TensorSpec acts_specs[NUM_ACTIVATION_TENSORS];
     void* acts_memory;
+    void* dresidual_libtorch;
     // other run state configuration
     int batch_size; // the batch size (B) of current forward pass
     int seq_len; // the sequence length (T) of current forward pass
@@ -393,6 +397,7 @@ void gpt2_init_common(GPT2 *model) {
     // common inits outside of the model weights
     // memory lazily initialized in forward()
     model->acts_memory = NULL;
+    model->dresidual_libtorch = NULL;
     model->inputs = NULL;
     model->targets = NULL;
     model->accumulated_mean_loss = NULL;
@@ -405,6 +410,7 @@ void gpt2_init_common(GPT2 *model) {
     model->param_shards_memory = NULL;
     // memory lazily initialized in backward()
     model->grads_memory = NULL;
+    model->grads_memory_libtorch = NULL;
     model->workload_indices = NULL; // on cpu, for encoder_backward
     model->bucket_info = NULL; // on cpu, for encoder_backward
     // memory lazily initialized in update()
@@ -477,6 +483,10 @@ void gpt2_allocate_state(GPT2 *model, int B, int T) {
     printf0("allocating %d MiB for parameter gradients\n", (int)round(model->num_parameters * sizeof(floatX) / (1024 * 1024)));
     assert(model->grads_memory == nullptr);
     model->grads_memory = malloc_and_point_parameters(&model->grads, model->param_elements, model->param_sizeof);
+#if defined(LLMK_SM120_USE_LIBTORCH_GRAD_ZERO)
+    model->grads_memory_libtorch = memory_libtorch_wrap_floatx((floatX*)model->grads_memory,
+                                                               model->num_parameters);
+#endif
 
     // record the current B,T as well
     model->batch_size = B;
@@ -485,6 +495,10 @@ void gpt2_allocate_state(GPT2 *model, int B, int T) {
     // allocate the space
     fill_in_activation_sizes(&model->acts, model->acts_specs, B, T, model->config, model->recompute);
     model->acts_memory = malloc_and_point_activations(model->acts_specs);
+#if defined(LLMK_SM120_USE_LIBTORCH_DRESIDUAL_ZERO)
+    model->dresidual_libtorch = memory_libtorch_wrap_floatx((floatX*)model->acts.scratch_btc,
+                                                            (size_t)B * T * model->config.channels);
+#endif
     // also create memory for caching inputs and targets
     cudaCheck(cudaMalloc((void**)&model->inputs, B * T * sizeof(int)));
     cudaCheck(cudaMalloc((void**)&model->targets, B * T * sizeof(int)));
@@ -944,7 +958,17 @@ void gpt2_backward_and_reduce(GPT2 *model, int* inputs, const int* targets, int 
         // 1) the losses accumulate += into acts.losses, reset here
         // 2) the gradients accumulate += into grads_memory, reset here
         cudaCheck(cudaMemsetAsync(model->acts.losses, 0, model->batch_size * model->seq_len * sizeof(float), main_stream));
+#if defined(LLMK_SM120_USE_LIBTORCH_GRAD_ZERO)
+        if (model->grads_memory_libtorch == nullptr) {
+            model->grads_memory_libtorch = memory_libtorch_wrap_floatx((floatX*)model->grads_memory,
+                                                                       model->num_parameters);
+        }
+        memory_libtorch_zero_floatx(model->grads_memory_libtorch, main_stream);
+#elif defined(LLMK_SM120_USE_CUDA_KERNEL_GRAD_ZERO)
+        memory_zero_floatx((floatX*)model->grads_memory, model->num_parameters, main_stream);
+#else
         cudaCheck(cudaMemsetAsync(model->grads_memory, 0, model->num_parameters * sizeof(floatX), main_stream));
+#endif
     }
 
     // convenience shortcuts, size_t instead of int so that pointer arithmetics don't overflow
@@ -972,7 +996,16 @@ void gpt2_backward_and_reduce(GPT2 *model, int* inputs, const int* targets, int 
 
     // reset residual stream gradients (put here to work with gradient accumulation)
     floatX* dresidual = (floatX*)model->acts.scratch_btc; // the main buffer holding the gradient in the backward pass
+#if defined(LLMK_SM120_USE_LIBTORCH_DRESIDUAL_ZERO)
+    if (model->dresidual_libtorch == nullptr) {
+        model->dresidual_libtorch = memory_libtorch_wrap_floatx(dresidual, B * T * C);
+    }
+    memory_libtorch_zero_floatx(model->dresidual_libtorch, main_stream);
+#elif defined(LLMK_SM120_USE_CUDA_KERNEL_DRESIDUAL_ZERO)
+    memory_zero_floatx(dresidual, B * T * C, main_stream);
+#else
     cudaCheck(cudaMemsetAsync(dresidual, 0, B * T * C * sizeof(floatX), main_stream));
+#endif
 
     // re-use the output buffer of the forward pass as a scratchpad during backward pass
     float*  scratchF = (float*)acts.output;
@@ -1121,7 +1154,11 @@ void gpt2_backward_and_reduce(GPT2 *model, int* inputs, const int* targets, int 
     }
 
     if(last_step) {
+#if defined(KITTENS_SM120) && !defined(LLMK_SM120_DISABLE_BACKWARD_STREAM_SYNC)
+        cudaCheck(cudaStreamSynchronize(main_stream));
+#else
         cudaCheck(cudaDeviceSynchronize());
+#endif
         model->mean_loss /= B*T*grad_accum_steps;
     } else {
         cudaCheck(cudaGetLastError());
@@ -1153,13 +1190,12 @@ void gpt2_validate_zero_tensor_sharding(const GPT2* model, const MultiGpuConfig*
     }
 }
 
-float gpt2_calculate_grad_norm(GPT2 *model, MultiGpuConfig* multi_gpu_config) {
+float* gpt2_calculate_grad_norm_squared_device(GPT2 *model, MultiGpuConfig* multi_gpu_config) {
     NVTX_RANGE_FN();
     floatX* grads_memory = (floatX*)model->grads_memory;
 
     // repurposing this buffer (which isn't needed now) to write grad norm into it
     float* grad_norm_squared = (float*)model->acts.output;
-    float grad_norm_squared_cpu = 0.0f;
 
     int num_slices[2] = {1, model->config.num_layers};
     int max_num_block_sums = get_max_num_block_sums(num_slices, 2);
@@ -1191,13 +1227,30 @@ float gpt2_calculate_grad_norm(GPT2 *model, MultiGpuConfig* multi_gpu_config) {
         global_norm_squared(grad_norm_squared, grads_memory, model->num_parameters, 0, 1, max_num_block_sums, true, main_stream);
         global_sum_deterministic(grad_norm_squared, grad_norm_squared, max_num_block_sums, main_stream);
     }
+    return grad_norm_squared;
+}
+
+float gpt2_read_grad_norm_cpu(float* grad_norm_squared) {
+    float grad_norm_squared_cpu = 0.0f;
+#if defined(KITTENS_SM120) && defined(LLMK_SM120_ASYNC_GRAD_NORM_COPY)
+    cudaCheck(cudaMemcpyAsync(&grad_norm_squared_cpu, grad_norm_squared, sizeof(float), cudaMemcpyDeviceToHost, main_stream));
+    cudaCheck(cudaStreamSynchronize(main_stream));
+#else
     cudaCheck(cudaMemcpy(&grad_norm_squared_cpu, grad_norm_squared, sizeof(float), cudaMemcpyDeviceToHost));
+#endif
     float grad_norm_cpu = sqrtf(grad_norm_squared_cpu);
     return grad_norm_cpu;
 }
 
+float gpt2_calculate_grad_norm(GPT2 *model, MultiGpuConfig* multi_gpu_config) {
+    float* grad_norm_squared = gpt2_calculate_grad_norm_squared_device(model, multi_gpu_config);
+    return gpt2_read_grad_norm_cpu(grad_norm_squared);
+}
+
 void gpt2_update(GPT2 *model, float learning_rate, float beta1, float beta2, float eps, float weight_decay, float grad_scale, int t,
-                 MultiGpuConfig* multi_gpu_config, bool init_from_master_only=false) {
+                 MultiGpuConfig* multi_gpu_config, bool init_from_master_only=false,
+                 const float* grad_norm_squared_device=nullptr, float grad_clip=1.0f,
+                 const float* grad_scale_device=nullptr) {
     // update the model parameters using the AdamW optimizer
     // keep in mind that optimizer sharding (ZeRO-1) assigns different parameters to different GPUs
     // so we may not be responsible for the entire parameter tensor
@@ -1269,11 +1322,31 @@ void gpt2_update(GPT2 *model, float learning_rate, float beta1, float beta2, flo
             init_from_master(param_ptr, master_ptr, shard.size, param_stride, shard.size, num_layers, seed, main_stream);
         } else {
             // ok finally call the kernel to update the weights with AdamW
+#if defined(KITTENS_SM120) && defined(LLMK_SM120_PRECOMPUTE_GRAD_SCALE_ADAMW)
+            if (grad_scale_device != nullptr) {
+                adamw_update_precomputed_grad_scale(param_ptr, master_ptr, grad_ptr,
+                            m_ptr, v_ptr,
+                            shard.size, param_stride, tensor.size, shard.size, num_layers,
+                            learning_rate,
+                            beta1, beta2, t, eps, wd, grad_scale_device, seed, main_stream);
+            } else
+#endif
+#if defined(KITTENS_SM120) && defined(LLMK_SM120_DEVICE_GRAD_SCALE_ADAMW)
+            if (grad_norm_squared_device != nullptr) {
+                adamw_update_device_grad_scale(param_ptr, master_ptr, grad_ptr,
+                            m_ptr, v_ptr,
+                            shard.size, param_stride, tensor.size, shard.size, num_layers,
+                            learning_rate,
+                            beta1, beta2, t, eps, wd, grad_norm_squared_device, grad_clip, seed, main_stream);
+            } else
+#endif
+            {
             adamw_update(param_ptr, master_ptr, grad_ptr,
                         m_ptr, v_ptr,
                         shard.size, param_stride, tensor.size, shard.size, num_layers,
                         learning_rate,
                         beta1, beta2, t, eps, wd, grad_scale, seed, main_stream);
+            }
         }
 
         if (zero_shards_parameters(multi_gpu_config)) {
@@ -1335,6 +1408,8 @@ float gpt2_estimate_mfu(GPT2 *model, int num_tokens, float dt) {
 }
 
 void gpt2_free(GPT2 *model) {
+    memory_libtorch_destroy(&model->grads_memory_libtorch);
+    memory_libtorch_destroy(&model->dresidual_libtorch);
     cudaFreeCheck(&model->params_memory);
     cudaFreeCheck(&model->param_shards_memory);
     cudaFreeCheck(&model->grads_memory);
@@ -1363,7 +1438,11 @@ void common_start(bool override_enable_tf32 = true, bool print_device_info = tru
     }
 
     // set up the cuda streams. atm everything is on the single main stream
+#if defined(KITTENS_SM120) && defined(LLMK_SM120_NONBLOCKING_MAIN_STREAM)
+    cudaCheck(cudaStreamCreateWithFlags(&main_stream, cudaStreamNonBlocking));
+#else
     cudaCheck(cudaStreamCreate(&main_stream));
+#endif
     nvtxNameCudaStreamA(main_stream, "main stream");
 #if defined(LLMK_SM120_USE_CUBLASLT_GEMM)
     llmk::cublaslt_sm120::init();
@@ -1836,6 +1915,33 @@ int main(int argc, char *argv[]) {
     printf0("| overfit_single_batch  | %-50d |\n", overfit_single_batch);
     printf0("| use_master_weights    | %-50s |\n", use_master_weights ? "enabled" : "disabled");
     printf0("| gelu_fusion           | %-50d |\n", gelu_fusion);
+    printf0("| grad_zero_backend     | %-50s |\n",
+#if defined(LLMK_SM120_USE_LIBTORCH_GRAD_ZERO)
+            "Torch C++"
+#elif defined(LLMK_SM120_USE_CUDA_KERNEL_GRAD_ZERO)
+            "CUDA kernel"
+#else
+            "CUDA runtime"
+#endif
+    );
+    printf0("| dresidual_zero_backend| %-50s |\n",
+#if defined(LLMK_SM120_USE_LIBTORCH_DRESIDUAL_ZERO)
+            "Torch C++"
+#elif defined(LLMK_SM120_USE_CUDA_KERNEL_DRESIDUAL_ZERO)
+            "CUDA kernel"
+#else
+            "CUDA runtime"
+#endif
+    );
+    printf0("| grad_scale_backend    | %-50s |\n",
+#if defined(KITTENS_SM120) && defined(LLMK_SM120_PRECOMPUTE_GRAD_SCALE_ADAMW)
+            (skip_update_lossz == 0.0f && skip_update_gradz == 0.0f) ? "precomputed device AdamW scalar" : "host scalar"
+#elif defined(KITTENS_SM120) && defined(LLMK_SM120_DEVICE_GRAD_SCALE_ADAMW)
+            (skip_update_lossz == 0.0f && skip_update_gradz == 0.0f) ? "device AdamW scalar" : "host scalar"
+#else
+            "host scalar"
+#endif
+    );
     printf0("| recompute             | %-50d |\n", recompute);
     printf0("+-----------------------+----------------------------------------------------+\n");
     const char* precision_str = "BF16";
@@ -1996,7 +2102,9 @@ int main(int argc, char *argv[]) {
     cudaEvent_t start, end;
     cudaCheck(cudaEventCreate(&start));
     cudaCheck(cudaEventCreate(&end));
+#if !defined(LLMK_DISABLE_CUDA_PROFILER)
     cudaCheck(cudaProfilerStart());
+#endif
     double total_sum_iteration_time_s = 0.0;
     float ema_tokens_per_second = 0.0f;
     for (; step <= train_num_batches; step++) {
@@ -2128,8 +2236,25 @@ int main(int argc, char *argv[]) {
         // fetch the next learning rate
         float step_learning_rate = get_learning_rate(&lr_scheduler, step);
         // calculate the gradient norm and how much we wish to scale the gradient
+#if defined(KITTENS_SM120) && (defined(LLMK_SM120_DEVICE_GRAD_SCALE_ADAMW) || defined(LLMK_SM120_PRECOMPUTE_GRAD_SCALE_ADAMW))
+        const bool device_grad_scale_path = skip_update_lossz == 0.0f && skip_update_gradz == 0.0f;
+        float* grad_norm_squared_device = nullptr;
+        float* grad_scale_device = nullptr;
+        float grad_norm = 0.0f;
+        float zgrad = NAN;
+        if (device_grad_scale_path) {
+            grad_norm_squared_device = gpt2_calculate_grad_norm_squared_device(&model, &multi_gpu_config);
+#if defined(LLMK_SM120_PRECOMPUTE_GRAD_SCALE_ADAMW)
+            grad_scale_device = model.accumulated_mean_loss;
+#endif
+        } else {
+            grad_norm = gpt2_calculate_grad_norm(&model, &multi_gpu_config);
+            zgrad = (float)(update_detector(&grad_norm_outlier_detector, (double)grad_norm)); // grad z-score
+        }
+#else
         float grad_norm = gpt2_calculate_grad_norm(&model, &multi_gpu_config);
         float zgrad = (float)(update_detector(&grad_norm_outlier_detector, (double)grad_norm)); // grad z-score
+#endif
         // update the model parameters
         if (isfinite(zloss) && skip_update_lossz != 0.0f && zloss > skip_update_lossz) {
             printf0("skipping update due to loss z-score of %f\n", zloss);
@@ -2138,11 +2263,31 @@ int main(int argc, char *argv[]) {
         } else {
             // clip the gradient norm to a maximum value
             float grad_clip = 1.0f;
+#if defined(KITTENS_SM120) && (defined(LLMK_SM120_DEVICE_GRAD_SCALE_ADAMW) || defined(LLMK_SM120_PRECOMPUTE_GRAD_SCALE_ADAMW))
+            if (device_grad_scale_path) {
+#if defined(LLMK_SM120_PRECOMPUTE_GRAD_SCALE_ADAMW)
+                adamw_compute_grad_scale(grad_scale_device, grad_norm_squared_device, grad_clip, main_stream);
+                gpt2_update(&model, step_learning_rate, 0.9f, 0.95f, 1e-8f, weight_decay, 1.0f, step+1, &multi_gpu_config,
+                            false, nullptr, grad_clip, grad_scale_device);
+#else
+                gpt2_update(&model, step_learning_rate, 0.9f, 0.95f, 1e-8f, weight_decay, 1.0f, step+1, &multi_gpu_config,
+                            false, grad_norm_squared_device, grad_clip);
+#endif
+            } else
+#endif
+            {
             float grad_scale = (grad_norm > grad_clip) ? grad_clip / grad_norm : 1.0f;
             gpt2_update(&model, step_learning_rate, 0.9f, 0.95f, 1e-8f, weight_decay, grad_scale, step+1, &multi_gpu_config);
+            }
         }
         cudaCheck(cudaEventRecord(end));
         cudaCheck(cudaEventSynchronize(end)); // wait for the end event to finish to get correct timings
+#if defined(KITTENS_SM120) && (defined(LLMK_SM120_DEVICE_GRAD_SCALE_ADAMW) || defined(LLMK_SM120_PRECOMPUTE_GRAD_SCALE_ADAMW))
+        if (device_grad_scale_path) {
+            grad_norm = gpt2_read_grad_norm_cpu(grad_norm_squared_device);
+            zgrad = (float)(update_detector(&grad_norm_outlier_detector, (double)grad_norm)); // grad z-score
+        }
+#endif
         // --------------- TRAINING SECTION END -------------------
         // everything that follows now is just diagnostics, prints, logging, etc.
 
@@ -2171,7 +2316,11 @@ int main(int argc, char *argv[]) {
         logger_log_train(&logger, step, model.mean_loss, step_learning_rate, grad_norm);
 
         // disable the profiler after 3 steps of optimization
-        if (step == 3) { cudaProfilerStop(); }
+        if (step == 3) {
+#if !defined(LLMK_DISABLE_CUDA_PROFILER)
+            cudaProfilerStop();
+#endif
+        }
     }
     // add a total average, for optimizations that are only mild improvements (excluding 1st batch as warmup)
     printf0("total average iteration time: %f ms\n", total_sum_iteration_time_s / (train_num_batches-1) * 1000);

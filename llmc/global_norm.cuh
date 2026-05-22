@@ -8,6 +8,10 @@ Global norm, used in gradient clipping
 #include "cuda_common.h"
 #include "cuda_utils.cuh"
 
+#if defined(KITTENS_SM120) && !defined(LLMK_SM120_GLOBAL_NORM_BLOCK_SIZE)
+#define LLMK_SM120_GLOBAL_NORM_BLOCK_SIZE 512
+#endif
+
 // ----------------------------------------------------------------------------
 // CUDA kernels
 
@@ -51,7 +55,11 @@ __global__ void global_norm_aggregate_kernel(float* out, size_t grid_size) {
 // Helper function determines the maximum number of block sums
 int get_max_num_block_sums(int* num_slices_all, int numel) {
     // NOTE: this needs to be kept in sync with `global_norm_squared` below.
+#if defined(KITTENS_SM120)
+    const int block_size = LLMK_SM120_GLOBAL_NORM_BLOCK_SIZE;
+#else
     const int block_size = 512;
+#endif
     const int grid_size = deviceProp.maxThreadsPerMultiProcessor * deviceProp.multiProcessorCount / block_size;
     assert(grid_size > 0);
     int max_num_block_sums = 0;
@@ -67,7 +75,11 @@ int get_max_num_block_sums(int* num_slices_all, int numel) {
 
 template<typename T>
 void global_norm_squared(float* out, const T* values, size_t count, ptrdiff_t stride, int num_slices, int max_num_block_sums, bool reset, cudaStream_t stream) {
+#if defined(KITTENS_SM120)
+    const int block_size = LLMK_SM120_GLOBAL_NORM_BLOCK_SIZE;
+#else
     const int block_size = 512;
+#endif
     // launch just enough blocks to fill the grid. deliberately no DIV_CEIL.
     // having one block less than possible is a tiny performance hit, having
     // one block too many is catastrophic, since it only can start once all the other

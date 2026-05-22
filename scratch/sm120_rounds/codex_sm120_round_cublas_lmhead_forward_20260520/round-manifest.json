@@ -1,0 +1,145 @@
+{
+  "binaries": [
+    {
+      "exists": true,
+      "path": "test_matmul",
+      "sha256": "01688e7a2374bb7b6f917bc7a3ee598072eaba9b5dc1f3b86d75fc5fde8b0ad6",
+      "size_bytes": 2128288
+    },
+    {
+      "exists": true,
+      "path": "test_attention",
+      "sha256": "e5742668fce4546f6e09d4fc265b5af660173848bd53653cadeb92e8624eb9fa",
+      "size_bytes": 1760032
+    },
+    {
+      "exists": true,
+      "path": "test_layernorm",
+      "sha256": "6f42857c672b3f534e009267d18168b35f342eb54e23d58de371081640a76865",
+      "size_bytes": 1237784
+    },
+    {
+      "exists": true,
+      "path": "test_bias",
+      "sha256": "38bcc66cd03be8bc7c60fe5da2f64f9296405d68287b5a9e23dd7fdbf294955a",
+      "size_bytes": 2039504
+    },
+    {
+      "exists": true,
+      "path": "test_gelu",
+      "sha256": "f3029d2d0d0a1aca0cb0aa5dd3fd6201d04cb0be090008a1154a4602c13e6a81",
+      "size_bytes": 1139336
+    },
+    {
+      "exists": true,
+      "path": "test_fused_classifier",
+      "sha256": "3db5f5c36901533d0ffcad31b56aae3b9ccb5c8b5f42d4372f34b46f3fd773b9",
+      "size_bytes": 1146768
+    },
+    {
+      "exists": true,
+      "path": "test_encoder",
+      "sha256": "3bcd0ef44c8245335e4103676b5ea8746daa8b3a64d9d0ed65a8d1501c7c5d9d",
+      "size_bytes": 1165512
+    },
+    {
+      "exists": true,
+      "path": "test_adamw",
+      "sha256": "645d3f3f67b7852e56dc7211726963f5e26c5a8edeb8d7c269bd3248fd2d5a1b",
+      "size_bytes": 1138408
+    },
+    {
+      "exists": true,
+      "path": "test_global_norm",
+      "sha256": "0939711fc44705c64d725ae8625415a819cd9010954f33e0b2f6898f0410c4d4",
+      "size_bytes": 1138816
+    },
+    {
+      "exists": true,
+      "path": "bench_sm120_matmul",
+      "sha256": "4f7dbbd00fa2d19e9166c75d66bb0aa45a8aa43eaa1d1ed9acc3eed209c83fd5",
+      "size_bytes": 2365064
+    },
+    {
+      "exists": true,
+      "path": "bench_sm120_attention",
+      "sha256": "d0d425c8cf30de4bde7670719c5da3476f9439976854702127f174aa03455e89",
+      "size_bytes": 1731352
+    },
+    {
+      "exists": true,
+      "path": "bench_sm120_layernorm",
+      "sha256": "4682372479fdc052f7534d1f97cb6f2fde0910dace233f6a5cf85a421f4c9e0d",
+      "size_bytes": 1229088
+    },
+    {
+      "exists": true,
+      "path": "bench_sm120_runtime",
+      "sha256": "ef9c4119733fe7a80942206eb635d056eb75d39a211a10f9377de88527efe8b1",
+      "size_bytes": 2168552
+    },
+    {
+      "exists": true,
+      "path": "train_gpt2cu",
+      "sha256": "855af1d401a991ac252c3f1fbd6ea5a23b566ff94fcf9b59e3b10075e7c27b78",
+      "size_bytes": 3037176
+    }
+  ],
+  "config": {
+    "artifact_dir": "scratch/sm120_rounds/codex_sm120_round_cublas_lmhead_forward_20260520",
+    "build_jobs": "4",
+    "device_arch": "SM120",
+    "keep_checkpoints": "0",
+    "max_steps": "3",
+    "no_multi_gpu": "1",
+    "no_use_mpi": "1",
+    "run_benchmarks": "1",
+    "run_correctness": "1",
+    "run_label": "codex_sm120_round_cublas_lmhead_forward_20260520",
+    "run_stack_probe": "1",
+    "run_training": "1",
+    "train_out_dir": "log124M/5090_S_codex_sm120_round_cublas_lmhead_forward_20260520"
+  },
+  "created_utc": "2026-05-20T17:33:10.374819+00:00",
+  "environment": {
+    "CONDA_DEFAULT_ENV": "llm-kittens",
+    "CUDA_HOME": "/usr/local/cuda",
+    "CUDA_VISIBLE_DEVICES": "",
+    "LD_LIBRARY_PATH": "/usr/local/cuda/lib64:",
+    "LLMK_SM120_CUBLASLT_HEURISTIC_INDEX": "",
+    "LLMK_SM120_CUBLASLT_HEURISTIC_RESULTS": "",
+    "LLMK_SM120_CUBLASLT_SELECT_MAX_WAVES": "",
+    "SM120_USE_CUBLASLT_GEMM": "",
+    "VIRTUAL_ENV": ""
+  },
+  "git": {
+    "commit": "0f2174743c0b94e92e25d7390038a5959d5f565f",
+    "short_commit": "0f21747",
+    "status_count": 452,
+    "status_path": "git-status.txt"
+  },
+  "host": {
+    "platform": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.43",
+    "python": "3.14.5"
+  },
+  "schema_version": 1,
+  "toolchain": {
+    "nvcc": {
+      "command": [
+        "nvcc",
+        "--version"
+      ],
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "nvcc: NVIDIA (R) Cuda compiler driver\nCopyright (c) 2005-2026 NVIDIA Corporation\nBuilt on Thu_Mar_19_11:12:51_PM_PDT_2026\nCuda compilation tools, release 13.2, V13.2.78\nBuild cuda_13.2.r13.2/compiler.37668154_0"
+    },
+    "nvidia_smi": {
+      "command": [
+        "nvidia-smi"
+      ],
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "Wed May 20 18:33:10 2026       \n+-----------------------------------------------------------------------------------------+\n| NVIDIA-SMI 595.71.01              Driver Version: 596.36         CUDA Version: 13.2     |\n+-----------------------------------------+------------------------+----------------------+\n| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |\n| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |\n|                                         |                        |               MIG M. |\n|=========================================+========================+======================|\n|   0  NVIDIA GeForce RTX 5090        On  |   00000000:E1:00.0  On |                  N/A |\n|100%   31C    P3             70W /  575W |    3584MiB /  32607MiB |      0%      Default |\n|                                         |                        |                  N/A |\n+-----------------------------------------+------------------------+----------------------+\n\n+-----------------------------------------------------------------------------------------+\n| Processes:                                                                              |\n|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |\n|        ID   ID                                                               Usage      |\n|=========================================================================================|\n|  No running processes found                                                             |\n+-----------------------------------------------------------------------------------------+"
+    }
+  }
+}

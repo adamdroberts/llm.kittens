@@ -1,0 +1,21 @@
+{
+  "active_promotion_candidates": [],
+  "artifact_dir": "scratch/sm120_rounds/codex_sm120_combo_all_native_winners_x3_20260521",
+  "attention_route_rows": [],
+  "benchmark_row_count": 0,
+  "git_commit": "0f21747",
+  "libtorch_matmul_coverage": {},
+  "libtorch_runtime_parity_coverage": {},
+  "libtorch_runtime_raw_pointer_route": false,
+  "libtorch_runtime_shape_coverage": {},
+  "libtorch_runtime_supplemental_parity_coverage": {},
+  "libtorch_runtime_supplemental_shape_coverage": {},
+  "libtorch_trainer_link_probe": false,
+  "promotion_candidates": [],
+  "run_label": "codex_sm120_combo_all_native_winners_x3_20260521",
+  "schema_version": 1,
+  "selected_backend_rows": [],
+  "selection_policy": "Fastest observed row per exact suite/kernel/shape. Rows without an existing trainer call path remain reference/operator prototypes until route-specific correctness and TinyStories smoke evidence proves promotion. Repo-local decisions mark refreshed rejects and structurally non-promotable rows inactive without deleting their evidence.",
+  "torch_benchmark_coverage": {},
+  "torch_benchmark_row_count": 0
+}

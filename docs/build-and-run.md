@@ -215,8 +215,8 @@ make train_gpt2cu
     -b 4 -t 1024 -x 100 -v 20 -s 0
 ```
 
-This compiles today, but a real run still needs H100 access, the downloaded
-starter pack, and the remaining parity work tracked in [`../goal.md`](../goal.md).
+This compiles today, but a real run still needs the downloaded starter pack and
+the remaining parity work tracked in [`../goal.md`](../goal.md).
 Add `-ge 1` to opt GPT-2's MLP up-projection into the compile-wired TK
 bias+GELU epilogue after validating numerics on your H100 host.
 When `-o OUTPUT_DIR` is set, rank 0 writes `OUTPUT_DIR/main.log` with

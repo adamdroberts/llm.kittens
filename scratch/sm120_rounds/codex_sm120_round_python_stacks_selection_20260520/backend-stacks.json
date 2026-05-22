@@ -1,0 +1,1314 @@
+{
+  "family_matrix": [
+    {
+      "family": "gemm_forward",
+      "next_action": "keep only shape wins that preserve the TinyStories smoke",
+      "reason": "native TK GEMM rows are benchmarked by GPT-2 shape",
+      "stack": "ThunderKittens 2.0",
+      "status": "candidate"
+    },
+    {
+      "family": "gemm_forward",
+      "next_action": "compare against cuBLASLt and TK for every required pass and shape",
+      "reason": "cuBLAS BF16 GEMM is a direct baseline; fused rows use cuBLAS plus explicit CUDA pointwise work",
+      "stack": "cuBLAS",
+      "status": "candidate"
+    },
+    {
+      "family": "gemm_forward",
+      "next_action": "keep selector decisions shape-specific",
+      "reason": "current SM120 GEMM baseline, including fused epilogue candidates",
+      "stack": "cuBLASLt",
+      "status": "baseline"
+    },
+    {
+      "family": "gemm_forward",
+      "next_action": "none until a cuDNN GEMM-equivalent path is intentionally scoped",
+      "reason": "cuDNN is not used as a GEMM provider in this project",
+      "stack": "cuDNN",
+      "status": "not_applicable"
+    },
+    {
+      "family": "gemm_forward",
+      "next_action": "add Triton parity tests before timing or trainer promotion",
+      "reason": "Triton can express GEMM or fused epilogue variants if installed",
+      "stack": "Triton",
+      "status": "candidate"
+    },
+    {
+      "family": "gemm_forward",
+      "next_action": "benchmark exact GPT-2 shapes and only promote routes that can be called from the trainer path",
+      "reason": "Torch BF16 matmul/operator routes can provide an implementation-backed comparison point",
+      "stack": "Torch",
+      "status": "candidate"
+    },
+    {
+      "family": "gemm_forward",
+      "next_action": "add CuTeDSL parity tests before timing or trainer promotion",
+      "reason": "CuTeDSL can generate Blackwell GEMM or fused epilogue kernels if installed",
+      "stack": "CuTeDSL",
+      "status": "candidate"
+    },
+    {
+      "family": "gemm_forward",
+      "next_action": "use only as a safety fallback unless focused timing proves otherwise",
+      "reason": "plain CUDA is a correctness fallback for GEMM-scale work, not the expected performance winner",
+      "stack": "Plain CUDA",
+      "status": "fallback"
+    },
+    {
+      "family": "gemm_forward_fused_gelu",
+      "next_action": "keep only shape wins that preserve the TinyStories smoke",
+      "reason": "native TK GEMM rows are benchmarked by GPT-2 shape",
+      "stack": "ThunderKittens 2.0",
+      "status": "candidate"
+    },
+    {
+      "family": "gemm_forward_fused_gelu",
+      "next_action": "compare against cuBLASLt and TK for every required pass and shape",
+      "reason": "cuBLAS BF16 GEMM is a direct baseline; fused rows use cuBLAS plus explicit CUDA pointwise work",
+      "stack": "cuBLAS",
+      "status": "candidate"
+    },
+    {
+      "family": "gemm_forward_fused_gelu",
+      "next_action": "keep selector decisions shape-specific",
+      "reason": "current SM120 GEMM baseline, including fused epilogue candidates",
+      "stack": "cuBLASLt",
+      "status": "baseline"
+    },
+    {
+      "family": "gemm_forward_fused_gelu",
+      "next_action": "none until a cuDNN GEMM-equivalent path is intentionally scoped",
+      "reason": "cuDNN is not used as a GEMM provider in this project",
+      "stack": "cuDNN",
+      "status": "not_applicable"
+    },
+    {
+      "family": "gemm_forward_fused_gelu",
+      "next_action": "add Triton parity tests before timing or trainer promotion",
+      "reason": "Triton can express GEMM or fused epilogue variants if installed",
+      "stack": "Triton",
+      "status": "candidate"
+    },
+    {
+      "family": "gemm_forward_fused_gelu",
+      "next_action": "benchmark exact GPT-2 shapes and only promote routes that can be called from the trainer path",
+      "reason": "Torch BF16 matmul/operator routes can provide an implementation-backed comparison point",
+      "stack": "Torch",
+      "status": "candidate"
+    },
+    {
+      "family": "gemm_forward_fused_gelu",
+      "next_action": "add CuTeDSL parity tests before timing or trainer promotion",
+      "reason": "CuTeDSL can generate Blackwell GEMM or fused epilogue kernels if installed",
+      "stack": "CuTeDSL",
+      "status": "candidate"
+    },
+    {
+      "family": "gemm_forward_fused_gelu",
+      "next_action": "use only as a safety fallback unless focused timing proves otherwise",
+      "reason": "plain CUDA is a correctness fallback for GEMM-scale work, not the expected performance winner",
+      "stack": "Plain CUDA",
+      "status": "fallback"
+    },
+    {
+      "family": "gemm_backward_dinput",
+      "next_action": "keep only shape wins that preserve the TinyStories smoke",
+      "reason": "native TK GEMM rows are benchmarked by GPT-2 shape",
+      "stack": "ThunderKittens 2.0",
+      "status": "candidate"
+    },
+    {
+      "family": "gemm_backward_dinput",
+      "next_action": "compare against cuBLASLt and TK for every required pass and shape",
+      "reason": "cuBLAS BF16 GEMM is a direct baseline; fused rows use cuBLAS plus explicit CUDA pointwise work",
+      "stack": "cuBLAS",
+      "status": "candidate"
+    },
+    {
+      "family": "gemm_backward_dinput",
+      "next_action": "keep selector decisions shape-specific",
+      "reason": "current SM120 GEMM baseline, including fused epilogue candidates",
+      "stack": "cuBLASLt",
+      "status": "baseline"
+    },
+    {
+      "family": "gemm_backward_dinput",
+      "next_action": "none until a cuDNN GEMM-equivalent path is intentionally scoped",
+      "reason": "cuDNN is not used as a GEMM provider in this project",
+      "stack": "cuDNN",
+      "status": "not_applicable"
+    },
+    {
+      "family": "gemm_backward_dinput",
+      "next_action": "add Triton parity tests before timing or trainer promotion",
+      "reason": "Triton can express GEMM or fused epilogue variants if installed",
+      "stack": "Triton",
+      "status": "candidate"
+    },
+    {
+      "family": "gemm_backward_dinput",
+      "next_action": "benchmark exact GPT-2 shapes and only promote routes that can be called from the trainer path",
+      "reason": "Torch BF16 matmul/operator routes can provide an implementation-backed comparison point",
+      "stack": "Torch",
+      "status": "candidate"
+    },
+    {
+      "family": "gemm_backward_dinput",
+      "next_action": "add CuTeDSL parity tests before timing or trainer promotion",
+      "reason": "CuTeDSL can generate Blackwell GEMM or fused epilogue kernels if installed",
+      "stack": "CuTeDSL",
+      "status": "candidate"
+    },
+    {
+      "family": "gemm_backward_dinput",
+      "next_action": "use only as a safety fallback unless focused timing proves otherwise",
+      "reason": "plain CUDA is a correctness fallback for GEMM-scale work, not the expected performance winner",
+      "stack": "Plain CUDA",
+      "status": "fallback"
+    },
+    {
+      "family": "gemm_backward_dinput_fused_dgelu",
+      "next_action": "keep only shape wins that preserve the TinyStories smoke",
+      "reason": "native TK GEMM rows are benchmarked by GPT-2 shape",
+      "stack": "ThunderKittens 2.0",
+      "status": "candidate"
+    },
+    {
+      "family": "gemm_backward_dinput_fused_dgelu",
+      "next_action": "compare against cuBLASLt and TK for every required pass and shape",
+      "reason": "cuBLAS BF16 GEMM is a direct baseline; fused rows use cuBLAS plus explicit CUDA pointwise work",
+      "stack": "cuBLAS",
+      "status": "candidate"
+    },
+    {
+      "family": "gemm_backward_dinput_fused_dgelu",
+      "next_action": "keep selector decisions shape-specific",
+      "reason": "current SM120 GEMM baseline, including fused epilogue candidates",
+      "stack": "cuBLASLt",
+      "status": "baseline"
+    },
+    {
+      "family": "gemm_backward_dinput_fused_dgelu",
+      "next_action": "none until a cuDNN GEMM-equivalent path is intentionally scoped",
+      "reason": "cuDNN is not used as a GEMM provider in this project",
+      "stack": "cuDNN",
+      "status": "not_applicable"
+    },
+    {
+      "family": "gemm_backward_dinput_fused_dgelu",
+      "next_action": "add Triton parity tests before timing or trainer promotion",
+      "reason": "Triton can express GEMM or fused epilogue variants if installed",
+      "stack": "Triton",
+      "status": "candidate"
+    },
+    {
+      "family": "gemm_backward_dinput_fused_dgelu",
+      "next_action": "benchmark exact GPT-2 shapes and only promote routes that can be called from the trainer path",
+      "reason": "Torch BF16 matmul/operator routes can provide an implementation-backed comparison point",
+      "stack": "Torch",
+      "status": "candidate"
+    },
+    {
+      "family": "gemm_backward_dinput_fused_dgelu",
+      "next_action": "add CuTeDSL parity tests before timing or trainer promotion",
+      "reason": "CuTeDSL can generate Blackwell GEMM or fused epilogue kernels if installed",
+      "stack": "CuTeDSL",
+      "status": "candidate"
+    },
+    {
+      "family": "gemm_backward_dinput_fused_dgelu",
+      "next_action": "use only as a safety fallback unless focused timing proves otherwise",
+      "reason": "plain CUDA is a correctness fallback for GEMM-scale work, not the expected performance winner",
+      "stack": "Plain CUDA",
+      "status": "fallback"
+    },
+    {
+      "family": "gemm_backward_dweight",
+      "next_action": "keep only shape wins that preserve the TinyStories smoke",
+      "reason": "native TK GEMM rows are benchmarked by GPT-2 shape",
+      "stack": "ThunderKittens 2.0",
+      "status": "candidate"
+    },
+    {
+      "family": "gemm_backward_dweight",
+      "next_action": "compare against cuBLASLt and TK for every required pass and shape",
+      "reason": "cuBLAS BF16 GEMM is a direct baseline; fused rows use cuBLAS plus explicit CUDA pointwise work",
+      "stack": "cuBLAS",
+      "status": "candidate"
+    },
+    {
+      "family": "gemm_backward_dweight",
+      "next_action": "keep selector decisions shape-specific",
+      "reason": "current SM120 GEMM baseline, including fused epilogue candidates",
+      "stack": "cuBLASLt",
+      "status": "baseline"
+    },
+    {
+      "family": "gemm_backward_dweight",
+      "next_action": "none until a cuDNN GEMM-equivalent path is intentionally scoped",
+      "reason": "cuDNN is not used as a GEMM provider in this project",
+      "stack": "cuDNN",
+      "status": "not_applicable"
+    },
+    {
+      "family": "gemm_backward_dweight",
+      "next_action": "add Triton parity tests before timing or trainer promotion",
+      "reason": "Triton can express GEMM or fused epilogue variants if installed",
+      "stack": "Triton",
+      "status": "candidate"
+    },
+    {
+      "family": "gemm_backward_dweight",
+      "next_action": "benchmark exact GPT-2 shapes and only promote routes that can be called from the trainer path",
+      "reason": "Torch BF16 matmul/operator routes can provide an implementation-backed comparison point",
+      "stack": "Torch",
+      "status": "candidate"
+    },
+    {
+      "family": "gemm_backward_dweight",
+      "next_action": "add CuTeDSL parity tests before timing or trainer promotion",
+      "reason": "CuTeDSL can generate Blackwell GEMM or fused epilogue kernels if installed",
+      "stack": "CuTeDSL",
+      "status": "candidate"
+    },
+    {
+      "family": "gemm_backward_dweight",
+      "next_action": "use only as a safety fallback unless focused timing proves otherwise",
+      "reason": "plain CUDA is a correctness fallback for GEMM-scale work, not the expected performance winner",
+      "stack": "Plain CUDA",
+      "status": "fallback"
+    },
+    {
+      "family": "gemm_backward_dweight_accum",
+      "next_action": "keep only shape wins that preserve the TinyStories smoke",
+      "reason": "native TK GEMM rows are benchmarked by GPT-2 shape",
+      "stack": "ThunderKittens 2.0",
+      "status": "candidate"
+    },
+    {
+      "family": "gemm_backward_dweight_accum",
+      "next_action": "compare against cuBLASLt and TK for every required pass and shape",
+      "reason": "cuBLAS BF16 GEMM is a direct baseline; fused rows use cuBLAS plus explicit CUDA pointwise work",
+      "stack": "cuBLAS",
+      "status": "candidate"
+    },
+    {
+      "family": "gemm_backward_dweight_accum",
+      "next_action": "keep selector decisions shape-specific",
+      "reason": "current SM120 GEMM baseline, including fused epilogue candidates",
+      "stack": "cuBLASLt",
+      "status": "baseline"
+    },
+    {
+      "family": "gemm_backward_dweight_accum",
+      "next_action": "none until a cuDNN GEMM-equivalent path is intentionally scoped",
+      "reason": "cuDNN is not used as a GEMM provider in this project",
+      "stack": "cuDNN",
+      "status": "not_applicable"
+    },
+    {
+      "family": "gemm_backward_dweight_accum",
+      "next_action": "add Triton parity tests before timing or trainer promotion",
+      "reason": "Triton can express GEMM or fused epilogue variants if installed",
+      "stack": "Triton",
+      "status": "candidate"
+    },
+    {
+      "family": "gemm_backward_dweight_accum",
+      "next_action": "benchmark exact GPT-2 shapes and only promote routes that can be called from the trainer path",
+      "reason": "Torch BF16 matmul/operator routes can provide an implementation-backed comparison point",
+      "stack": "Torch",
+      "status": "candidate"
+    },
+    {
+      "family": "gemm_backward_dweight_accum",
+      "next_action": "add CuTeDSL parity tests before timing or trainer promotion",
+      "reason": "CuTeDSL can generate Blackwell GEMM or fused epilogue kernels if installed",
+      "stack": "CuTeDSL",
+      "status": "candidate"
+    },
+    {
+      "family": "gemm_backward_dweight_accum",
+      "next_action": "use only as a safety fallback unless focused timing proves otherwise",
+      "reason": "plain CUDA is a correctness fallback for GEMM-scale work, not the expected performance winner",
+      "stack": "Plain CUDA",
+      "status": "fallback"
+    },
+    {
+      "family": "bias_add",
+      "next_action": "none",
+      "reason": "ThunderKittens 2.0 is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "ThunderKittens 2.0",
+      "status": "not_applicable"
+    },
+    {
+      "family": "bias_add",
+      "next_action": "none",
+      "reason": "cuBLAS is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "cuBLAS",
+      "status": "not_applicable"
+    },
+    {
+      "family": "bias_add",
+      "next_action": "none",
+      "reason": "cuBLASLt is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "cuBLASLt",
+      "status": "not_applicable"
+    },
+    {
+      "family": "bias_add",
+      "next_action": "none",
+      "reason": "cuDNN is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "cuDNN",
+      "status": "not_applicable"
+    },
+    {
+      "family": "bias_add",
+      "next_action": "add stack-specific parity tests before timing",
+      "reason": "Triton can express selected pointwise or reduction fusions if installed",
+      "stack": "Triton",
+      "status": "candidate"
+    },
+    {
+      "family": "bias_add",
+      "next_action": "benchmark exact trainer shapes and account for composition overhead before promotion",
+      "reason": "Torch can provide operator-backed pointwise/reduction comparisons for selected runtime families",
+      "stack": "Torch",
+      "status": "candidate"
+    },
+    {
+      "family": "bias_add",
+      "next_action": "none",
+      "reason": "CuTeDSL is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "CuTeDSL",
+      "status": "not_applicable"
+    },
+    {
+      "family": "bias_add",
+      "next_action": "keep until a fused candidate improves focused timing and trainer smoke",
+      "reason": "current SM120 runtime-family baseline",
+      "stack": "Plain CUDA",
+      "status": "baseline"
+    },
+    {
+      "family": "bias_gradient_reduce",
+      "next_action": "none",
+      "reason": "ThunderKittens 2.0 is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "ThunderKittens 2.0",
+      "status": "not_applicable"
+    },
+    {
+      "family": "bias_gradient_reduce",
+      "next_action": "none",
+      "reason": "cuBLAS is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "cuBLAS",
+      "status": "not_applicable"
+    },
+    {
+      "family": "bias_gradient_reduce",
+      "next_action": "none",
+      "reason": "cuBLASLt is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "cuBLASLt",
+      "status": "not_applicable"
+    },
+    {
+      "family": "bias_gradient_reduce",
+      "next_action": "none",
+      "reason": "cuDNN is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "cuDNN",
+      "status": "not_applicable"
+    },
+    {
+      "family": "bias_gradient_reduce",
+      "next_action": "add stack-specific parity tests before timing",
+      "reason": "Triton can express selected pointwise or reduction fusions if installed",
+      "stack": "Triton",
+      "status": "candidate"
+    },
+    {
+      "family": "bias_gradient_reduce",
+      "next_action": "benchmark exact trainer shapes and account for composition overhead before promotion",
+      "reason": "Torch can provide operator-backed pointwise/reduction comparisons for selected runtime families",
+      "stack": "Torch",
+      "status": "candidate"
+    },
+    {
+      "family": "bias_gradient_reduce",
+      "next_action": "none",
+      "reason": "CuTeDSL is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "CuTeDSL",
+      "status": "not_applicable"
+    },
+    {
+      "family": "bias_gradient_reduce",
+      "next_action": "keep until a fused candidate improves focused timing and trainer smoke",
+      "reason": "current SM120 runtime-family baseline",
+      "stack": "Plain CUDA",
+      "status": "baseline"
+    },
+    {
+      "family": "gelu_forward",
+      "next_action": "none",
+      "reason": "ThunderKittens 2.0 is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "ThunderKittens 2.0",
+      "status": "not_applicable"
+    },
+    {
+      "family": "gelu_forward",
+      "next_action": "none",
+      "reason": "cuBLAS is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "cuBLAS",
+      "status": "not_applicable"
+    },
+    {
+      "family": "gelu_forward",
+      "next_action": "none",
+      "reason": "cuBLASLt is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "cuBLASLt",
+      "status": "not_applicable"
+    },
+    {
+      "family": "gelu_forward",
+      "next_action": "none",
+      "reason": "cuDNN is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "cuDNN",
+      "status": "not_applicable"
+    },
+    {
+      "family": "gelu_forward",
+      "next_action": "add stack-specific parity tests before timing",
+      "reason": "Triton can express selected pointwise or reduction fusions if installed",
+      "stack": "Triton",
+      "status": "candidate"
+    },
+    {
+      "family": "gelu_forward",
+      "next_action": "benchmark exact trainer shapes and account for composition overhead before promotion",
+      "reason": "Torch can provide operator-backed pointwise/reduction comparisons for selected runtime families",
+      "stack": "Torch",
+      "status": "candidate"
+    },
+    {
+      "family": "gelu_forward",
+      "next_action": "none",
+      "reason": "CuTeDSL is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "CuTeDSL",
+      "status": "not_applicable"
+    },
+    {
+      "family": "gelu_forward",
+      "next_action": "keep until a fused candidate improves focused timing and trainer smoke",
+      "reason": "current SM120 runtime-family baseline",
+      "stack": "Plain CUDA",
+      "status": "baseline"
+    },
+    {
+      "family": "gelu_backward",
+      "next_action": "none",
+      "reason": "ThunderKittens 2.0 is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "ThunderKittens 2.0",
+      "status": "not_applicable"
+    },
+    {
+      "family": "gelu_backward",
+      "next_action": "none",
+      "reason": "cuBLAS is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "cuBLAS",
+      "status": "not_applicable"
+    },
+    {
+      "family": "gelu_backward",
+      "next_action": "none",
+      "reason": "cuBLASLt is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "cuBLASLt",
+      "status": "not_applicable"
+    },
+    {
+      "family": "gelu_backward",
+      "next_action": "none",
+      "reason": "cuDNN is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "cuDNN",
+      "status": "not_applicable"
+    },
+    {
+      "family": "gelu_backward",
+      "next_action": "add stack-specific parity tests before timing",
+      "reason": "Triton can express selected pointwise or reduction fusions if installed",
+      "stack": "Triton",
+      "status": "candidate"
+    },
+    {
+      "family": "gelu_backward",
+      "next_action": "benchmark exact trainer shapes and account for composition overhead before promotion",
+      "reason": "Torch can provide operator-backed pointwise/reduction comparisons for selected runtime families",
+      "stack": "Torch",
+      "status": "candidate"
+    },
+    {
+      "family": "gelu_backward",
+      "next_action": "none",
+      "reason": "CuTeDSL is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "CuTeDSL",
+      "status": "not_applicable"
+    },
+    {
+      "family": "gelu_backward",
+      "next_action": "keep until a fused candidate improves focused timing and trainer smoke",
+      "reason": "current SM120 runtime-family baseline",
+      "stack": "Plain CUDA",
+      "status": "baseline"
+    },
+    {
+      "family": "attention_forward",
+      "next_action": "compare only against stack-specific parity-tested alternatives",
+      "reason": "SM120 packed-QKV attention is the current focused benchmark path",
+      "stack": "ThunderKittens 2.0",
+      "status": "baseline"
+    },
+    {
+      "family": "attention_forward",
+      "next_action": "none",
+      "reason": "cuBLAS is a GEMM library and does not implement causal attention",
+      "stack": "cuBLAS",
+      "status": "not_applicable"
+    },
+    {
+      "family": "attention_forward",
+      "next_action": "none",
+      "reason": "cuBLASLt is a GEMM library and does not implement causal attention",
+      "stack": "cuBLASLt",
+      "status": "not_applicable"
+    },
+    {
+      "family": "attention_forward",
+      "next_action": "prototype as an opt-in attention benchmark before trainer promotion",
+      "reason": "cuDNN is missing; intended use: cuDNN attention may be relevant if headers, libraries, and GPT-2 BF16 shape support line up",
+      "stack": "cuDNN",
+      "status": "missing"
+    },
+    {
+      "family": "attention_forward",
+      "next_action": "add parity checks against the TK packed-QKV reference",
+      "reason": "Triton can express FlashAttention-style alternatives if installed",
+      "stack": "Triton",
+      "status": "candidate"
+    },
+    {
+      "family": "attention_forward",
+      "next_action": "add parity checks against the TK packed-QKV reference before timing",
+      "reason": "Torch scaled-dot-product attention can provide a backend comparison if the packed-QKV layout and saved-state needs are matched",
+      "stack": "Torch",
+      "status": "candidate"
+    },
+    {
+      "family": "attention_forward",
+      "next_action": "none until an attention-specific CuTeDSL prototype is scoped",
+      "reason": "CuTeDSL is being considered for GEMM/codegen work here, not attention",
+      "stack": "CuTeDSL",
+      "status": "not_applicable"
+    },
+    {
+      "family": "attention_forward",
+      "next_action": "time only as a fallback comparison, not a default candidate",
+      "reason": "plain CUDA recompute attention remains a correctness fallback for unsupported shapes",
+      "stack": "Plain CUDA",
+      "status": "fallback"
+    },
+    {
+      "family": "attention_backward",
+      "next_action": "compare only against stack-specific parity-tested alternatives",
+      "reason": "SM120 packed-QKV attention is the current focused benchmark path",
+      "stack": "ThunderKittens 2.0",
+      "status": "baseline"
+    },
+    {
+      "family": "attention_backward",
+      "next_action": "none",
+      "reason": "cuBLAS is a GEMM library and does not implement causal attention",
+      "stack": "cuBLAS",
+      "status": "not_applicable"
+    },
+    {
+      "family": "attention_backward",
+      "next_action": "none",
+      "reason": "cuBLASLt is a GEMM library and does not implement causal attention",
+      "stack": "cuBLASLt",
+      "status": "not_applicable"
+    },
+    {
+      "family": "attention_backward",
+      "next_action": "prototype as an opt-in attention benchmark before trainer promotion",
+      "reason": "cuDNN is missing; intended use: cuDNN attention may be relevant if headers, libraries, and GPT-2 BF16 shape support line up",
+      "stack": "cuDNN",
+      "status": "missing"
+    },
+    {
+      "family": "attention_backward",
+      "next_action": "add parity checks against the TK packed-QKV reference",
+      "reason": "Triton can express FlashAttention-style alternatives if installed",
+      "stack": "Triton",
+      "status": "candidate"
+    },
+    {
+      "family": "attention_backward",
+      "next_action": "add parity checks against the TK packed-QKV reference before timing",
+      "reason": "Torch scaled-dot-product attention can provide a backend comparison if the packed-QKV layout and saved-state needs are matched",
+      "stack": "Torch",
+      "status": "candidate"
+    },
+    {
+      "family": "attention_backward",
+      "next_action": "none until an attention-specific CuTeDSL prototype is scoped",
+      "reason": "CuTeDSL is being considered for GEMM/codegen work here, not attention",
+      "stack": "CuTeDSL",
+      "status": "not_applicable"
+    },
+    {
+      "family": "attention_backward",
+      "next_action": "time only as a fallback comparison, not a default candidate",
+      "reason": "plain CUDA recompute attention remains a correctness fallback for unsupported shapes",
+      "stack": "Plain CUDA",
+      "status": "fallback"
+    },
+    {
+      "family": "layernorm_forward",
+      "next_action": "port and parity-test an SM120 TK LayerNorm path before benchmarking it",
+      "reason": "the current TK LayerNorm wrapper is Hopper-only; SM120 routes LayerNorm through the CUDA baseline",
+      "stack": "ThunderKittens 2.0",
+      "status": "missing"
+    },
+    {
+      "family": "layernorm_forward",
+      "next_action": "none until a concrete LayerNorm implementation for this stack is scoped",
+      "reason": "cuBLAS is not the scoped LayerNorm provider for this optimization round",
+      "stack": "cuBLAS",
+      "status": "not_applicable"
+    },
+    {
+      "family": "layernorm_forward",
+      "next_action": "none until a concrete LayerNorm implementation for this stack is scoped",
+      "reason": "cuBLASLt is not the scoped LayerNorm provider for this optimization round",
+      "stack": "cuBLASLt",
+      "status": "not_applicable"
+    },
+    {
+      "family": "layernorm_forward",
+      "next_action": "none until a concrete LayerNorm implementation for this stack is scoped",
+      "reason": "cuDNN is not the scoped LayerNorm provider for this optimization round",
+      "stack": "cuDNN",
+      "status": "not_applicable"
+    },
+    {
+      "family": "layernorm_forward",
+      "next_action": "add parity tests before timing",
+      "reason": "Triton is a practical candidate for normalization kernels if installed",
+      "stack": "Triton",
+      "status": "candidate"
+    },
+    {
+      "family": "layernorm_forward",
+      "next_action": "benchmark native and stats-producing variants separately before trainer promotion",
+      "reason": "Torch LayerNorm kernels are useful comparison points; native rows do not expose saved mean/rstd",
+      "stack": "Torch",
+      "status": "candidate"
+    },
+    {
+      "family": "layernorm_forward",
+      "next_action": "none until a concrete LayerNorm implementation for this stack is scoped",
+      "reason": "CuTeDSL is not the scoped LayerNorm provider for this optimization round",
+      "stack": "CuTeDSL",
+      "status": "not_applicable"
+    },
+    {
+      "family": "layernorm_forward",
+      "next_action": "keep as default until a focused benchmark and TinyStories smoke improve",
+      "reason": "current SM120 LayerNorm benchmark baseline",
+      "stack": "Plain CUDA",
+      "status": "baseline"
+    },
+    {
+      "family": "layernorm_fused_residual_forward",
+      "next_action": "port and parity-test an SM120 TK LayerNorm path before benchmarking it",
+      "reason": "the current TK LayerNorm wrapper is Hopper-only; SM120 routes LayerNorm through the CUDA baseline",
+      "stack": "ThunderKittens 2.0",
+      "status": "missing"
+    },
+    {
+      "family": "layernorm_fused_residual_forward",
+      "next_action": "none until a concrete LayerNorm implementation for this stack is scoped",
+      "reason": "cuBLAS is not the scoped LayerNorm provider for this optimization round",
+      "stack": "cuBLAS",
+      "status": "not_applicable"
+    },
+    {
+      "family": "layernorm_fused_residual_forward",
+      "next_action": "none until a concrete LayerNorm implementation for this stack is scoped",
+      "reason": "cuBLASLt is not the scoped LayerNorm provider for this optimization round",
+      "stack": "cuBLASLt",
+      "status": "not_applicable"
+    },
+    {
+      "family": "layernorm_fused_residual_forward",
+      "next_action": "none until a concrete LayerNorm implementation for this stack is scoped",
+      "reason": "cuDNN is not the scoped LayerNorm provider for this optimization round",
+      "stack": "cuDNN",
+      "status": "not_applicable"
+    },
+    {
+      "family": "layernorm_fused_residual_forward",
+      "next_action": "add parity tests before timing",
+      "reason": "Triton is a practical candidate for normalization kernels if installed",
+      "stack": "Triton",
+      "status": "candidate"
+    },
+    {
+      "family": "layernorm_fused_residual_forward",
+      "next_action": "benchmark native and stats-producing variants separately before trainer promotion",
+      "reason": "Torch LayerNorm kernels are useful comparison points; native rows do not expose saved mean/rstd",
+      "stack": "Torch",
+      "status": "candidate"
+    },
+    {
+      "family": "layernorm_fused_residual_forward",
+      "next_action": "none until a concrete LayerNorm implementation for this stack is scoped",
+      "reason": "CuTeDSL is not the scoped LayerNorm provider for this optimization round",
+      "stack": "CuTeDSL",
+      "status": "not_applicable"
+    },
+    {
+      "family": "layernorm_fused_residual_forward",
+      "next_action": "keep as default until a focused benchmark and TinyStories smoke improve",
+      "reason": "current SM120 LayerNorm benchmark baseline",
+      "stack": "Plain CUDA",
+      "status": "baseline"
+    },
+    {
+      "family": "layernorm_backward",
+      "next_action": "port and parity-test an SM120 TK LayerNorm path before benchmarking it",
+      "reason": "the current TK LayerNorm wrapper is Hopper-only; SM120 routes LayerNorm through the CUDA baseline",
+      "stack": "ThunderKittens 2.0",
+      "status": "missing"
+    },
+    {
+      "family": "layernorm_backward",
+      "next_action": "none until a concrete LayerNorm implementation for this stack is scoped",
+      "reason": "cuBLAS is not the scoped LayerNorm provider for this optimization round",
+      "stack": "cuBLAS",
+      "status": "not_applicable"
+    },
+    {
+      "family": "layernorm_backward",
+      "next_action": "none until a concrete LayerNorm implementation for this stack is scoped",
+      "reason": "cuBLASLt is not the scoped LayerNorm provider for this optimization round",
+      "stack": "cuBLASLt",
+      "status": "not_applicable"
+    },
+    {
+      "family": "layernorm_backward",
+      "next_action": "none until a concrete LayerNorm implementation for this stack is scoped",
+      "reason": "cuDNN is not the scoped LayerNorm provider for this optimization round",
+      "stack": "cuDNN",
+      "status": "not_applicable"
+    },
+    {
+      "family": "layernorm_backward",
+      "next_action": "add parity tests before timing",
+      "reason": "Triton is a practical candidate for normalization kernels if installed",
+      "stack": "Triton",
+      "status": "candidate"
+    },
+    {
+      "family": "layernorm_backward",
+      "next_action": "benchmark native and stats-producing variants separately before trainer promotion",
+      "reason": "Torch LayerNorm kernels are useful comparison points; native rows do not expose saved mean/rstd",
+      "stack": "Torch",
+      "status": "candidate"
+    },
+    {
+      "family": "layernorm_backward",
+      "next_action": "none until a concrete LayerNorm implementation for this stack is scoped",
+      "reason": "CuTeDSL is not the scoped LayerNorm provider for this optimization round",
+      "stack": "CuTeDSL",
+      "status": "not_applicable"
+    },
+    {
+      "family": "layernorm_backward",
+      "next_action": "keep as default until a focused benchmark and TinyStories smoke improve",
+      "reason": "current SM120 LayerNorm benchmark baseline",
+      "stack": "Plain CUDA",
+      "status": "baseline"
+    },
+    {
+      "family": "classifier_softmax_cross_entropy_dlogits",
+      "next_action": "none",
+      "reason": "ThunderKittens 2.0 is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "ThunderKittens 2.0",
+      "status": "not_applicable"
+    },
+    {
+      "family": "classifier_softmax_cross_entropy_dlogits",
+      "next_action": "none",
+      "reason": "cuBLAS is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "cuBLAS",
+      "status": "not_applicable"
+    },
+    {
+      "family": "classifier_softmax_cross_entropy_dlogits",
+      "next_action": "none",
+      "reason": "cuBLASLt is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "cuBLASLt",
+      "status": "not_applicable"
+    },
+    {
+      "family": "classifier_softmax_cross_entropy_dlogits",
+      "next_action": "none",
+      "reason": "cuDNN is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "cuDNN",
+      "status": "not_applicable"
+    },
+    {
+      "family": "classifier_softmax_cross_entropy_dlogits",
+      "next_action": "add stack-specific parity tests before timing",
+      "reason": "Triton can express selected pointwise or reduction fusions if installed",
+      "stack": "Triton",
+      "status": "candidate"
+    },
+    {
+      "family": "classifier_softmax_cross_entropy_dlogits",
+      "next_action": "benchmark exact trainer shapes and account for composition overhead before promotion",
+      "reason": "Torch can provide operator-backed pointwise/reduction comparisons for selected runtime families",
+      "stack": "Torch",
+      "status": "candidate"
+    },
+    {
+      "family": "classifier_softmax_cross_entropy_dlogits",
+      "next_action": "none",
+      "reason": "CuTeDSL is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "CuTeDSL",
+      "status": "not_applicable"
+    },
+    {
+      "family": "classifier_softmax_cross_entropy_dlogits",
+      "next_action": "keep until a fused candidate improves focused timing and trainer smoke",
+      "reason": "current SM120 runtime-family baseline",
+      "stack": "Plain CUDA",
+      "status": "baseline"
+    },
+    {
+      "family": "adamw",
+      "next_action": "none",
+      "reason": "ThunderKittens 2.0 is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "ThunderKittens 2.0",
+      "status": "not_applicable"
+    },
+    {
+      "family": "adamw",
+      "next_action": "none",
+      "reason": "cuBLAS is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "cuBLAS",
+      "status": "not_applicable"
+    },
+    {
+      "family": "adamw",
+      "next_action": "none",
+      "reason": "cuBLASLt is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "cuBLASLt",
+      "status": "not_applicable"
+    },
+    {
+      "family": "adamw",
+      "next_action": "none",
+      "reason": "cuDNN is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "cuDNN",
+      "status": "not_applicable"
+    },
+    {
+      "family": "adamw",
+      "next_action": "add stack-specific parity tests before timing",
+      "reason": "Triton can express selected pointwise or reduction fusions if installed",
+      "stack": "Triton",
+      "status": "candidate"
+    },
+    {
+      "family": "adamw",
+      "next_action": "benchmark exact trainer shapes and account for composition overhead before promotion",
+      "reason": "Torch can provide operator-backed pointwise/reduction comparisons for selected runtime families",
+      "stack": "Torch",
+      "status": "candidate"
+    },
+    {
+      "family": "adamw",
+      "next_action": "none",
+      "reason": "CuTeDSL is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "CuTeDSL",
+      "status": "not_applicable"
+    },
+    {
+      "family": "adamw",
+      "next_action": "keep until a fused candidate improves focused timing and trainer smoke",
+      "reason": "current SM120 runtime-family baseline",
+      "stack": "Plain CUDA",
+      "status": "baseline"
+    },
+    {
+      "family": "global_norm",
+      "next_action": "none",
+      "reason": "ThunderKittens 2.0 is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "ThunderKittens 2.0",
+      "status": "not_applicable"
+    },
+    {
+      "family": "global_norm",
+      "next_action": "none",
+      "reason": "cuBLAS is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "cuBLAS",
+      "status": "not_applicable"
+    },
+    {
+      "family": "global_norm",
+      "next_action": "none",
+      "reason": "cuBLASLt is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "cuBLASLt",
+      "status": "not_applicable"
+    },
+    {
+      "family": "global_norm",
+      "next_action": "none",
+      "reason": "cuDNN is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "cuDNN",
+      "status": "not_applicable"
+    },
+    {
+      "family": "global_norm",
+      "next_action": "add stack-specific parity tests before timing",
+      "reason": "Triton can express selected pointwise or reduction fusions if installed",
+      "stack": "Triton",
+      "status": "candidate"
+    },
+    {
+      "family": "global_norm",
+      "next_action": "benchmark exact trainer shapes and account for composition overhead before promotion",
+      "reason": "Torch can provide operator-backed pointwise/reduction comparisons for selected runtime families",
+      "stack": "Torch",
+      "status": "candidate"
+    },
+    {
+      "family": "global_norm",
+      "next_action": "none",
+      "reason": "CuTeDSL is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "CuTeDSL",
+      "status": "not_applicable"
+    },
+    {
+      "family": "global_norm",
+      "next_action": "keep until a fused candidate improves focused timing and trainer smoke",
+      "reason": "current SM120 runtime-family baseline",
+      "stack": "Plain CUDA",
+      "status": "baseline"
+    },
+    {
+      "family": "encoder_forward",
+      "next_action": "none",
+      "reason": "ThunderKittens 2.0 is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "ThunderKittens 2.0",
+      "status": "not_applicable"
+    },
+    {
+      "family": "encoder_forward",
+      "next_action": "none",
+      "reason": "cuBLAS is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "cuBLAS",
+      "status": "not_applicable"
+    },
+    {
+      "family": "encoder_forward",
+      "next_action": "none",
+      "reason": "cuBLASLt is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "cuBLASLt",
+      "status": "not_applicable"
+    },
+    {
+      "family": "encoder_forward",
+      "next_action": "none",
+      "reason": "cuDNN is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "cuDNN",
+      "status": "not_applicable"
+    },
+    {
+      "family": "encoder_forward",
+      "next_action": "add stack-specific parity tests before timing",
+      "reason": "Triton can express selected pointwise or reduction fusions if installed",
+      "stack": "Triton",
+      "status": "candidate"
+    },
+    {
+      "family": "encoder_forward",
+      "next_action": "benchmark exact trainer shapes and account for composition overhead before promotion",
+      "reason": "Torch can provide operator-backed pointwise/reduction comparisons for selected runtime families",
+      "stack": "Torch",
+      "status": "candidate"
+    },
+    {
+      "family": "encoder_forward",
+      "next_action": "none",
+      "reason": "CuTeDSL is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "CuTeDSL",
+      "status": "not_applicable"
+    },
+    {
+      "family": "encoder_forward",
+      "next_action": "keep until a fused candidate improves focused timing and trainer smoke",
+      "reason": "current SM120 runtime-family baseline",
+      "stack": "Plain CUDA",
+      "status": "baseline"
+    },
+    {
+      "family": "cuda_memset",
+      "next_action": "none",
+      "reason": "ThunderKittens 2.0 is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "ThunderKittens 2.0",
+      "status": "not_applicable"
+    },
+    {
+      "family": "cuda_memset",
+      "next_action": "none",
+      "reason": "cuBLAS is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "cuBLAS",
+      "status": "not_applicable"
+    },
+    {
+      "family": "cuda_memset",
+      "next_action": "none",
+      "reason": "cuBLASLt is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "cuBLASLt",
+      "status": "not_applicable"
+    },
+    {
+      "family": "cuda_memset",
+      "next_action": "none",
+      "reason": "cuDNN is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "cuDNN",
+      "status": "not_applicable"
+    },
+    {
+      "family": "cuda_memset",
+      "next_action": "add stack-specific parity tests before timing",
+      "reason": "Triton can express selected pointwise or reduction fusions if installed",
+      "stack": "Triton",
+      "status": "candidate"
+    },
+    {
+      "family": "cuda_memset",
+      "next_action": "benchmark exact trainer shapes and account for composition overhead before promotion",
+      "reason": "Torch can provide operator-backed pointwise/reduction comparisons for selected runtime families",
+      "stack": "Torch",
+      "status": "candidate"
+    },
+    {
+      "family": "cuda_memset",
+      "next_action": "none",
+      "reason": "CuTeDSL is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "CuTeDSL",
+      "status": "not_applicable"
+    },
+    {
+      "family": "cuda_memset",
+      "next_action": "keep until a fused candidate improves focused timing and trainer smoke",
+      "reason": "current SM120 runtime-family baseline",
+      "stack": "Plain CUDA",
+      "status": "baseline"
+    },
+    {
+      "family": "cuda_copy_d2d",
+      "next_action": "none",
+      "reason": "ThunderKittens 2.0 is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "ThunderKittens 2.0",
+      "status": "not_applicable"
+    },
+    {
+      "family": "cuda_copy_d2d",
+      "next_action": "none",
+      "reason": "cuBLAS is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "cuBLAS",
+      "status": "not_applicable"
+    },
+    {
+      "family": "cuda_copy_d2d",
+      "next_action": "none",
+      "reason": "cuBLASLt is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "cuBLASLt",
+      "status": "not_applicable"
+    },
+    {
+      "family": "cuda_copy_d2d",
+      "next_action": "none",
+      "reason": "cuDNN is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "cuDNN",
+      "status": "not_applicable"
+    },
+    {
+      "family": "cuda_copy_d2d",
+      "next_action": "add stack-specific parity tests before timing",
+      "reason": "Triton can express selected pointwise or reduction fusions if installed",
+      "stack": "Triton",
+      "status": "candidate"
+    },
+    {
+      "family": "cuda_copy_d2d",
+      "next_action": "benchmark exact trainer shapes and account for composition overhead before promotion",
+      "reason": "Torch can provide operator-backed pointwise/reduction comparisons for selected runtime families",
+      "stack": "Torch",
+      "status": "candidate"
+    },
+    {
+      "family": "cuda_copy_d2d",
+      "next_action": "none",
+      "reason": "CuTeDSL is not a reasonable provider for this pointwise/reduction/runtime family",
+      "stack": "CuTeDSL",
+      "status": "not_applicable"
+    },
+    {
+      "family": "cuda_copy_d2d",
+      "next_action": "keep until a fused candidate improves focused timing and trainer smoke",
+      "reason": "current SM120 runtime-family baseline",
+      "stack": "Plain CUDA",
+      "status": "baseline"
+    }
+  ],
+  "objective_families": [
+    "gemm_forward",
+    "gemm_forward_fused_gelu",
+    "gemm_backward_dinput",
+    "gemm_backward_dinput_fused_dgelu",
+    "gemm_backward_dweight",
+    "gemm_backward_dweight_accum",
+    "bias_add",
+    "bias_gradient_reduce",
+    "gelu_forward",
+    "gelu_backward",
+    "attention_forward",
+    "attention_backward",
+    "layernorm_forward",
+    "layernorm_fused_residual_forward",
+    "layernorm_backward",
+    "classifier_softmax_cross_entropy_dlogits",
+    "adamw",
+    "global_norm",
+    "encoder_forward",
+    "cuda_memset",
+    "cuda_copy_d2d"
+  ],
+  "objective_stacks": [
+    "ThunderKittens 2.0",
+    "cuBLAS",
+    "cuBLASLt",
+    "cuDNN",
+    "Triton",
+    "Torch",
+    "CuTeDSL",
+    "Plain CUDA"
+  ],
+  "schema_version": 1,
+  "stacks": [
+    {
+      "candidate_use": "native TK kernels and current SM120 packed-QKV attention path",
+      "evidence": [
+        "TK_ROOT=/mnt/disk1/home/adam/dev/open-source/ThunderKittens",
+        "header=/mnt/disk1/home/adam/dev/open-source/ThunderKittens/include/kittens.cuh",
+        "prototype=/mnt/disk1/home/adam/dev/open-source/ThunderKittens/prototype/prototype.cuh"
+      ],
+      "next_action": "benchmark against cuBLASLt/plain CUDA by shape before promoting TK-only wins",
+      "stack": "ThunderKittens 2.0",
+      "status": "available"
+    },
+    {
+      "candidate_use": "plain CUDA baselines and C++ benchmarks",
+      "evidence": [
+        "nvcc=/usr/local/cuda/bin/nvcc",
+        "Build cuda_13.2.r13.2/compiler.37668154_0"
+      ],
+      "next_action": "run the SM120 round on the RTX 5090 target for runtime timings",
+      "stack": "Plain CUDA",
+      "status": "available"
+    },
+    {
+      "candidate_use": "runtime timing and correctness execution",
+      "evidence": [
+        "nvidia-smi/NVML metadata query did not return device metadata in this process context",
+        "nvidia-smi/NVML metadata query did not return device metadata in this process context",
+        "target runtime availability is proven by explicit SM120 correctness and benchmark runs"
+      ],
+      "next_action": "use explicit correctness and benchmark logs as the runtime evidence source",
+      "stack": "GPU runtime",
+      "status": "available"
+    },
+    {
+      "candidate_use": "baseline GEMM comparison where cuBLASLt epilogues are not needed",
+      "evidence": [
+        "header=/usr/local/cuda/include/cublas_v2.h",
+        "library=libcublas.so.13"
+      ],
+      "next_action": "add explicit cuBLAS benchmark/parity rows before selecting it over cuBLASLt",
+      "stack": "cuBLAS",
+      "status": "available"
+    },
+    {
+      "candidate_use": "current SM120 GEMM baseline and fused GEMM epilogues",
+      "evidence": [
+        "header=/usr/local/cuda/include/cublasLt.h",
+        "library=libcublasLt.so.13"
+      ],
+      "next_action": "keep benchmark rows shape-specific; do not switch global defaults from one isolated win",
+      "stack": "cuBLASLt",
+      "status": "available"
+    },
+    {
+      "candidate_use": "attention alternatives if local headers/libs and shape support line up",
+      "evidence": [
+        "cudnn.h not found",
+        "cuDNN library not found"
+      ],
+      "next_action": "prototype as an opt-in benchmark first; current v1 build contract intentionally avoids -lcudnn",
+      "stack": "cuDNN",
+      "status": "missing"
+    },
+    {
+      "candidate_use": "attention, normalization, elementwise fusion, and GEMM candidates",
+      "evidence": [
+        "python=/home/adam/miniconda3/envs/llm-kittens/bin/python",
+        "python_version=3.13.13",
+        "module=triton version=3.6.0 origin=/home/adam/miniconda3/envs/llm-kittens/lib/python3.13/site-packages/triton/__init__.py",
+        "requirements.txt lists triton"
+      ],
+      "next_action": "add stack-specific parity tests before trainer promotion",
+      "stack": "Triton",
+      "status": "available"
+    },
+    {
+      "candidate_use": "PyTorch operator kernels for exact family-by-family backend comparisons",
+      "evidence": [
+        "python=/home/adam/miniconda3/envs/llm-kittens/bin/python",
+        "python_version=3.13.13",
+        "module=torch version=2.11.0+cu130 origin=/home/adam/miniconda3/envs/llm-kittens/lib/python3.13/site-packages/torch/__init__.py",
+        "requirements.txt lists torch"
+      ],
+      "next_action": "add stack-specific parity tests before trainer promotion",
+      "stack": "Torch",
+      "status": "available"
+    },
+    {
+      "candidate_use": "Blackwell GEMM and fused epilogue candidates",
+      "evidence": [
+        "python=/home/adam/miniconda3/envs/llm-kittens/bin/python",
+        "python_version=3.13.13",
+        "module=cutlass version=4.5.1 origin=/home/adam/miniconda3/envs/llm-kittens/lib/python3.13/site-packages/nvidia_cutlass_dsl/python_packages/cutlass/__init__.py",
+        "requirements.txt lists nvidia-cutlass-dsl"
+      ],
+      "next_action": "add stack-specific parity tests before trainer promotion",
+      "stack": "CuTeDSL",
+      "status": "available"
+    }
+  ]
+}

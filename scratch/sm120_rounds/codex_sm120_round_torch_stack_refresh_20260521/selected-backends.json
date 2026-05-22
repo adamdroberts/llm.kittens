@@ -1,0 +1,2067 @@
+{
+  "active_promotion_candidates": [],
+  "artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+  "benchmark_row_count": 187,
+  "git_commit": "0f21747",
+  "promotion_candidates": [
+    {
+      "candidate_class": "native/codegen integration",
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_gelu.log"
+      ],
+      "correctness_logs": [
+        "test_gelu.log"
+      ],
+      "decision_active": false,
+      "decision_decision": "Rejected for trainer promotion; focused uncontended timing showed CUDA was faster than Triton for the GPT-2 MLP GELU-forward row.",
+      "decision_evidence": [
+        "2026-05-21 full stack refresh selected Triton by a small edge: Triton 531.483 us; CUDA 535.954 us",
+        "2026-05-21 focused uncontended refresh: CUDA 528.159 us; Triton 529.627 us"
+      ],
+      "decision_note": "Use as a Triton comparison row until a trainer-callable integration beats the current provider.",
+      "decision_status": "rejected_same_session_refresh",
+      "kernel": "gelu_forward",
+      "next_stack": "CUDA",
+      "next_time_us": 535.954,
+      "priority": "low",
+      "promotion_gate": "refresh same-session baseline, add a trainer-callable Triton/C++ route, then run route parity and TinyStories",
+      "selected_stack": "Triton",
+      "selected_time_us": 531.483,
+      "shape": "BT=65536 C=3072",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "speedup_vs_next_pct": 0.8342133839844471,
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "runtime",
+      "timing_log": "bench_sm120_triton_runtime.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_triton_runtime.log",
+      "trainer_call_path_available": false,
+      "use_scope": "operator prototype"
+    },
+    {
+      "candidate_class": "native/codegen integration",
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_gelu.log"
+      ],
+      "correctness_logs": [
+        "test_gelu.log"
+      ],
+      "decision_active": false,
+      "decision_decision": "Rejected for trainer promotion; refreshed CUDA GELU backward was faster than Triton.",
+      "decision_evidence": [
+        "2026-05-20 target-context refresh: CUDA 789.605 us; Triton 802.830 us"
+      ],
+      "decision_note": "Use as a Triton comparison row until a trainer-callable integration beats the current provider.",
+      "decision_status": "rejected_same_session_refresh",
+      "kernel": "gelu_backward_inplace",
+      "next_stack": "CUDA",
+      "next_time_us": 795.119,
+      "priority": "low",
+      "promotion_gate": "refresh same-session baseline, add a trainer-callable Triton/C++ route, then run route parity and TinyStories",
+      "selected_stack": "Triton",
+      "selected_time_us": 793.576,
+      "shape": "BT=65536 C=3072",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "speedup_vs_next_pct": 0.1940590024889364,
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "runtime",
+      "timing_log": "bench_sm120_triton_runtime.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_triton_runtime.log",
+      "trainer_call_path_available": false,
+      "use_scope": "operator prototype"
+    },
+    {
+      "candidate_class": "library integration",
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_evidence_note": "No dedicated route-level correctness log is required for this runtime primitive; the timing log and CUDA runtime API checks are the available evidence.",
+      "correctness_log_paths": [],
+      "correctness_logs": [],
+      "decision_active": false,
+      "decision_decision": "Keep as operator evidence; native CUDA replacement was slower than CUDA runtime.",
+      "decision_evidence": [
+        "2026-05-20 target-context refresh: logits memset CUDA runtime 4186.323 us; CUDA kernel 4374.765 us"
+      ],
+      "decision_note": "Use Torch for Python-side operator comparisons; trainer promotion needs a matching C++ call path and smoke gate.",
+      "decision_status": "native_replacement_rejected",
+      "kernel": "cuda_memset",
+      "next_stack": "CUDA runtime",
+      "next_time_us": 4312.973,
+      "priority": "high",
+      "promotion_gate": "refresh same-session baseline, add an explicit libtorch/C++ or equivalent native route, then run route parity and TinyStories",
+      "selected_stack": "Torch",
+      "selected_time_us": 3920.64,
+      "shape": "logits_elems=3296722944",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "speedup_vs_next_pct": 9.096579088253048,
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "runtime",
+      "timing_log": "bench_sm120_torch_runtime.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_torch_runtime.log",
+      "trainer_call_path_available": false,
+      "use_scope": "operator prototype"
+    },
+    {
+      "candidate_class": "library integration",
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_evidence_note": "No dedicated route-level correctness log is required for this runtime primitive; the timing log and CUDA runtime API checks are the available evidence.",
+      "correctness_log_paths": [],
+      "correctness_logs": [],
+      "decision_active": false,
+      "decision_decision": "Keep as operator evidence; native CUDA replacement was slower than CUDA runtime.",
+      "decision_evidence": [
+        "2026-05-20 target-context refresh: hidden memset CUDA runtime 62.519 us; CUDA kernel 65.381 us"
+      ],
+      "decision_note": "Use Torch for Python-side operator comparisons; trainer promotion needs a matching C++ call path and smoke gate.",
+      "decision_status": "native_replacement_rejected",
+      "kernel": "cuda_memset",
+      "next_stack": "CUDA runtime",
+      "next_time_us": 63.85,
+      "priority": "high",
+      "promotion_gate": "refresh same-session baseline, add an explicit libtorch/C++ or equivalent native route, then run route parity and TinyStories",
+      "selected_stack": "Torch",
+      "selected_time_us": 59.968,
+      "shape": "hidden_elems=50331648",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "speedup_vs_next_pct": 6.079874706342988,
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "runtime",
+      "timing_log": "bench_sm120_torch_runtime.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_torch_runtime.log",
+      "trainer_call_path_available": false,
+      "use_scope": "operator prototype"
+    },
+    {
+      "candidate_class": "library integration",
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_evidence_note": "No dedicated route-level correctness log is required for this runtime primitive; the timing log and CUDA runtime API checks are the available evidence.",
+      "correctness_log_paths": [],
+      "correctness_logs": [],
+      "decision_active": false,
+      "decision_decision": "Keep as operator evidence; native CUDA replacement was slower than CUDA runtime.",
+      "decision_evidence": [
+        "2026-05-20 target-context refresh: logits copy CUDA runtime 8876.186 us; CUDA kernel 9354.822 us"
+      ],
+      "decision_note": "Use Torch for Python-side operator comparisons; trainer promotion needs a matching C++ call path and smoke gate.",
+      "decision_status": "native_replacement_rejected",
+      "kernel": "cuda_copy_d2d",
+      "next_stack": "CUDA runtime",
+      "next_time_us": 8992.87,
+      "priority": "medium",
+      "promotion_gate": "refresh same-session baseline, add an explicit libtorch/C++ or equivalent native route, then run route parity and TinyStories",
+      "selected_stack": "Torch",
+      "selected_time_us": 8667.008,
+      "shape": "logits_elems=3296722944",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "speedup_vs_next_pct": 3.623559553290562,
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "runtime",
+      "timing_log": "bench_sm120_torch_runtime.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_torch_runtime.log",
+      "trainer_call_path_available": false,
+      "use_scope": "operator prototype"
+    },
+    {
+      "candidate_class": "library integration",
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_evidence_note": "No dedicated route-level correctness log is required for this runtime primitive; the timing log and CUDA runtime API checks are the available evidence.",
+      "correctness_log_paths": [],
+      "correctness_logs": [],
+      "decision_active": false,
+      "decision_decision": "Keep as operator evidence; native CUDA replacement was slower than CUDA runtime.",
+      "decision_evidence": [
+        "2026-05-20 target-context refresh: hidden copy CUDA runtime 133.939 us; CUDA kernel 139.932 us"
+      ],
+      "decision_note": "Use Torch for Python-side operator comparisons; trainer promotion needs a matching C++ call path and smoke gate.",
+      "decision_status": "native_replacement_rejected",
+      "kernel": "cuda_copy_d2d",
+      "next_stack": "CUDA runtime",
+      "next_time_us": 133.843,
+      "priority": "medium",
+      "promotion_gate": "refresh same-session baseline, add an explicit libtorch/C++ or equivalent native route, then run route parity and TinyStories",
+      "selected_stack": "Torch",
+      "selected_time_us": 131.765,
+      "shape": "hidden_elems=50331648",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "speedup_vs_next_pct": 1.5525653190678654,
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "runtime",
+      "timing_log": "bench_sm120_torch_runtime.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_torch_runtime.log",
+      "trainer_call_path_available": false,
+      "use_scope": "operator prototype"
+    },
+    {
+      "candidate_class": "library integration",
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_matmul.log"
+      ],
+      "correctness_logs": [
+        "test_matmul.log"
+      ],
+      "decision_active": false,
+      "decision_decision": "Rejected for libtorch/native replacement work; focused uncontended timing showed current C++ cuBLAS was faster than Torch for MLP-up dWeight.",
+      "decision_evidence": [
+        "2026-05-21 full stack refresh selected Torch by a small edge: Torch 1333.13 us; cuBLAS 1353.38 us",
+        "2026-05-21 focused uncontended refresh: cuBLAS 1332.63 us; Torch 1347.02 us"
+      ],
+      "decision_note": "Torch is the fastest observed operator row here; trainer use still needs an explicit libtorch/C++ integration gate.",
+      "decision_status": "rejected_same_session_refresh",
+      "kernel": "dW",
+      "next_stack": "cuBLAS",
+      "next_time_us": 1353.38,
+      "priority": "medium",
+      "promotion_gate": "refresh same-session baseline, add an explicit libtorch/C++ or equivalent native route, then run route parity and TinyStories",
+      "selected_stack": "Torch",
+      "selected_time_us": 1333.13,
+      "shape": "fc M=65536 N=3072 K=768 bias=1 gelu=1",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "speedup_vs_next_pct": 1.4962538237597718,
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "matmul",
+      "timing_log": "bench_sm120_torch_matmul.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_torch_matmul.log",
+      "trainer_call_path_available": false,
+      "use_scope": "operator prototype"
+    },
+    {
+      "candidate_class": "library integration",
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_matmul.log"
+      ],
+      "correctness_logs": [
+        "test_matmul.log"
+      ],
+      "decision_active": false,
+      "decision_decision": "Rejected for libtorch/native replacement work; focused uncontended timing showed current C++ cuBLAS was faster than Torch for MLP-up dInput.",
+      "decision_evidence": [
+        "2026-05-21 full stack refresh selected Torch by a small edge: Torch 1346.50 us; cuBLAS 1363.76 us",
+        "2026-05-21 focused uncontended refresh: cuBLAS 1331.36 us; Torch 1357.45 us"
+      ],
+      "decision_note": "Torch is the fastest observed operator row here; trainer use still needs an explicit libtorch/C++ integration gate.",
+      "decision_status": "rejected_same_session_refresh",
+      "kernel": "dInp",
+      "next_stack": "cuBLAS",
+      "next_time_us": 1363.76,
+      "priority": "medium",
+      "promotion_gate": "refresh same-session baseline, add an explicit libtorch/C++ or equivalent native route, then run route parity and TinyStories",
+      "selected_stack": "Torch",
+      "selected_time_us": 1346.5,
+      "shape": "fc M=65536 N=3072 K=768 bias=1 gelu=1",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "speedup_vs_next_pct": 1.2656185839150578,
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "matmul",
+      "timing_log": "bench_sm120_torch_matmul.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_torch_matmul.log",
+      "trainer_call_path_available": false,
+      "use_scope": "operator prototype"
+    },
+    {
+      "candidate_class": "library integration",
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_adamw.log"
+      ],
+      "correctness_logs": [
+        "test_adamw.log"
+      ],
+      "decision_active": false,
+      "decision_decision": "Rejected for trainer promotion; Torch fp32-state AdamW is materially slower than the CUDA trainer route.",
+      "decision_evidence": [
+        "Python-stack round: CUDA AdamW no-master 1926.957 us; Torch fp32-state AdamW 7449.536 us"
+      ],
+      "decision_note": "Use Torch for Python-side operator comparisons; trainer promotion needs a matching C++ call path and smoke gate.",
+      "decision_status": "rejected_slower_than_trainer_baseline",
+      "kernel": "adamw_update",
+      "next_stack": null,
+      "next_time_us": null,
+      "priority": "unknown",
+      "promotion_gate": "refresh same-session baseline, add an explicit libtorch/C++ or equivalent native route, then run route parity and TinyStories",
+      "selected_stack": "Torch",
+      "selected_time_us": 7317.12,
+      "shape": "params=124475904 no-master fp32-state",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "speedup_vs_next_pct": null,
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "runtime",
+      "timing_log": "bench_sm120_torch_runtime.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_torch_runtime.log",
+      "trainer_call_path_available": false,
+      "use_scope": "operator prototype"
+    },
+    {
+      "candidate_class": "library integration",
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_bias.log"
+      ],
+      "correctness_logs": [
+        "test_bias.log"
+      ],
+      "decision_active": false,
+      "decision_decision": "Keep as operator evidence; the refreshed Torch edge is sub-percent and not enough to justify a libtorch trainer route.",
+      "decision_evidence": [
+        "2026-05-20 target-context refresh: CUDA 549.777 us; Torch 547.969 us"
+      ],
+      "decision_note": "Use Torch for Python-side operator comparisons; trainer promotion needs a matching C++ call path and smoke gate.",
+      "decision_status": "library_integration_not_justified",
+      "kernel": "bias_add",
+      "next_stack": "Triton",
+      "next_time_us": 532.278,
+      "priority": "low",
+      "promotion_gate": "refresh same-session baseline, add an explicit libtorch/C++ or equivalent native route, then run route parity and TinyStories",
+      "selected_stack": "Torch",
+      "selected_time_us": 530.65,
+      "shape": "BT=65536 OC=3072",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "speedup_vs_next_pct": 0.30585521099877183,
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "runtime",
+      "timing_log": "bench_sm120_torch_runtime.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_torch_runtime.log",
+      "trainer_call_path_available": false,
+      "use_scope": "operator prototype"
+    },
+    {
+      "candidate_class": "layout rewrite",
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_attention.log"
+      ],
+      "correctness_logs": [
+        "test_attention.log"
+      ],
+      "decision_active": false,
+      "decision_decision": "Native Torch SDPA wins only for already-separated Q/K/V; trainer-shaped TorchPacked was slower than packed TK.",
+      "decision_evidence": [
+        "2026-05-20 target-context refresh: packed TK forward 787.859 us; TorchPacked forward 1120.509 us; native Torch separated forward 570.848 us"
+      ],
+      "decision_note": "Use Torch SDPA for already-separated Q/K/V experiments; packed trainer selection must compare TorchPacked.",
+      "decision_status": "layout_rewrite_only",
+      "kernel": "forward",
+      "next_stack": "cuDNN",
+      "next_time_us": 683.973,
+      "priority": "high",
+      "promotion_gate": "refresh same-session baseline, add a packed-QKV or separated-Q/K/V trainer path, then compare against TK and run TinyStories",
+      "selected_stack": "Torch",
+      "selected_time_us": 567.918,
+      "shape": "B=64 T=1024 C=768 NH=12 HS=64",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "speedup_vs_next_pct": 16.967775043751722,
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "attention",
+      "timing_log": "bench_sm120_torch_attention.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_torch_attention.log",
+      "trainer_call_path_available": false,
+      "use_scope": "python separated-Q/K/V"
+    },
+    {
+      "candidate_class": "layout rewrite",
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_attention.log"
+      ],
+      "correctness_logs": [
+        "test_attention.log"
+      ],
+      "decision_active": false,
+      "decision_decision": "Native Torch SDPA wins only for already-separated Q/K/V; trainer-shaped TorchPacked was slower than packed TK.",
+      "decision_evidence": [
+        "2026-05-20 target-context refresh: packed TK backward 2716.901 us; TorchPacked backward 4107.011 us; native Torch separated backward 2227.869 us"
+      ],
+      "decision_note": "Use Torch SDPA for already-separated Q/K/V experiments; packed trainer selection must compare TorchPacked.",
+      "decision_status": "layout_rewrite_only",
+      "kernel": "backward",
+      "next_stack": "cuDNN",
+      "next_time_us": 2417.149,
+      "priority": "high",
+      "promotion_gate": "refresh same-session baseline, add a packed-QKV or separated-Q/K/V trainer path, then compare against TK and run TinyStories",
+      "selected_stack": "Torch",
+      "selected_time_us": 2223.19,
+      "shape": "B=64 T=1024 C=768 NH=12 HS=64",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "speedup_vs_next_pct": 8.024288117943902,
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "attention",
+      "timing_log": "bench_sm120_torch_attention.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_torch_attention.log",
+      "trainer_call_path_available": false,
+      "use_scope": "python separated-Q/K/V"
+    },
+    {
+      "candidate_class": "reference/state gap",
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_layernorm.log"
+      ],
+      "correctness_logs": [
+        "test_layernorm.log"
+      ],
+      "decision_active": false,
+      "decision_decision": "Do not promote the dInput-only Torch row. The full Torch native backward with dweight/dbias is slower than CUDA, and the full Triton atomic prototype is also slower plus has an FP32 gradient-buffer contract mismatch.",
+      "decision_evidence": [
+        "2026-05-20 target-context refresh: dInput-only Torch native 217.568 us; Triton dInput-only 228.320 us",
+        "2026-05-20 target-context refresh: full Torch native backward 416.224 us; Triton atomic FP32-grad backward 363.680 us; CUDA full backward remains about 290 us"
+      ],
+      "decision_note": "Torch native dInput-only output-mask row is useful for backward decomposition work but needs dweight/dbias before trainer promotion.",
+      "decision_status": "partial_backward_only",
+      "kernel": "backward_dinput",
+      "next_stack": "Triton dInput-only",
+      "next_time_us": 224.736,
+      "priority": "high",
+      "promotion_gate": "add dweight/dbias accumulation before considering trainer promotion",
+      "selected_stack": "Torch native",
+      "selected_time_us": 212.192,
+      "shape": "N=65536 C=768",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "speedup_vs_next_pct": 5.581660259148505,
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "layernorm",
+      "timing_log": "bench_sm120_layernorm_python_stacks.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_layernorm_python_stacks.log",
+      "trainer_call_path_available": false,
+      "use_scope": "partial backward prototype"
+    },
+    {
+      "candidate_class": "non-trainer shape",
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_layernorm.log"
+      ],
+      "correctness_logs": [
+        "test_layernorm.log"
+      ],
+      "decision_active": false,
+      "decision_decision": "Not an active trainer-promotion target for GPT-2 124M.",
+      "decision_evidence": [],
+      "decision_note": "Triton dInput-only is useful for backward decomposition work but needs dweight/dbias before trainer promotion.",
+      "decision_status": "non_trainer_shape",
+      "kernel": "backward_dinput",
+      "next_stack": "Torch native",
+      "next_time_us": 845.856,
+      "priority": "medium",
+      "promotion_gate": "non-trainer GPT-2 LayerNorm shape; keep as operator evidence unless the trainer adds this shape",
+      "selected_stack": "Triton dInput-only",
+      "selected_time_us": 817.12,
+      "shape": "N=65536 C=3072",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "speedup_vs_next_pct": 3.3972685658078907,
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "layernorm",
+      "timing_log": "bench_sm120_layernorm_python_stacks.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_layernorm_python_stacks.log",
+      "trainer_call_path_available": false,
+      "use_scope": "partial backward prototype"
+    },
+    {
+      "candidate_class": "non-trainer shape",
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_layernorm.log"
+      ],
+      "correctness_logs": [
+        "test_layernorm.log"
+      ],
+      "decision_active": false,
+      "decision_decision": "Not a GPT-2 124M trainer LayerNorm width, and refreshed CUDA was faster.",
+      "decision_evidence": [
+        "2026-05-20 target-context refresh: CUDA C=3072 fused residual 1101.192 us; Triton 1121.344 us; trainer width is C=768"
+      ],
+      "decision_note": "Use as a Triton comparison row until a trainer-callable integration beats the current provider.",
+      "decision_status": "non_trainer_shape",
+      "kernel": "fused_residual_forward",
+      "next_stack": "CUDA",
+      "next_time_us": 1112.549,
+      "priority": "low",
+      "promotion_gate": "non-trainer GPT-2 LayerNorm shape; keep as operator evidence unless the trainer adds this shape",
+      "selected_stack": "Triton",
+      "selected_time_us": 1108.544,
+      "shape": "N=65536 C=3072",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "speedup_vs_next_pct": 0.3599841445185679,
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "layernorm",
+      "timing_log": "bench_sm120_layernorm_python_stacks.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_layernorm_python_stacks.log",
+      "trainer_call_path_available": false,
+      "use_scope": "operator prototype"
+    },
+    {
+      "candidate_class": "non-trainer shape",
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_layernorm.log"
+      ],
+      "correctness_logs": [
+        "test_layernorm.log"
+      ],
+      "decision_active": false,
+      "decision_decision": "Not a GPT-2 124M trainer LayerNorm width; keep as operator stress evidence.",
+      "decision_evidence": [
+        "2026-05-20 target-context refresh: GPT-2 trainer LayerNorm width is C=768"
+      ],
+      "decision_note": "Native Torch is useful where saved mean/rstd are not needed; trainer LayerNorm still needs stats-compatible state.",
+      "decision_status": "non_trainer_shape",
+      "kernel": "forward",
+      "next_stack": "CUDA",
+      "next_time_us": 563.255,
+      "priority": "low",
+      "promotion_gate": "non-trainer GPT-2 LayerNorm shape; keep as operator evidence unless the trainer adds this shape",
+      "selected_stack": "Torch native",
+      "selected_time_us": 563.008,
+      "shape": "N=65536 C=3072",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "speedup_vs_next_pct": 0.04385225164445185,
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "layernorm",
+      "timing_log": "bench_sm120_layernorm_python_stacks.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_layernorm_python_stacks.log",
+      "trainer_call_path_available": false,
+      "use_scope": "reference only"
+    },
+    {
+      "candidate_class": "contract mismatch",
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_adamw.log"
+      ],
+      "correctness_logs": [
+        "test_adamw.log"
+      ],
+      "decision_active": false,
+      "decision_decision": "Not active until the candidate matches the trainer state contract.",
+      "decision_evidence": [],
+      "decision_note": "Torch fused AdamW is usable only for BF16 moment-state experiments; the trainer default uses FP32 moment buffers.",
+      "decision_status": "contract_mismatch",
+      "kernel": "adamw_update_bf16_state",
+      "next_stack": null,
+      "next_time_us": null,
+      "priority": "unknown",
+      "promotion_gate": "match the trainer optimizer state contract before considering promotion",
+      "selected_stack": "Torch",
+      "selected_time_us": 1215.322,
+      "shape": "params=124475904 no-master",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "speedup_vs_next_pct": null,
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "runtime",
+      "timing_log": "bench_sm120_torch_runtime.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_torch_runtime.log",
+      "trainer_call_path_available": false,
+      "use_scope": "non-equivalent BF16-state reference"
+    }
+  ],
+  "run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+  "schema_version": 1,
+  "selected_backend_rows": [
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_attention.log"
+      ],
+      "correctness_logs": [
+        "test_attention.log"
+      ],
+      "decision_active": false,
+      "decision_decision": "Native Torch SDPA wins only for already-separated Q/K/V; trainer-shaped TorchPacked was slower than packed TK.",
+      "decision_evidence": [
+        "2026-05-20 target-context refresh: packed TK backward 2716.901 us; TorchPacked backward 4107.011 us; native Torch separated backward 2227.869 us"
+      ],
+      "decision_note": "Use Torch SDPA for already-separated Q/K/V experiments; packed trainer selection must compare TorchPacked.",
+      "decision_status": "layout_rewrite_only",
+      "kernel": "backward",
+      "next_stack": "cuDNN",
+      "next_time_us": 2417.149,
+      "selected_stack": "Torch",
+      "selected_time_us": 2223.19,
+      "shape": "B=64 T=1024 C=768 NH=12 HS=64",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "attention",
+      "timing_log": "bench_sm120_torch_attention.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_torch_attention.log",
+      "trainer_call_path_available": false,
+      "use_scope": "python separated-Q/K/V"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_attention.log"
+      ],
+      "correctness_logs": [
+        "test_attention.log"
+      ],
+      "decision_active": false,
+      "decision_decision": "Native Torch SDPA wins only for already-separated Q/K/V; trainer-shaped TorchPacked was slower than packed TK.",
+      "decision_evidence": [
+        "2026-05-20 target-context refresh: packed TK forward 787.859 us; TorchPacked forward 1120.509 us; native Torch separated forward 570.848 us"
+      ],
+      "decision_note": "Use Torch SDPA for already-separated Q/K/V experiments; packed trainer selection must compare TorchPacked.",
+      "decision_status": "layout_rewrite_only",
+      "kernel": "forward",
+      "next_stack": "cuDNN",
+      "next_time_us": 683.973,
+      "selected_stack": "Torch",
+      "selected_time_us": 567.918,
+      "shape": "B=64 T=1024 C=768 NH=12 HS=64",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "attention",
+      "timing_log": "bench_sm120_torch_attention.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_torch_attention.log",
+      "trainer_call_path_available": false,
+      "use_scope": "python separated-Q/K/V"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_layernorm.log"
+      ],
+      "correctness_logs": [
+        "test_layernorm.log"
+      ],
+      "decision_note": "Plain CUDA/CUDA-runtime route; eligible for trainer selection subject to correctness and TinyStories smoke evidence.",
+      "kernel": "backward",
+      "next_stack": "Triton atomic FP32-grad",
+      "next_time_us": 1425.824,
+      "selected_stack": "CUDA",
+      "selected_time_us": 1302.031,
+      "shape": "N=65536 C=3072",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "layernorm",
+      "timing_log": "bench_sm120_layernorm.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_layernorm.log",
+      "trainer_call_path_available": true,
+      "use_scope": "CUDA benchmark route"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_layernorm.log"
+      ],
+      "correctness_logs": [
+        "test_layernorm.log"
+      ],
+      "decision_note": "Plain CUDA/CUDA-runtime route; eligible for trainer selection subject to correctness and TinyStories smoke evidence.",
+      "kernel": "backward",
+      "next_stack": "Triton atomic FP32-grad",
+      "next_time_us": 364.032,
+      "selected_stack": "CUDA",
+      "selected_time_us": 287.972,
+      "shape": "N=65536 C=768",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "layernorm",
+      "timing_log": "bench_sm120_layernorm.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_layernorm.log",
+      "trainer_call_path_available": true,
+      "use_scope": "CUDA benchmark route"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_layernorm.log"
+      ],
+      "correctness_logs": [
+        "test_layernorm.log"
+      ],
+      "decision_note": "Triton dInput-only is useful for backward decomposition work but needs dweight/dbias before trainer promotion.",
+      "kernel": "backward_dinput",
+      "next_stack": "Torch native",
+      "next_time_us": 845.856,
+      "selected_stack": "Triton dInput-only",
+      "selected_time_us": 817.12,
+      "shape": "N=65536 C=3072",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "layernorm",
+      "timing_log": "bench_sm120_layernorm_python_stacks.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_layernorm_python_stacks.log",
+      "trainer_call_path_available": false,
+      "use_scope": "partial backward prototype"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_layernorm.log"
+      ],
+      "correctness_logs": [
+        "test_layernorm.log"
+      ],
+      "decision_active": false,
+      "decision_decision": "Do not promote the dInput-only Torch row. The full Torch native backward with dweight/dbias is slower than CUDA, and the full Triton atomic prototype is also slower plus has an FP32 gradient-buffer contract mismatch.",
+      "decision_evidence": [
+        "2026-05-20 target-context refresh: dInput-only Torch native 217.568 us; Triton dInput-only 228.320 us",
+        "2026-05-20 target-context refresh: full Torch native backward 416.224 us; Triton atomic FP32-grad backward 363.680 us; CUDA full backward remains about 290 us"
+      ],
+      "decision_note": "Torch native dInput-only output-mask row is useful for backward decomposition work but needs dweight/dbias before trainer promotion.",
+      "decision_status": "partial_backward_only",
+      "kernel": "backward_dinput",
+      "next_stack": "Triton dInput-only",
+      "next_time_us": 224.736,
+      "selected_stack": "Torch native",
+      "selected_time_us": 212.192,
+      "shape": "N=65536 C=768",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "layernorm",
+      "timing_log": "bench_sm120_layernorm_python_stacks.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_layernorm_python_stacks.log",
+      "trainer_call_path_available": false,
+      "use_scope": "partial backward prototype"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_layernorm.log"
+      ],
+      "correctness_logs": [
+        "test_layernorm.log"
+      ],
+      "decision_active": false,
+      "decision_decision": "Not a GPT-2 124M trainer LayerNorm width; keep as operator stress evidence.",
+      "decision_evidence": [
+        "2026-05-20 target-context refresh: GPT-2 trainer LayerNorm width is C=768"
+      ],
+      "decision_note": "Native Torch is useful where saved mean/rstd are not needed; trainer LayerNorm still needs stats-compatible state.",
+      "decision_status": "non_trainer_shape",
+      "kernel": "forward",
+      "next_stack": "CUDA",
+      "next_time_us": 563.255,
+      "selected_stack": "Torch native",
+      "selected_time_us": 563.008,
+      "shape": "N=65536 C=3072",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "layernorm",
+      "timing_log": "bench_sm120_layernorm_python_stacks.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_layernorm_python_stacks.log",
+      "trainer_call_path_available": false,
+      "use_scope": "reference only"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_layernorm.log"
+      ],
+      "correctness_logs": [
+        "test_layernorm.log"
+      ],
+      "decision_note": "Plain CUDA/CUDA-runtime route; eligible for trainer selection subject to correctness and TinyStories smoke evidence.",
+      "kernel": "forward",
+      "next_stack": "Torch native",
+      "next_time_us": 152.32,
+      "selected_stack": "CUDA",
+      "selected_time_us": 142.649,
+      "shape": "N=65536 C=768",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "layernorm",
+      "timing_log": "bench_sm120_layernorm.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_layernorm.log",
+      "trainer_call_path_available": true,
+      "use_scope": "CUDA benchmark route"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_layernorm.log"
+      ],
+      "correctness_logs": [
+        "test_layernorm.log"
+      ],
+      "decision_active": false,
+      "decision_decision": "Not a GPT-2 124M trainer LayerNorm width, and refreshed CUDA was faster.",
+      "decision_evidence": [
+        "2026-05-20 target-context refresh: CUDA C=3072 fused residual 1101.192 us; Triton 1121.344 us; trainer width is C=768"
+      ],
+      "decision_note": "Use as a Triton comparison row until a trainer-callable integration beats the current provider.",
+      "decision_status": "non_trainer_shape",
+      "kernel": "fused_residual_forward",
+      "next_stack": "CUDA",
+      "next_time_us": 1112.549,
+      "selected_stack": "Triton",
+      "selected_time_us": 1108.544,
+      "shape": "N=65536 C=3072",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "layernorm",
+      "timing_log": "bench_sm120_layernorm_python_stacks.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_layernorm_python_stacks.log",
+      "trainer_call_path_available": false,
+      "use_scope": "operator prototype"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_layernorm.log"
+      ],
+      "correctness_logs": [
+        "test_layernorm.log"
+      ],
+      "decision_note": "Plain CUDA/CUDA-runtime route; eligible for trainer selection subject to correctness and TinyStories smoke evidence.",
+      "kernel": "fused_residual_forward",
+      "next_stack": "Torch native",
+      "next_time_us": 332.352,
+      "selected_stack": "CUDA",
+      "selected_time_us": 285.402,
+      "shape": "N=65536 C=768",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "layernorm",
+      "timing_log": "bench_sm120_layernorm.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_layernorm.log",
+      "trainer_call_path_available": true,
+      "use_scope": "CUDA benchmark route"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_matmul.log"
+      ],
+      "correctness_logs": [
+        "test_matmul.log"
+      ],
+      "decision_active": false,
+      "decision_decision": "Do not broaden the SM120 direct-cuBLAS dInput selector to attention projection; the x10 trainer stability round regressed, so the source default remains the huge-N LM-head-only direct-cuBLAS dInput route.",
+      "decision_evidence": [
+        "2026-05-21 candidate selector round codex_sm120_round_cublas_dinp_attproj_fc_20260521 validated at avg_ms=2493.931",
+        "2026-05-21 x10 stability round codex_sm120_round_cublas_dinp_attproj_fc_x10_20260521 regressed to avg_ms=2502.950 versus current stable x10 2495.443 ms"
+      ],
+      "decision_note": "Trainer-callable route, but default promotion still requires route-specific correctness and TinyStories smoke evidence.",
+      "decision_status": "rejected_x10_selector",
+      "kernel": "dInp",
+      "next_stack": "cuBLASLt",
+      "next_time_us": 367.16,
+      "selected_stack": "cuBLAS",
+      "selected_time_us": 365.28,
+      "shape": "attproj M=65536 N=768 K=768 bias=1 gelu=0",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "matmul",
+      "timing_log": "bench_sm120_matmul.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_matmul.log",
+      "trainer_call_path_available": true,
+      "use_scope": "C++ benchmark route"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_matmul.log"
+      ],
+      "correctness_logs": [
+        "test_matmul.log"
+      ],
+      "decision_active": false,
+      "decision_decision": "Rejected for libtorch/native replacement work; focused uncontended timing showed current C++ cuBLAS was faster than Torch for MLP-up dInput.",
+      "decision_evidence": [
+        "2026-05-21 full stack refresh selected Torch by a small edge: Torch 1346.50 us; cuBLAS 1363.76 us",
+        "2026-05-21 focused uncontended refresh: cuBLAS 1331.36 us; Torch 1357.45 us"
+      ],
+      "decision_note": "Torch is the fastest observed operator row here; trainer use still needs an explicit libtorch/C++ integration gate.",
+      "decision_status": "rejected_same_session_refresh",
+      "kernel": "dInp",
+      "next_stack": "cuBLAS",
+      "next_time_us": 1363.76,
+      "selected_stack": "Torch",
+      "selected_time_us": 1346.5,
+      "shape": "fc M=65536 N=3072 K=768 bias=1 gelu=1",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "matmul",
+      "timing_log": "bench_sm120_torch_matmul.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_torch_matmul.log",
+      "trainer_call_path_available": false,
+      "use_scope": "operator prototype"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_matmul.log"
+      ],
+      "correctness_logs": [
+        "test_matmul.log"
+      ],
+      "decision_note": "Trainer-callable route, but default promotion still requires route-specific correctness and TinyStories smoke evidence.",
+      "kernel": "dInp",
+      "next_stack": "cuBLAS",
+      "next_time_us": 1392.83,
+      "selected_stack": "cuBLASLt",
+      "selected_time_us": 1375.44,
+      "shape": "fcproj M=65536 N=768 K=3072 bias=1 gelu=0",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "matmul",
+      "timing_log": "bench_sm120_matmul.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_matmul.log",
+      "trainer_call_path_available": true,
+      "use_scope": "C++ benchmark route"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_matmul.log"
+      ],
+      "correctness_logs": [
+        "test_matmul.log"
+      ],
+      "decision_note": "Trainer-callable route, but default promotion still requires route-specific correctness and TinyStories smoke evidence.",
+      "kernel": "dInp",
+      "next_stack": "Torch",
+      "next_time_us": 21820.54,
+      "selected_stack": "cuBLAS",
+      "selected_time_us": 21346.29,
+      "shape": "lmhead M=65536 N=50304 K=768 bias=0 gelu=0",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "matmul",
+      "timing_log": "bench_sm120_matmul.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_matmul.log",
+      "trainer_call_path_available": true,
+      "use_scope": "C++ benchmark route"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_matmul.log"
+      ],
+      "correctness_logs": [
+        "test_matmul.log"
+      ],
+      "decision_note": "Trainer-callable route, but default promotion still requires route-specific correctness and TinyStories smoke evidence.",
+      "kernel": "dInp",
+      "next_stack": "Torch",
+      "next_time_us": 1038.48,
+      "selected_stack": "cuBLASLt",
+      "selected_time_us": 1029.35,
+      "shape": "qkv M=65536 N=2304 K=768 bias=1 gelu=0",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "matmul",
+      "timing_log": "bench_sm120_matmul.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_matmul.log",
+      "trainer_call_path_available": true,
+      "use_scope": "C++ benchmark route"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_matmul.log"
+      ],
+      "correctness_logs": [
+        "test_matmul.log"
+      ],
+      "decision_active": false,
+      "decision_decision": "Keep the cuBLASLt fused dGELU trainer route as the default. The opt-in TK exact-dGELU selector now passes correctness and has a focused row win, but its x10 TinyStories stability round regressed versus the current stable default.",
+      "decision_evidence": [
+        "2026-05-20 target-context test_matmul with LLMK_SM120_USE_TK_FUSED_DGELU_DINP failed only the GPT-2 fcproj fused dGELU dInput row with max abs diff 0.500000 against the strict <0.50 gate",
+        "2026-05-21 opt-in exact-dGELU selector test_matmul passed 10/10; GPT-2 fcproj fused dGELU dInput max abs diff was 0.125000",
+        "2026-05-21 focused LLMK_BENCH_REPEATS=7 bench_sm120_matmul measured TK exact dInp+dGeLU 1761.68 us versus cuBLASLt fused 1855.33 us",
+        "2026-05-21 candidate round codex_sm120_round_tk_fused_dgelu_exact_20260521 validated at avg_ms=2492.018",
+        "2026-05-21 x10 stability round codex_sm120_round_tk_fused_dgelu_exact_x10_20260521 regressed to avg_ms=2502.328 versus current stable x10 2495.443 ms"
+      ],
+      "decision_note": "Trainer-callable route, but default promotion still requires route-specific correctness and TinyStories smoke evidence.",
+      "decision_status": "rejected_x10_selector",
+      "kernel": "dInp+dGeLU",
+      "next_stack": "cuBLASLt fused",
+      "next_time_us": 1820.23,
+      "selected_stack": "TK",
+      "selected_time_us": 1771.14,
+      "shape": "fcproj M=65536 N=768 K=3072 bias=1 gelu=0",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "matmul",
+      "timing_log": "bench_sm120_matmul.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_matmul.log",
+      "trainer_call_path_available": true,
+      "use_scope": "C++ benchmark route"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_matmul.log"
+      ],
+      "correctness_logs": [
+        "test_matmul.log"
+      ],
+      "decision_note": "Trainer-callable route, but default promotion still requires route-specific correctness and TinyStories smoke evidence.",
+      "kernel": "dW",
+      "next_stack": "Torch",
+      "next_time_us": 339.98,
+      "selected_stack": "cuBLAS",
+      "selected_time_us": 328.25,
+      "shape": "attproj M=65536 N=768 K=768 bias=1 gelu=0",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "matmul",
+      "timing_log": "bench_sm120_matmul.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_matmul.log",
+      "trainer_call_path_available": true,
+      "use_scope": "C++ benchmark route"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_matmul.log"
+      ],
+      "correctness_logs": [
+        "test_matmul.log"
+      ],
+      "decision_active": false,
+      "decision_decision": "Rejected for libtorch/native replacement work; focused uncontended timing showed current C++ cuBLAS was faster than Torch for MLP-up dWeight.",
+      "decision_evidence": [
+        "2026-05-21 full stack refresh selected Torch by a small edge: Torch 1333.13 us; cuBLAS 1353.38 us",
+        "2026-05-21 focused uncontended refresh: cuBLAS 1332.63 us; Torch 1347.02 us"
+      ],
+      "decision_note": "Torch is the fastest observed operator row here; trainer use still needs an explicit libtorch/C++ integration gate.",
+      "decision_status": "rejected_same_session_refresh",
+      "kernel": "dW",
+      "next_stack": "cuBLAS",
+      "next_time_us": 1353.38,
+      "selected_stack": "Torch",
+      "selected_time_us": 1333.13,
+      "shape": "fc M=65536 N=3072 K=768 bias=1 gelu=1",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "matmul",
+      "timing_log": "bench_sm120_torch_matmul.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_torch_matmul.log",
+      "trainer_call_path_available": false,
+      "use_scope": "operator prototype"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_matmul.log"
+      ],
+      "correctness_logs": [
+        "test_matmul.log"
+      ],
+      "decision_note": "Trainer-callable route, but default promotion still requires route-specific correctness and TinyStories smoke evidence.",
+      "kernel": "dW",
+      "next_stack": "Torch",
+      "next_time_us": 1368.92,
+      "selected_stack": "cuBLAS",
+      "selected_time_us": 1338.06,
+      "shape": "fcproj M=65536 N=768 K=3072 bias=1 gelu=0",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "matmul",
+      "timing_log": "bench_sm120_matmul.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_matmul.log",
+      "trainer_call_path_available": true,
+      "use_scope": "C++ benchmark route"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_matmul.log"
+      ],
+      "correctness_logs": [
+        "test_matmul.log"
+      ],
+      "decision_note": "Trainer-callable route, but default promotion still requires route-specific correctness and TinyStories smoke evidence.",
+      "kernel": "dW",
+      "next_stack": "cuBLAS",
+      "next_time_us": 21566.84,
+      "selected_stack": "cuBLASLt",
+      "selected_time_us": 21177.73,
+      "shape": "lmhead M=65536 N=50304 K=768 bias=0 gelu=0",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "matmul",
+      "timing_log": "bench_sm120_matmul.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_matmul.log",
+      "trainer_call_path_available": true,
+      "use_scope": "C++ benchmark route"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_matmul.log"
+      ],
+      "correctness_logs": [
+        "test_matmul.log"
+      ],
+      "decision_note": "Trainer-callable route, but default promotion still requires route-specific correctness and TinyStories smoke evidence.",
+      "kernel": "dW",
+      "next_stack": "Torch",
+      "next_time_us": 1008.19,
+      "selected_stack": "cuBLAS",
+      "selected_time_us": 997.61,
+      "shape": "qkv M=65536 N=2304 K=768 bias=1 gelu=0",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "matmul",
+      "timing_log": "bench_sm120_matmul.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_matmul.log",
+      "trainer_call_path_available": true,
+      "use_scope": "C++ benchmark route"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_matmul.log"
+      ],
+      "correctness_logs": [
+        "test_matmul.log"
+      ],
+      "decision_note": "Trainer-callable route, but default promotion still requires route-specific correctness and TinyStories smoke evidence.",
+      "kernel": "dW+accum",
+      "next_stack": "Torch",
+      "next_time_us": 346.45,
+      "selected_stack": "cuBLAS",
+      "selected_time_us": 334.4,
+      "shape": "attproj M=65536 N=768 K=768 bias=1 gelu=0",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "matmul",
+      "timing_log": "bench_sm120_matmul.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_matmul.log",
+      "trainer_call_path_available": true,
+      "use_scope": "C++ benchmark route"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_matmul.log"
+      ],
+      "correctness_logs": [
+        "test_matmul.log"
+      ],
+      "decision_note": "Trainer-callable route, but default promotion still requires route-specific correctness and TinyStories smoke evidence.",
+      "kernel": "dW+accum",
+      "next_stack": "Torch",
+      "next_time_us": 1354.6,
+      "selected_stack": "cuBLAS",
+      "selected_time_us": 1313.96,
+      "shape": "fc M=65536 N=3072 K=768 bias=1 gelu=1",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "matmul",
+      "timing_log": "bench_sm120_matmul.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_matmul.log",
+      "trainer_call_path_available": true,
+      "use_scope": "C++ benchmark route"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_matmul.log"
+      ],
+      "correctness_logs": [
+        "test_matmul.log"
+      ],
+      "decision_note": "Trainer-callable route, but default promotion still requires route-specific correctness and TinyStories smoke evidence.",
+      "kernel": "dW+accum",
+      "next_stack": "Torch",
+      "next_time_us": 1472.17,
+      "selected_stack": "cuBLAS",
+      "selected_time_us": 1351.94,
+      "shape": "fcproj M=65536 N=768 K=3072 bias=1 gelu=0",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "matmul",
+      "timing_log": "bench_sm120_matmul.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_matmul.log",
+      "trainer_call_path_available": true,
+      "use_scope": "C++ benchmark route"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_matmul.log"
+      ],
+      "correctness_logs": [
+        "test_matmul.log"
+      ],
+      "decision_note": "Trainer-callable route, but default promotion still requires route-specific correctness and TinyStories smoke evidence.",
+      "kernel": "dW+accum",
+      "next_stack": "cuBLAS",
+      "next_time_us": 21262.23,
+      "selected_stack": "cuBLASLt",
+      "selected_time_us": 21153.99,
+      "shape": "lmhead M=65536 N=50304 K=768 bias=0 gelu=0",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "matmul",
+      "timing_log": "bench_sm120_matmul.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_matmul.log",
+      "trainer_call_path_available": true,
+      "use_scope": "C++ benchmark route"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_matmul.log"
+      ],
+      "correctness_logs": [
+        "test_matmul.log"
+      ],
+      "decision_note": "Trainer-callable route, but default promotion still requires route-specific correctness and TinyStories smoke evidence.",
+      "kernel": "dW+accum",
+      "next_stack": "Torch",
+      "next_time_us": 1023.4,
+      "selected_stack": "cuBLAS",
+      "selected_time_us": 1000.58,
+      "shape": "qkv M=65536 N=2304 K=768 bias=1 gelu=0",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "matmul",
+      "timing_log": "bench_sm120_matmul.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_matmul.log",
+      "trainer_call_path_available": true,
+      "use_scope": "C++ benchmark route"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_matmul.log"
+      ],
+      "correctness_logs": [
+        "test_matmul.log"
+      ],
+      "decision_active": false,
+      "decision_decision": "Keep attention-projection forward on the cuBLASLt trainer default; TK's full-round edge was not stable under focused uncontended timing.",
+      "decision_evidence": [
+        "2026-05-21 full stack refresh selected TK by a small edge: TK 376.400 us; cuBLASLt 393.060 us",
+        "2026-05-21 focused uncontended refresh: cuBLASLt 369.640 us; TK 376.390 us",
+        "Earlier current-mix refreshes also favored cuBLASLt: 371.110 us versus TK 376.510 us, and 369.760 us versus TK 374.620 us"
+      ],
+      "decision_note": "Trainer-callable route, but default promotion still requires route-specific correctness and TinyStories smoke evidence.",
+      "decision_status": "rejected_same_session_refresh",
+      "kernel": "fwd",
+      "next_stack": "cuBLASLt",
+      "next_time_us": 393.06,
+      "selected_stack": "TK",
+      "selected_time_us": 376.4,
+      "shape": "attproj M=65536 N=768 K=768 bias=1 gelu=0",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "matmul",
+      "timing_log": "bench_sm120_matmul.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_matmul.log",
+      "trainer_call_path_available": true,
+      "use_scope": "C++ benchmark route"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_matmul.log"
+      ],
+      "correctness_logs": [
+        "test_matmul.log"
+      ],
+      "decision_note": "Trainer-callable route, but default promotion still requires route-specific correctness and TinyStories smoke evidence.",
+      "kernel": "fwd",
+      "next_stack": "TK",
+      "next_time_us": 1457.28,
+      "selected_stack": "cuBLASLt",
+      "selected_time_us": 1389.99,
+      "shape": "fcproj M=65536 N=768 K=3072 bias=1 gelu=0",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "matmul",
+      "timing_log": "bench_sm120_matmul.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_matmul.log",
+      "trainer_call_path_available": true,
+      "use_scope": "C++ benchmark route"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_matmul.log"
+      ],
+      "correctness_logs": [
+        "test_matmul.log"
+      ],
+      "decision_active": false,
+      "decision_decision": "Keep LM-head forward on cuBLASLt; the opt-in direct-cuBLAS forward selector passed focused gates but regressed in TinyStories trainer timing.",
+      "decision_evidence": [
+        "2026-05-20 round codex_sm120_round_cublas_lmhead_forward_20260520 validated with avg_ms=2522.413",
+        "The same round measured LM-head forward cuBLAS 22186.19 us versus cuBLASLt 23528.42 us, but trainer timing regressed versus the current 2495-2497 ms default range"
+      ],
+      "decision_note": "Trainer-callable route, but default promotion still requires route-specific correctness and TinyStories smoke evidence.",
+      "decision_status": "rejected_trainer_smoke",
+      "kernel": "fwd",
+      "next_stack": "cuBLASLt",
+      "next_time_us": 22533.93,
+      "selected_stack": "cuBLAS",
+      "selected_time_us": 22524.04,
+      "shape": "lmhead M=65536 N=50304 K=768 bias=0 gelu=0",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "matmul",
+      "timing_log": "bench_sm120_matmul.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_matmul.log",
+      "trainer_call_path_available": true,
+      "use_scope": "C++ benchmark route"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_matmul.log"
+      ],
+      "correctness_logs": [
+        "test_matmul.log"
+      ],
+      "decision_note": "Trainer-callable route, but default promotion still requires route-specific correctness and TinyStories smoke evidence.",
+      "kernel": "fwd",
+      "next_stack": "TK",
+      "next_time_us": 1068.68,
+      "selected_stack": "cuBLASLt",
+      "selected_time_us": 1044.88,
+      "shape": "qkv M=65536 N=2304 K=768 bias=1 gelu=0",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "matmul",
+      "timing_log": "bench_sm120_matmul.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_matmul.log",
+      "trainer_call_path_available": true,
+      "use_scope": "C++ benchmark route"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_matmul.log"
+      ],
+      "correctness_logs": [
+        "test_matmul.log"
+      ],
+      "decision_note": "Trainer-callable route, but default promotion still requires route-specific correctness and TinyStories smoke evidence.",
+      "kernel": "fwd+gelu",
+      "next_stack": "TK fused",
+      "next_time_us": 1567.34,
+      "selected_stack": "cuBLASLt",
+      "selected_time_us": 1511.86,
+      "shape": "fc M=65536 N=3072 K=768 bias=1 gelu=1",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "matmul",
+      "timing_log": "bench_sm120_matmul.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_matmul.log",
+      "trainer_call_path_available": true,
+      "use_scope": "C++ benchmark route"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_adamw.log"
+      ],
+      "correctness_logs": [
+        "test_adamw.log"
+      ],
+      "decision_note": "Plain CUDA/CUDA-runtime route; eligible for trainer selection subject to correctness and TinyStories smoke evidence.",
+      "kernel": "adamw_update",
+      "next_stack": null,
+      "next_time_us": null,
+      "selected_stack": "CUDA",
+      "selected_time_us": 1893.056,
+      "shape": "params=124475904 no-master",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "runtime",
+      "timing_log": "bench_sm120_runtime.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_runtime.log",
+      "trainer_call_path_available": true,
+      "use_scope": "CUDA benchmark route"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_adamw.log"
+      ],
+      "correctness_logs": [
+        "test_adamw.log"
+      ],
+      "decision_active": false,
+      "decision_decision": "Rejected for trainer promotion; Torch fp32-state AdamW is materially slower than the CUDA trainer route.",
+      "decision_evidence": [
+        "Python-stack round: CUDA AdamW no-master 1926.957 us; Torch fp32-state AdamW 7449.536 us"
+      ],
+      "decision_note": "Use Torch for Python-side operator comparisons; trainer promotion needs a matching C++ call path and smoke gate.",
+      "decision_status": "rejected_slower_than_trainer_baseline",
+      "kernel": "adamw_update",
+      "next_stack": null,
+      "next_time_us": null,
+      "selected_stack": "Torch",
+      "selected_time_us": 7317.12,
+      "shape": "params=124475904 no-master fp32-state",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "runtime",
+      "timing_log": "bench_sm120_torch_runtime.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_torch_runtime.log",
+      "trainer_call_path_available": false,
+      "use_scope": "operator prototype"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_adamw.log"
+      ],
+      "correctness_logs": [
+        "test_adamw.log"
+      ],
+      "decision_note": "Torch fused AdamW is usable only for BF16 moment-state experiments; the trainer default uses FP32 moment buffers.",
+      "kernel": "adamw_update_bf16_state",
+      "next_stack": null,
+      "next_time_us": null,
+      "selected_stack": "Torch",
+      "selected_time_us": 1215.322,
+      "shape": "params=124475904 no-master",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "runtime",
+      "timing_log": "bench_sm120_torch_runtime.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_torch_runtime.log",
+      "trainer_call_path_available": false,
+      "use_scope": "non-equivalent BF16-state reference"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_bias.log"
+      ],
+      "correctness_logs": [
+        "test_bias.log"
+      ],
+      "decision_active": false,
+      "decision_decision": "Keep as operator evidence; the refreshed Torch edge is sub-percent and not enough to justify a libtorch trainer route.",
+      "decision_evidence": [
+        "2026-05-20 target-context refresh: CUDA 549.777 us; Torch 547.969 us"
+      ],
+      "decision_note": "Use Torch for Python-side operator comparisons; trainer promotion needs a matching C++ call path and smoke gate.",
+      "decision_status": "library_integration_not_justified",
+      "kernel": "bias_add",
+      "next_stack": "Triton",
+      "next_time_us": 532.278,
+      "selected_stack": "Torch",
+      "selected_time_us": 530.65,
+      "shape": "BT=65536 OC=3072",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "runtime",
+      "timing_log": "bench_sm120_torch_runtime.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_torch_runtime.log",
+      "trainer_call_path_available": false,
+      "use_scope": "operator prototype"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_bias.log"
+      ],
+      "correctness_logs": [
+        "test_bias.log"
+      ],
+      "decision_note": "Plain CUDA/CUDA-runtime route; eligible for trainer selection subject to correctness and TinyStories smoke evidence.",
+      "kernel": "bias_add",
+      "next_stack": "Triton",
+      "next_time_us": 132.779,
+      "selected_stack": "CUDA",
+      "selected_time_us": 88.514,
+      "shape": "BT=65536 OC=768",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "runtime",
+      "timing_log": "bench_sm120_runtime.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_runtime.log",
+      "trainer_call_path_available": true,
+      "use_scope": "CUDA benchmark route"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_bias.log"
+      ],
+      "correctness_logs": [
+        "test_bias.log"
+      ],
+      "decision_note": "Plain CUDA/CUDA-runtime route; eligible for trainer selection subject to correctness and TinyStories smoke evidence.",
+      "kernel": "bias_grad_reduce",
+      "next_stack": "Torch",
+      "next_time_us": 969.171,
+      "selected_stack": "CUDA",
+      "selected_time_us": 187.91,
+      "shape": "BT=65536 OC=2304",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "runtime",
+      "timing_log": "bench_sm120_runtime.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_runtime.log",
+      "trainer_call_path_available": true,
+      "use_scope": "CUDA benchmark route"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_bias.log"
+      ],
+      "correctness_logs": [
+        "test_bias.log"
+      ],
+      "decision_note": "Plain CUDA/CUDA-runtime route; eligible for trainer selection subject to correctness and TinyStories smoke evidence.",
+      "kernel": "bias_grad_reduce",
+      "next_stack": "Torch",
+      "next_time_us": 1313.085,
+      "selected_stack": "CUDA",
+      "selected_time_us": 247.688,
+      "shape": "BT=65536 OC=3072",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "runtime",
+      "timing_log": "bench_sm120_runtime.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_runtime.log",
+      "trainer_call_path_available": true,
+      "use_scope": "CUDA benchmark route"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_bias.log"
+      ],
+      "correctness_logs": [
+        "test_bias.log"
+      ],
+      "decision_note": "Plain CUDA/CUDA-runtime route; eligible for trainer selection subject to correctness and TinyStories smoke evidence.",
+      "kernel": "bias_grad_reduce",
+      "next_stack": "Torch",
+      "next_time_us": 317.315,
+      "selected_stack": "CUDA",
+      "selected_time_us": 24.502,
+      "shape": "BT=65536 OC=768",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "runtime",
+      "timing_log": "bench_sm120_runtime.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_runtime.log",
+      "trainer_call_path_available": true,
+      "use_scope": "CUDA benchmark route"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_evidence_note": "No dedicated route-level correctness log is required for this runtime primitive; the timing log and CUDA runtime API checks are the available evidence.",
+      "correctness_log_paths": [],
+      "correctness_logs": [],
+      "decision_active": false,
+      "decision_decision": "Keep as operator evidence; native CUDA replacement was slower than CUDA runtime.",
+      "decision_evidence": [
+        "2026-05-20 target-context refresh: hidden copy CUDA runtime 133.939 us; CUDA kernel 139.932 us"
+      ],
+      "decision_note": "Use Torch for Python-side operator comparisons; trainer promotion needs a matching C++ call path and smoke gate.",
+      "decision_status": "native_replacement_rejected",
+      "kernel": "cuda_copy_d2d",
+      "next_stack": "CUDA runtime",
+      "next_time_us": 133.843,
+      "selected_stack": "Torch",
+      "selected_time_us": 131.765,
+      "shape": "hidden_elems=50331648",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "runtime",
+      "timing_log": "bench_sm120_torch_runtime.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_torch_runtime.log",
+      "trainer_call_path_available": false,
+      "use_scope": "operator prototype"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_evidence_note": "No dedicated route-level correctness log is required for this runtime primitive; the timing log and CUDA runtime API checks are the available evidence.",
+      "correctness_log_paths": [],
+      "correctness_logs": [],
+      "decision_active": false,
+      "decision_decision": "Keep as operator evidence; native CUDA replacement was slower than CUDA runtime.",
+      "decision_evidence": [
+        "2026-05-20 target-context refresh: logits copy CUDA runtime 8876.186 us; CUDA kernel 9354.822 us"
+      ],
+      "decision_note": "Use Torch for Python-side operator comparisons; trainer promotion needs a matching C++ call path and smoke gate.",
+      "decision_status": "native_replacement_rejected",
+      "kernel": "cuda_copy_d2d",
+      "next_stack": "CUDA runtime",
+      "next_time_us": 8992.87,
+      "selected_stack": "Torch",
+      "selected_time_us": 8667.008,
+      "shape": "logits_elems=3296722944",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "runtime",
+      "timing_log": "bench_sm120_torch_runtime.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_torch_runtime.log",
+      "trainer_call_path_available": false,
+      "use_scope": "operator prototype"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_evidence_note": "No dedicated route-level correctness log is required for this runtime primitive; the timing log and CUDA runtime API checks are the available evidence.",
+      "correctness_log_paths": [],
+      "correctness_logs": [],
+      "decision_active": false,
+      "decision_decision": "Keep as operator evidence; native CUDA replacement was slower than CUDA runtime.",
+      "decision_evidence": [
+        "2026-05-20 target-context refresh: hidden memset CUDA runtime 62.519 us; CUDA kernel 65.381 us"
+      ],
+      "decision_note": "Use Torch for Python-side operator comparisons; trainer promotion needs a matching C++ call path and smoke gate.",
+      "decision_status": "native_replacement_rejected",
+      "kernel": "cuda_memset",
+      "next_stack": "CUDA runtime",
+      "next_time_us": 63.85,
+      "selected_stack": "Torch",
+      "selected_time_us": 59.968,
+      "shape": "hidden_elems=50331648",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "runtime",
+      "timing_log": "bench_sm120_torch_runtime.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_torch_runtime.log",
+      "trainer_call_path_available": false,
+      "use_scope": "operator prototype"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_evidence_note": "No dedicated route-level correctness log is required for this runtime primitive; the timing log and CUDA runtime API checks are the available evidence.",
+      "correctness_log_paths": [],
+      "correctness_logs": [],
+      "decision_active": false,
+      "decision_decision": "Keep as operator evidence; native CUDA replacement was slower than CUDA runtime.",
+      "decision_evidence": [
+        "2026-05-20 target-context refresh: logits memset CUDA runtime 4186.323 us; CUDA kernel 4374.765 us"
+      ],
+      "decision_note": "Use Torch for Python-side operator comparisons; trainer promotion needs a matching C++ call path and smoke gate.",
+      "decision_status": "native_replacement_rejected",
+      "kernel": "cuda_memset",
+      "next_stack": "CUDA runtime",
+      "next_time_us": 4312.973,
+      "selected_stack": "Torch",
+      "selected_time_us": 3920.64,
+      "shape": "logits_elems=3296722944",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "runtime",
+      "timing_log": "bench_sm120_torch_runtime.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_torch_runtime.log",
+      "trainer_call_path_available": false,
+      "use_scope": "operator prototype"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_encoder.log"
+      ],
+      "correctness_logs": [
+        "test_encoder.log"
+      ],
+      "decision_note": "Plain CUDA/CUDA-runtime route; eligible for trainer selection subject to correctness and TinyStories smoke evidence.",
+      "kernel": "encoder_forward",
+      "next_stack": "Torch",
+      "next_time_us": 199.592,
+      "selected_stack": "CUDA",
+      "selected_time_us": 86.424,
+      "shape": "B=64 T=1024 C=768",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "runtime",
+      "timing_log": "bench_sm120_runtime.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_runtime.log",
+      "trainer_call_path_available": true,
+      "use_scope": "CUDA benchmark route"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_fused_classifier.log"
+      ],
+      "correctness_logs": [
+        "test_fused_classifier.log"
+      ],
+      "decision_note": "Plain CUDA/CUDA-runtime route; eligible for trainer selection subject to correctness and TinyStories smoke evidence.",
+      "kernel": "fused_classifier",
+      "next_stack": "Triton",
+      "next_time_us": 22694.304,
+      "selected_stack": "CUDA",
+      "selected_time_us": 9121.119,
+      "shape": "B=64 T=1024 V=50257 P=50304",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "runtime",
+      "timing_log": "bench_sm120_runtime.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_runtime.log",
+      "trainer_call_path_available": true,
+      "use_scope": "CUDA benchmark route"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_fused_classifier.log"
+      ],
+      "correctness_logs": [
+        "test_fused_classifier.log"
+      ],
+      "decision_note": "Plain CUDA/CUDA-runtime route; eligible for trainer selection subject to correctness and TinyStories smoke evidence.",
+      "kernel": "fused_classifier_loss",
+      "next_stack": "Triton",
+      "next_time_us": 8311.104,
+      "selected_stack": "CUDA",
+      "selected_time_us": 4064.608,
+      "shape": "B=64 T=1024 V=50257 P=50304",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "runtime",
+      "timing_log": "bench_sm120_runtime.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_runtime.log",
+      "trainer_call_path_available": true,
+      "use_scope": "CUDA benchmark route"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_gelu.log"
+      ],
+      "correctness_logs": [
+        "test_gelu.log"
+      ],
+      "decision_active": false,
+      "decision_decision": "Rejected for trainer promotion; refreshed CUDA GELU backward was faster than Triton.",
+      "decision_evidence": [
+        "2026-05-20 target-context refresh: CUDA 789.605 us; Triton 802.830 us"
+      ],
+      "decision_note": "Use as a Triton comparison row until a trainer-callable integration beats the current provider.",
+      "decision_status": "rejected_same_session_refresh",
+      "kernel": "gelu_backward_inplace",
+      "next_stack": "CUDA",
+      "next_time_us": 795.119,
+      "selected_stack": "Triton",
+      "selected_time_us": 793.576,
+      "shape": "BT=65536 C=3072",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "runtime",
+      "timing_log": "bench_sm120_triton_runtime.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_triton_runtime.log",
+      "trainer_call_path_available": false,
+      "use_scope": "operator prototype"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_gelu.log"
+      ],
+      "correctness_logs": [
+        "test_gelu.log"
+      ],
+      "decision_active": false,
+      "decision_decision": "Rejected for trainer promotion; focused uncontended timing showed CUDA was faster than Triton for the GPT-2 MLP GELU-forward row.",
+      "decision_evidence": [
+        "2026-05-21 full stack refresh selected Triton by a small edge: Triton 531.483 us; CUDA 535.954 us",
+        "2026-05-21 focused uncontended refresh: CUDA 528.159 us; Triton 529.627 us"
+      ],
+      "decision_note": "Use as a Triton comparison row until a trainer-callable integration beats the current provider.",
+      "decision_status": "rejected_same_session_refresh",
+      "kernel": "gelu_forward",
+      "next_stack": "CUDA",
+      "next_time_us": 535.954,
+      "selected_stack": "Triton",
+      "selected_time_us": 531.483,
+      "shape": "BT=65536 C=3072",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "runtime",
+      "timing_log": "bench_sm120_triton_runtime.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_triton_runtime.log",
+      "trainer_call_path_available": false,
+      "use_scope": "operator prototype"
+    },
+    {
+      "config_artifact": "round-manifest.json",
+      "config_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/round-manifest.json",
+      "correctness_log_paths": [
+        "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/test_global_norm.log"
+      ],
+      "correctness_logs": [
+        "test_global_norm.log"
+      ],
+      "decision_note": "Plain CUDA/CUDA-runtime route; eligible for trainer selection subject to correctness and TinyStories smoke evidence.",
+      "kernel": "global_norm_squared",
+      "next_stack": "Torch",
+      "next_time_us": 2268.339,
+      "selected_stack": "CUDA",
+      "selected_time_us": 186.109,
+      "shape": "params=124475904",
+      "source_artifact_dir": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521",
+      "source_git_commit": "0f21747",
+      "source_run_label": "codex_sm120_round_torch_stack_refresh_20260521",
+      "stack_probe_artifact": "backend-stacks.json",
+      "stack_probe_artifact_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/backend-stacks.json",
+      "suite": "runtime",
+      "timing_log": "bench_sm120_runtime.log",
+      "timing_log_path": "scratch/sm120_rounds/codex_sm120_round_torch_stack_refresh_20260521/bench_sm120_runtime.log",
+      "trainer_call_path_available": true,
+      "use_scope": "CUDA benchmark route"
+    }
+  ],
+  "selection_policy": "Fastest observed row per exact suite/kernel/shape. Rows without an existing trainer call path remain reference/operator prototypes until route-specific correctness and TinyStories smoke evidence proves promotion. Repo-local decisions mark refreshed rejects and structurally non-promotable rows inactive without deleting their evidence."
+}

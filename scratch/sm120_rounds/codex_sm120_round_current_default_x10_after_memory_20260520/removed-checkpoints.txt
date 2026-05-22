@@ -1,0 +1,2 @@
+log124M/5090_S_codex_sm120_round_current_default_x10_after_memory_20260520/model_00000010.bin
+log124M/5090_S_codex_sm120_round_current_default_x10_after_memory_20260520/state_00000010_00000.bin

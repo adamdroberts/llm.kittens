@@ -1,0 +1,145 @@
+{
+  "binaries": [
+    {
+      "exists": true,
+      "path": "test_matmul",
+      "sha256": "2a5c5f74fe1f0c202b1767d459cb25a2f33da33570a747d7fbe2ffa262730f51",
+      "size_bytes": 2115600
+    },
+    {
+      "exists": true,
+      "path": "test_attention",
+      "sha256": "4098edc48f31cb9663383453261d0c7ca056bc92dc9d840aae4b51c1d5a7384f",
+      "size_bytes": 1760032
+    },
+    {
+      "exists": true,
+      "path": "test_layernorm",
+      "sha256": "1e47219df7c84b874acbb2362e9e4e2c622b3a1b04e5ba28488ca94ef4e5a1d2",
+      "size_bytes": 1241880
+    },
+    {
+      "exists": true,
+      "path": "test_bias",
+      "sha256": "59abde30ca3b9981d70093f988264b6c59a3c38128580292926deb860bb90335",
+      "size_bytes": 2039504
+    },
+    {
+      "exists": true,
+      "path": "test_gelu",
+      "sha256": "c14ef94d7cd768f7ddd05395f4b0131058e0fa8d6d8d649c26ae0fc00a62bc37",
+      "size_bytes": 1139336
+    },
+    {
+      "exists": true,
+      "path": "test_fused_classifier",
+      "sha256": "cf5271da9bcb1aa7f1ee47305244e842fb28bad27813c5ce94fb1490aa424d0d",
+      "size_bytes": 1146768
+    },
+    {
+      "exists": true,
+      "path": "test_encoder",
+      "sha256": "028aa6885112e445266d03a7e486c8ee24e5c78e25d8653b3bbace0fa334e01a",
+      "size_bytes": 1165512
+    },
+    {
+      "exists": true,
+      "path": "test_adamw",
+      "sha256": "e1c80867cda4900eb70198925c369175d5bf990f095dd917dad9dd6c9c3e5486",
+      "size_bytes": 1134168
+    },
+    {
+      "exists": true,
+      "path": "test_global_norm",
+      "sha256": "4c0526877090e12925aef15fa1c50b07bacf34d53cd946249aca95103d485658",
+      "size_bytes": 1138816
+    },
+    {
+      "exists": true,
+      "path": "bench_sm120_matmul",
+      "sha256": "b0c2a4a2e6f34f2e53d805d6620a1b529259f7a5af212c8466d6cce9e43be71a",
+      "size_bytes": 2344376
+    },
+    {
+      "exists": true,
+      "path": "bench_sm120_attention",
+      "sha256": "cb845813c31db00a1a3c0b8b808c5daf8e0b8762f122b8fa76a64c073056390d",
+      "size_bytes": 1731352
+    },
+    {
+      "exists": true,
+      "path": "bench_sm120_layernorm",
+      "sha256": "bdd24765bff3f7bb003c0ba8f07d480d21a0260adf0373869f13dd9eef3910c6",
+      "size_bytes": 1233184
+    },
+    {
+      "exists": true,
+      "path": "bench_sm120_runtime",
+      "sha256": "f104eb470c20f4bcf19142362d8892d191842159d2098bb3cb17de36247dde02",
+      "size_bytes": 2168552
+    },
+    {
+      "exists": true,
+      "path": "train_gpt2cu",
+      "sha256": "db4ad7b6a208ad4ab7cae246bebd128160718624a6b5de0c7706f618195a0688",
+      "size_bytes": 3040632
+    }
+  ],
+  "config": {
+    "artifact_dir": "scratch/sm120_rounds/codex_fresh_sm120_round_20260520_gpu",
+    "build_jobs": "4",
+    "device_arch": "SM120",
+    "keep_checkpoints": "0",
+    "max_steps": "3",
+    "no_multi_gpu": "1",
+    "no_use_mpi": "1",
+    "run_benchmarks": "1",
+    "run_correctness": "1",
+    "run_label": "codex_fresh_sm120_round_20260520_gpu",
+    "run_stack_probe": "1",
+    "run_training": "1",
+    "train_out_dir": "log124M/5090_S_codex_fresh_sm120_round_20260520_gpu"
+  },
+  "created_utc": "2026-05-20T16:08:02.015104+00:00",
+  "environment": {
+    "CONDA_DEFAULT_ENV": "llm-kittens",
+    "CUDA_HOME": "/usr/local/cuda",
+    "CUDA_VISIBLE_DEVICES": "",
+    "LD_LIBRARY_PATH": "/usr/local/cuda/lib64:",
+    "LLMK_SM120_CUBLASLT_HEURISTIC_INDEX": "",
+    "LLMK_SM120_CUBLASLT_HEURISTIC_RESULTS": "",
+    "LLMK_SM120_CUBLASLT_SELECT_MAX_WAVES": "",
+    "SM120_USE_CUBLASLT_GEMM": "",
+    "VIRTUAL_ENV": ""
+  },
+  "git": {
+    "commit": "0f2174743c0b94e92e25d7390038a5959d5f565f",
+    "short_commit": "0f21747",
+    "status_count": 430,
+    "status_path": "git-status.txt"
+  },
+  "host": {
+    "platform": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.43",
+    "python": "3.14.5"
+  },
+  "schema_version": 1,
+  "toolchain": {
+    "nvcc": {
+      "command": [
+        "nvcc",
+        "--version"
+      ],
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "nvcc: NVIDIA (R) Cuda compiler driver\nCopyright (c) 2005-2026 NVIDIA Corporation\nBuilt on Thu_Mar_19_11:12:51_PM_PDT_2026\nCuda compilation tools, release 13.2, V13.2.78\nBuild cuda_13.2.r13.2/compiler.37668154_0"
+    },
+    "nvidia_smi": {
+      "command": [
+        "nvidia-smi"
+      ],
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "Wed May 20 17:08:02 2026       \n+-----------------------------------------------------------------------------------------+\n| NVIDIA-SMI 595.71.01              Driver Version: 596.36         CUDA Version: 13.2     |\n+-----------------------------------------+------------------------+----------------------+\n| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |\n| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |\n|                                         |                        |               MIG M. |\n|=========================================+========================+======================|\n|   0  NVIDIA GeForce RTX 5090        On  |   00000000:E1:00.0  On |                  N/A |\n|100%   29C    P5             57W /  575W |    3278MiB /  32607MiB |      2%      Default |\n|                                         |                        |                  N/A |\n+-----------------------------------------+------------------------+----------------------+\n\n+-----------------------------------------------------------------------------------------+\n| Processes:                                                                              |\n|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |\n|        ID   ID                                                               Usage      |\n|=========================================================================================|\n|  No running processes found                                                             |\n+-----------------------------------------------------------------------------------------+"
+    }
+  }
+}

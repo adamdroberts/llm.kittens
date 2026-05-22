@@ -2,7 +2,7 @@
 
 llm.kittens borrows llm.c's test pyramid. Today step 1a is live, and the
 `train_gpt2cu` / `test_gpt2cu` compile paths are wired. Runtime forward/parity
-checks still need H100 access and the starter-pack `.bin` files.
+checks still need the target GPU runtime and the starter-pack `.bin` files.
 
 The executable checklist for a target H100 box is
 [`../scripts/validate_goal_h100.sh`](../scripts/validate_goal_h100.sh). The full
@@ -547,9 +547,8 @@ accumulation. Justification: bf16 has ~3e-3 relative precision; for K=768
 with values in `[-1, 1]` the accumulation error is `~sqrt(K)*eps ~ 0.08`. The
 0.5 bound has slack.
 
-All smoke targets listed above have direct Makefile entries; H100 runtime
-execution is still blocked in this local environment by the CUDA driver/runtime
-mismatch.
+All smoke targets listed above have direct Makefile entries. Use the harness
+runtime phases to refresh H100 parity evidence on the target GPU.
 
 Pattern (follow `test_matmul.cu`):
 

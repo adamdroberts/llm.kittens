@@ -73,7 +73,7 @@ int main() {
     auto lerp = [](float start, float end, float w) { return start + w * (end - start); };
     float bc1 = 1.0f - powf(beta1, (float)t);
     float bc2 = 1.0f - powf(beta2, (float)t);
-    std::vector<float> ref_master(N), ref_m(N), ref_v(N);
+    std::vector<float> ref_master(N), ref_master_nomaster(N), ref_m(N), ref_v(N);
     for (size_t i = 0; i < N; ++i) {
         // GPU reads `grads_memory` as bf16 then casts to float; mirror that.
         float g = grad_scale * bf16_to_float(h_grad_bf16[i]);
@@ -85,6 +85,8 @@ int main() {
         float vhat = vi / bc2;
         float old_p = h_master[i];
         ref_master[i] = old_p - (lr * (mhat / (sqrtf(vhat) + eps) + wd * old_p));
+        float old_p_nomaster = bf16_to_float(h_param[i]);
+        ref_master_nomaster[i] = old_p_nomaster - (lr * (mhat / (sqrtf(vhat) + eps) + wd * old_p_nomaster));
     }
 
     __nv_bfloat16* d_param = nullptr;
@@ -135,13 +137,45 @@ int main() {
     printf("bf16 param vs master max abs diff = %.3e (tol %.1e) %s\n",
            param_diff, sr_tol, param_diff <= sr_tol ? "PASS" : "FAIL");
 
+    cudaCheck(cudaMemcpy(d_param, h_param.data(), N * sizeof(__nv_bfloat16), cudaMemcpyHostToDevice));
+    cudaCheck(cudaMemcpy(d_grad, h_grad_bf16.data(), N * sizeof(__nv_bfloat16), cudaMemcpyHostToDevice));
+    cudaCheck(cudaMemset(d_m, 0, N * sizeof(float)));
+    cudaCheck(cudaMemset(d_v, 0, N * sizeof(float)));
+
+    adamw_update(d_param, (float*)nullptr, d_grad, d_m, d_v, N,
+                 /*w_stride=*/0, /*g_stride=*/0, /*s_stride=*/0,
+                 /*num_slices=*/1, lr, beta1, beta2, t, eps, wd, grad_scale, seed, 0);
+    cudaCheck(cudaDeviceSynchronize());
+
+    std::vector<float> g_m_nomaster(N), g_v_nomaster(N);
+    std::vector<__nv_bfloat16> g_param_nomaster(N);
+    cudaCheck(cudaMemcpy(g_m_nomaster.data(), d_m, N * sizeof(float), cudaMemcpyDeviceToHost));
+    cudaCheck(cudaMemcpy(g_v_nomaster.data(), d_v, N * sizeof(float), cudaMemcpyDeviceToHost));
+    cudaCheck(cudaMemcpy(g_param_nomaster.data(), d_param, N * sizeof(__nv_bfloat16), cudaMemcpyDeviceToHost));
+
+    double m_nomaster_diff = max_abs_diff_float(g_m_nomaster, ref_m);
+    double v_nomaster_diff = max_abs_diff_float(g_v_nomaster, ref_v);
+    double param_nomaster_diff = 0.0;
+    for (size_t i = 0; i < N; ++i) {
+        double d = std::abs((double)bf16_to_float(g_param_nomaster[i]) - (double)ref_master_nomaster[i]);
+        if (d > param_nomaster_diff) param_nomaster_diff = d;
+    }
+
+    printf("no-master m max abs diff = %.3e (tol %.1e) %s\n",
+           m_nomaster_diff, fp_tol, m_nomaster_diff <= fp_tol ? "PASS" : "FAIL");
+    printf("no-master v max abs diff = %.3e (tol %.1e) %s\n",
+           v_nomaster_diff, fp_tol, v_nomaster_diff <= fp_tol ? "PASS" : "FAIL");
+    printf("no-master bf16 param vs ref max abs diff = %.3e (tol %.1e) %s\n",
+           param_nomaster_diff, sr_tol, param_nomaster_diff <= sr_tol ? "PASS" : "FAIL");
+
     cudaCheck(cudaFree(d_param));
     cudaCheck(cudaFree(d_master));
     cudaCheck(cudaFree(d_grad));
     cudaCheck(cudaFree(d_m));
     cudaCheck(cudaFree(d_v));
 
-    bool ok = mp_diff <= fp_tol && m_diff <= fp_tol && v_diff <= fp_tol && param_diff <= sr_tol;
+    bool ok = mp_diff <= fp_tol && m_diff <= fp_tol && v_diff <= fp_tol && param_diff <= sr_tol &&
+              m_nomaster_diff <= fp_tol && v_nomaster_diff <= fp_tol && param_nomaster_diff <= sr_tol;
     if (ok) printf("test_adamw smoke OK\n");
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

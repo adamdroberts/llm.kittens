@@ -36,7 +36,7 @@ fallback for GPT-2 and a custom warp-scope GPT MHA path.
 | RoPE forward / backward (Llama-3) | [`llmc/rope.cuh`](../llmc/rope.cuh) | [`llmc/tk/rope_tk.cuh`](../llmc/tk/rope_tk.cuh) | wrap `ThunderKittens/kernels/rotary/rotary.cu`; backward = inverse rotation with `sin -> -sin` | ✅ M6 compile-wired; `test_rope` compile-ready; runtime pending |
 | GELU forward / backward-inplace | [`llmc/gelu.cuh`](../llmc/gelu.cuh) | — | `llm.c/llmc/gelu.cuh:50,59` | ✅ verbatim |
 | SwiGLU (Llama-3) | [`llmc/swiglu.cuh`](../llmc/swiglu.cuh) | — | none — new, plain CUDA elementwise fwd/bwd | ✅ M6 compile-wired; `test_swiglu` compile-ready; runtime pending |
-| Cross-entropy + softmax + dlogits (fused) | [`llmc/fused_classifier.cuh`](../llmc/fused_classifier.cuh) | — | `llm.c/llmc/fused_classifier.cuh:140` | ✅ verbatim |
+| Cross-entropy + softmax + dlogits (fused) | [`llmc/fused_classifier.cuh`](../llmc/fused_classifier.cuh) | — | `llm.c/llmc/fused_classifier.cuh:140` | ✅ CUDA baseline; SM120 uses a two-pass 1024-thread softmax path |
 | AdamW step | [`llmc/adamw.cuh`](../llmc/adamw.cuh) | — | `llm.c/llmc/adamw.cuh:75,91` | ✅ verbatim |
 | `init_from_master` | `llmc/adamw.cuh` | — | verbatim | ✅ |
 | `global_norm_squared` (grad-clip norm) | [`llmc/global_norm.cuh`](../llmc/global_norm.cuh) | — | `llm.c/llmc/global_norm.cuh:69` | ✅ verbatim |
@@ -127,7 +127,11 @@ Current status:
    dInput GEMM. The fused SM120 path uses in-place register-layout swaps and
    an approximate dGELU tanh (`LLMK_SM120_APPROX_DGELU_TANH=1`) by default
    after RTX 5090 smoke and 3-step validation; both knobs remain explicit A/B
-   fallbacks.
+   fallbacks. In the cuBLASLt-backed SM120 trainer build,
+   `LLMK_SM120_USE_TK_FUSED_DGELU_DINP` can opt the `fcproj` fused dGELU dInput
+   row into the TK path with exact dGELU tanh for A/B rounds, but the default
+   remains cuBLASLt after the exact TK selector regressed x10 TinyStories
+   timing.
 2. `dweight (OC, C) = doutᵀ (OC, B*T) · inp (B*T, C)` — wired through TK `A^T*B`. For accumulated micro-steps, the product lands in the caller-provided aligned scratch buffer and a small add kernel applies `dweight += scratch`. SM120 pure-TK defaults to 8-way split-K (`LLMK_SM120_DWEIGHT_SPLIT_K=8`) after the current N96+dGELU trainer rerun favored fewer qkv part launches.
    The SM120 TN swizzle now defaults to `LLMK_SM120_DWEIGHT_SUPER_M=2`; `1`
    fails smoke, while `3`, `4`, and higher tested values were slower or mixed
@@ -179,6 +183,12 @@ the forward output as `(B, T, C)`, and writes packed dQ/dK/dV directly into the
 QKV input-gradient buffer. Builds that disable SM120 TK backward or enable the
 atomic-dQ experiment fall back to the generic permuted layout so the forward
 and backward saved layouts stay consistent.
+
+Optional Torch SDPA attention benchmarks now cover separated Q/K/V,
+trainer-shaped packed QKV through strided views, and packed QKV with explicit
+Q/K/V materialization. The separated Torch row is faster than packed TK and is
+kept as Python-side reference evidence, but both trainer-shaped Torch rows are
+slower than the SM120 packed TK path, so the trainer remains on TK.
 
 ### Signatures
 
@@ -240,8 +250,8 @@ upstream TK kernel:
 
 Current implementation: `llmc/tk/layernorm_tk.cuh` is wired into
 `llmc/layernorm.cuh` for the supported widths and saves `mean` / `rstd` for the
-existing GPT-2 backward path. Runtime numerical validation is still gated on an
-accessible H100 plus the GPT-2 debug-state files.
+existing GPT-2 backward path. Runtime numerical validation still needs the
+intended H100 target plus the GPT-2 debug-state files.
 
 [`dev/cuda/test_layernorm.cu`](../dev/cuda/test_layernorm.cu) compile-wires a
 CPU-reference smoke harness for forward, fused residual+LayerNorm forward,
@@ -342,16 +352,16 @@ and `dup` from the saved gate/up tensors. No TK benefit.
 `dev/cuda/test_swiglu.cu` adds a CPU-reference smoke harness for forward,
 `dgate`, and `dup`.
 
-## Plain-CUDA kernels (kept verbatim)
+## Plain-CUDA kernels
 
-These are imported from llm.c with no changes beyond `#include`s. The comment
-header in each file points to the upstream source.
+These are imported from llm.c unless the notes call out an architecture-specific
+repair. The comment header in each file points to the upstream source.
 
 | File | Purpose | Notes |
 |---|---|---|
 | [`llmc/encoder.cuh`](../llmc/encoder.cuh) | Token + position embedding fwd/bwd | Sparse gather + bucketed deterministic scatter — wrong workload for TK |
 | [`llmc/gelu.cuh`](../llmc/gelu.cuh) | GELU fwd + in-place backward | TK's flux GELU is fused with matmul, not standalone |
-| [`llmc/fused_classifier.cuh`](../llmc/fused_classifier.cuh) | Cross-entropy + softmax + dlogits, fused | Block-wide online softmax over `V = 50304` (GPT-2) or `128256` (Llama-3). Optional v2 TK-ification. |
+| [`llmc/fused_classifier.cuh`](../llmc/fused_classifier.cuh) | Cross-entropy + softmax + dlogits, fused | Block-wide softmax over `V = 50304` (GPT-2) or `128256` (Llama-3). SM120 uses a two-pass vectorized traversal to avoid the upstream reverse/tail hang at 128+ threads. Optional v2 TK/Triton replacement. |
 | [`llmc/adamw.cuh`](../llmc/adamw.cuh) | AdamW step + `init_from_master` | Element-wise |
 | [`llmc/global_norm.cuh`](../llmc/global_norm.cuh) | Grad-clip norm | Element-wise reduction |
 | [`llmc/zero.cuh`](../llmc/zero.cuh) | NCCL + ZeRO-0/1/2/3 + multi-node init; ZeRO-3 parameter shards all-gather into the full compute layout | NCCL operates on opaque buffers — compatible with TK kernels |

@@ -1,0 +1,10 @@
+{
+  "active_promotion_candidates": [],
+  "artifact_dir": "scratch/sm120_rounds/codex_sm120_round_libtorch_dresidual_zero_x10_20260521",
+  "decision_policy": "Repo-local decisions in dev/sm120_promotion_decisions.json mark refreshed or structurally non-promotable rows as inactive without deleting their evidence.",
+  "git_commit": "0f21747",
+  "promotion_candidates": [],
+  "promotion_policy": "Rows are selected benchmark winners that do not yet have a trainer call path. They are prioritized by speedup over the next observed stack when that comparison exists. Native/direct and codegen rows are listed before library integrations, layout rewrites, and reference/state gaps. Before implementation, rerun the selected row and current baseline in the same session.",
+  "run_label": "codex_sm120_round_libtorch_dresidual_zero_x10_20260521",
+  "schema_version": 1
+}

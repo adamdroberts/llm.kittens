@@ -279,8 +279,8 @@
 - `make train_llama3cu NO_MULTI_GPU=1 NO_USE_MPI=1 FORCE_NVCC_O=0` passes.
 - Launch scripts pass `bash -n`.
 - Python helpers/data files pass `python3 -m py_compile`.
-- Runtime validation is blocked in this environment by unavailable GPU access
-  and missing reference checkpoint/debug-state binaries.
+- Runtime validation requires the target GPU runtime plus the reference
+  checkpoint/debug-state binaries.
 
 ## Optional
 

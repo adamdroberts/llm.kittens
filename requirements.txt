@@ -7,3 +7,5 @@ datasets
 requests
 runpod-flash
 pytest
+triton
+nvidia-cutlass-dsl
